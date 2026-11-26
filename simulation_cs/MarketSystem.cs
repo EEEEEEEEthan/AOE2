@@ -13,9 +13,22 @@ public static class MarketSystem
     public const long MaxRate = 200;
     public const long ImpactPerHundred = 10;
     public const long RateScale = 100;
+    public const long MaxTradeAmount = 10000;
 
     private static bool IsValidResource(long resourceKind) =>
         resourceKind >= 0 && resourceKind < SimComponents.ResourceColumns.Length;
+
+    /// <summary>单次买卖/进贡的数量上限，挡住来自 LockstepCommand 的超大数量与溢出玩法。</summary>
+    private static bool IsValidAmount(long amount) =>
+        amount > 0 && amount <= MaxTradeAmount;
+
+    /// <summary>先除后乘，避免 amount × rate 在边界改动后溢出；结果与原式整数截断一致。</summary>
+    private static long ScaledAmount(long amount, long rate)
+    {
+        long quotient = amount / RateScale;
+        long remainder = amount % RateScale;
+        return quotient * rate + remainder * rate / RateScale;
+    }
 
     public static bool HasCompletedMarket(SimWorld world, long team)
     {
@@ -63,15 +76,15 @@ public static class MarketSystem
         Rate(world, team, resourceKind) - SellSpread;
 
     public static long BuyCost(SimWorld world, long team, long resourceKind, long amount) =>
-        amount * BuyRate(world, team, resourceKind) / RateScale;
+        ScaledAmount(amount, BuyRate(world, team, resourceKind));
 
     public static long SellRevenue(SimWorld world, long team, long resourceKind, long amount) =>
-        amount * SellRate(world, team, resourceKind) / RateScale;
+        ScaledAmount(amount, SellRate(world, team, resourceKind));
 
     /// <summary>买入：仅拥有完工市场的玩家可买，先扣金再入资源，成交后抬升基准价。</summary>
     public static bool Buy(GameSim sim, long team, long resourceKind, long amount)
     {
-        if (!IsValidResource(resourceKind) || amount <= 0)
+        if (!IsValidResource(resourceKind) || !IsValidAmount(amount))
         {
             return false;
         }
@@ -97,7 +110,7 @@ public static class MarketSystem
     /// <summary>卖出：资源不足或数量折算不出金币时拒绝，避免白扣资源；成交后压低基准价。</summary>
     public static bool Sell(GameSim sim, long team, long resourceKind, long amount)
     {
-        if (!IsValidResource(resourceKind) || amount <= 0)
+        if (!IsValidResource(resourceKind) || !IsValidAmount(amount))
         {
             return false;
         }
@@ -127,7 +140,7 @@ public static class MarketSystem
     /// <summary>进贡：从发起方库存原子转入目标玩家，可向队友或对手输送四类资源。</summary>
     public static bool Tribute(GameSim sim, long from, long to, long resourceKind, long amount)
     {
-        if (!IsValidResource(resourceKind) || amount <= 0 || from == to)
+        if (!IsValidResource(resourceKind) || !IsValidAmount(amount) || from == to)
         {
             return false;
         }
@@ -146,7 +159,7 @@ public static class MarketSystem
 
     private static void ShiftRate(SimWorld world, long team, long resourceKind, long signedAmount)
     {
-        long delta = signedAmount * ImpactPerHundred / RateScale;
+        long delta = ScaledAmount(signedAmount, ImpactPerHundred);
         if (delta == 0)
         {
             return;
