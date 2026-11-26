@@ -7,26 +7,51 @@ signal research_requested(tech_id: int)
 signal age_up_requested(target_age: int)
 signal stop_requested
 signal placement_cancelled
+signal market_buy_requested(resource: int, amount: int)
+signal market_sell_requested(resource: int, amount: int)
+signal tribute_requested(target: int, resource: int, amount: int)
 
 const AGE_NAMES := ["黑暗时代", "封建时代", "城堡时代", "帝王时代"]
 const KIND_BUILDING := 8
 const BUILDING_STATE_FOUNDATION := 0
+const BUILDING_STATE_COMPLETE := 1
 const VILLAGER_UNIT := -1
 const TOWN_CENTER := 1
 const BARRACKS := 3
+const MARKET := 6
+const RESOURCE_WOOD := 0
+const RESOURCE_FOOD := 1
+const RESOURCE_GOLD := 2
+const RESOURCE_STONE := 3
+const RESOURCE_NAMES := {0: "木材", 1: "食物", 2: "金币", 3: "石料"}
+const TRADABLE_RESOURCES := [RESOURCE_WOOD, RESOURCE_FOOD, RESOURCE_STONE]
+const TRIBUTE_RESOURCES := [RESOURCE_WOOD, RESOURCE_FOOD, RESOURCE_GOLD, RESOURCE_STONE]
+const MAX_TRADE_AMOUNT := 10000
+const SHIFT_BATCH := 100
 
 var _building_costs: Dictionary = {}
 var _unit_costs: Dictionary = {}
 var _notice_serial := 0
+var _bridge: GameBridge
+var _market_targets_signature := ""
 
 
 func _ready() -> void:
 	%SelectionBox.hide()
 	%PlacementHint.hide()
 	%NoticeLabel.text = ""
+	%MarketPanel.hide()
+	for resource: int in TRIBUTE_RESOURCES:
+		%MarketResourceOption.add_item(RESOURCE_NAMES[resource], resource)
+	for row in %TradeRows.get_children():
+		var resource := int(row.get_meta("market_resource", -1))
+		row.get_child(3).pressed.connect(_on_market_buy_pressed.bind(resource))
+		row.get_child(5).pressed.connect(_on_market_sell_pressed.bind(resource))
+	%MarketTributeButton.pressed.connect(_on_tribute_pressed)
 
 
 func setup(bridge: GameBridge) -> void:
+	_bridge = bridge
 	_building_costs.clear()
 	for option: Dictionary in bridge.BuildingOptions():
 		_building_costs[int(option["id"])] = option
@@ -47,6 +72,7 @@ func refresh(player: Dictionary, selection: Array, my_team: int) -> void:
 	_update_build_buttons(player)
 	_update_train_buttons(player, selection, my_team)
 	_update_research_buttons(player)
+	_update_market(player, selection, my_team)
 	show_selection(selection)
 
 
@@ -119,6 +145,105 @@ func _update_research_buttons(player: Dictionary) -> void:
 		var button := child as Button
 		var tech_id: int = button.get_meta("tech_id", -1)
 		button.disabled = ((research >> tech_id) & 1) == 1
+
+
+func _update_market(player: Dictionary, selection: Array, my_team: int) -> void:
+	var market := _selected_market(selection, my_team)
+	%MarketPanel.visible = not market.is_empty()
+	if market.is_empty() or _bridge == null:
+		return
+	_ensure_market_targets(my_team)
+	for row in %TradeRows.get_children():
+		var resource := int(row.get_meta("market_resource", -1))
+		var amount := int(row.get_child(2).value)
+		row.get_child(1).text = "买价 %d 金/100" % _bridge.MarketBuyRate(resource)
+		row.get_child(4).text = "卖价 %d 金/100" % _bridge.MarketSellRate(resource)
+		var buy_button: Button = row.get_child(3)
+		var sell_button: Button = row.get_child(5)
+		buy_button.disabled = not _bridge.CanMarketBuy(resource, amount)
+		sell_button.disabled = not _bridge.CanMarketSell(resource, amount)
+		buy_button.tooltip_text = _market_trade_hint(resource, amount, true)
+		sell_button.tooltip_text = _market_trade_hint(resource, amount, false)
+	_update_tribute_button()
+
+
+func _selected_market(selection: Array, my_team: int) -> Dictionary:
+	if selection.size() != 1:
+		return {}
+	var entry: Dictionary = selection[0]
+	if int(entry["kind"]) != KIND_BUILDING or int(entry["team"]) != my_team:
+		return {}
+	if int(entry.get("building_type", -1)) != MARKET:
+		return {}
+	if int(entry.get("building_state", -1)) != BUILDING_STATE_COMPLETE:
+		return {}
+	return entry
+
+
+func _ensure_market_targets(my_team: int) -> void:
+	var teams: Array = []
+	for player: Dictionary in _bridge.PlayerStates():
+		var team := int(player["team"])
+		if team != my_team:
+			teams.append(team)
+	var signature := str(teams)
+	if signature == _market_targets_signature:
+		return
+	_market_targets_signature = signature
+	%MarketTargetOption.clear()
+	for team: int in teams:
+		%MarketTargetOption.add_item("玩家 %d" % (team + 1), team)
+	if %MarketTargetOption.item_count > 0:
+		%MarketTargetOption.select(0)
+
+
+func _update_tribute_button() -> void:
+	var button: Button = %MarketTributeButton
+	if %MarketTargetOption.item_count == 0:
+		button.disabled = true
+		button.tooltip_text = "没有可进贡的玩家"
+		return
+	var target_index: int = %MarketTargetOption.selected
+	if target_index < 0:
+		button.disabled = true
+		button.tooltip_text = "请选择进贡目标"
+		return
+	var target := int(%MarketTargetOption.get_item_id(target_index))
+	var resource_index: int = %MarketResourceOption.selected
+	var resource := int(%MarketResourceOption.get_item_id(resource_index))
+	var amount := _trade_amount(%MarketTributeAmount)
+	button.disabled = not _bridge.CanTribute(target, resource, amount)
+	button.tooltip_text = "资源不足或目标无效" if button.disabled \
+		else "向玩家 %d 进贡 %d %s" % [target + 1, amount, RESOURCE_NAMES[resource]]
+
+
+func _market_trade_hint(resource: int, amount: int, buying: bool) -> String:
+	var name: String = RESOURCE_NAMES[resource]
+	if not _bridge.HasCompletedMarket():
+		return "需要已完工市场"
+	if buying:
+		if not _bridge.CanMarketBuy(resource, amount):
+			return "金币不足"
+		return "花费 %d 金买入 %d %s" % [
+			_bridge.MarketBuyRate(resource) * amount / 100, amount, name,
+		]
+	if not _bridge.CanMarketSell(resource, amount):
+		return "%s不足" % name
+	return "卖出 %d %s 获得 %d 金" % [amount, name, _bridge.MarketSellRate(resource) * amount / 100]
+
+
+func _trade_amount(spin: SpinBox) -> int:
+	var amount := int(spin.value)
+	if Input.is_key_pressed(KEY_SHIFT):
+		amount = mini(amount * SHIFT_BATCH, MAX_TRADE_AMOUNT)
+	return maxi(amount, 1)
+
+
+func _market_row(resource: int) -> Control:
+	for row in %TradeRows.get_children():
+		if int(row.get_meta("market_resource", -1)) == resource:
+			return row
+	return null
 
 
 func _can_afford(cost: Dictionary, player: Dictionary) -> bool:
@@ -204,3 +329,26 @@ func _on_stop_pressed() -> void:
 
 func _on_cancel_placement_pressed() -> void:
 	placement_cancelled.emit()
+
+
+func _on_market_buy_pressed(resource: int) -> void:
+	var row := _market_row(resource)
+	if row != null:
+		market_buy_requested.emit(resource, _trade_amount(row.get_child(2)))
+
+
+func _on_market_sell_pressed(resource: int) -> void:
+	var row := _market_row(resource)
+	if row != null:
+		market_sell_requested.emit(resource, _trade_amount(row.get_child(2)))
+
+
+func _on_tribute_pressed() -> void:
+	var target_index: int = %MarketTargetOption.selected
+	var resource_index: int = %MarketResourceOption.selected
+	if target_index < 0 or resource_index < 0:
+		return
+	tribute_requested.emit(
+		int(%MarketTargetOption.get_item_id(target_index)),
+		int(%MarketResourceOption.get_item_id(resource_index)),
+		_trade_amount(%MarketTributeAmount))
