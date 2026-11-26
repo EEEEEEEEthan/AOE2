@@ -314,7 +314,7 @@ public partial class GameBridge : Node
             _replaySpeed = 1.0;
             _grid = replay.Server.Sim.Grid;
             _terrain = replay.Server.Sim.Terrain;
-            replay.Server.ViewTeam = 0;
+            replay.Server.ViewTeam = -1;
             _accumulator = 0.0;
             ResetBatchCache();
             LastReplayError = "";
@@ -339,7 +339,7 @@ public partial class GameBridge : Node
             var replay = new AoeSim.ReplaySession(_replayData, tick);
             _replay = replay;
             _session = replay;
-            replay.Server.ViewTeam = 0;
+            replay.Server.ViewTeam = -1;
             _accumulator = 0.0;
             ResetBatchCache();
             return true;

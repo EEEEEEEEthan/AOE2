@@ -245,6 +245,8 @@ public sealed class ReplaySession : ILocalSession
         Server = new SimulationServer(sim);
         Client = new SimulationClient();
         Client.ApplyStaticMap(StaticMapFrame.FromTerrain(sim.Terrain));
+        // 回放是观战视角：不裁剪视野，渲染端在没有迷雾数据时直接隐藏迷雾。
+        Server.ViewTeam = -1;
         foreach (KeyValuePair<long, List<LockstepCommand>> pair in data.Commands)
         {
             foreach (LockstepCommand command in pair.Value)
@@ -253,8 +255,9 @@ public sealed class ReplaySession : ILocalSession
             }
         }
         Client.ApplySnapshot(Server.Snapshot());
-        long target = Math.Min(seekTick, Math.Max(0, data.FinalTick));
-        while(!Finished && sim.World.Tick < target)
+        // 起点至少推进到第 1 tick：第 0 tick 还没有视野，直接展示会是一片黑。
+        long target = seekTick <= 0 ? 1 : Math.Min(seekTick, Math.Max(0, data.FinalTick));
+        while (!Finished && sim.World.Tick < target)
         {
             Step();
         }
