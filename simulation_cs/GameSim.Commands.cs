@@ -88,7 +88,8 @@ public sealed partial class GameSim
         {
             AddResource(player, resourceKind, -cost.AmountOf(resourceKind));
         }
-        InvalidateFields();
+        InvalidateFieldsForBlockedRect(
+            cellX, cellY, BuildingTypes.SizeWidth(type), BuildingTypes.SizeHeight(type));
         return id;
     }
 
@@ -232,7 +233,10 @@ public sealed partial class GameSim
         {
             AddResource(player, resourceKind, -unitCost.AmountOf(resourceKind) * cells.Count);
         }
-        InvalidateFields();
+        foreach ((int cellX, int cellY) in cells)
+        {
+            InvalidateFieldsForBlockedRect(cellX, cellY, 1, 1);
+        }
         return ids;
     }
 
@@ -254,7 +258,19 @@ public sealed partial class GameSim
         {
             return false;
         }
-        InvalidateFields();
+        if (targetState == BuildingSystem.GateOpen)
+        {
+            // 开城门是解除阻挡，任何地方都可能因此出现新捷径，只能全表失效。
+            InvalidateFields();
+        }
+        else
+        {
+            int gateX = (int)Fixed.ToInt(World.GetValue(gate, SimComponents.Position, SimComponents.X));
+            int gateY = (int)Fixed.ToInt(World.GetValue(gate, SimComponents.Position, SimComponents.Y));
+            int gateWidth = (int)World.GetValue(gate, SimComponents.Building, SimComponents.SizeWidth);
+            int gateHeight = (int)World.GetValue(gate, SimComponents.Building, SimComponents.SizeHeight);
+            InvalidateFieldsForBlockedRect(gateX, gateY, gateWidth, gateHeight);
+        }
         return true;
     }
 
