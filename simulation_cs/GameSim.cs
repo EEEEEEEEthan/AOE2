@@ -28,6 +28,7 @@ public sealed class GameSim
     private readonly Dictionary<long, FlowField> _fields = new();
     private readonly Dictionary<long, LinkedListNode<long>> _fieldNodes = new();
     private readonly LinkedList<long> _fieldRecency = new();
+    private readonly Stack<FlowField> _fieldPool = new();
     private readonly Dictionary<long, long> _inventoryEntities = new();
     private readonly Dictionary<long, long> _progressEntities = new();
     private readonly long[] _civIds;
@@ -915,7 +916,8 @@ public sealed class GameSim
         {
             AddResource(player, resourceKind, -cost.AmountOf(resourceKind));
         }
-        InvalidateFields();
+        InvalidateFieldsForBlockedRect(
+            cellX, cellY, BuildingTypes.SizeWidth(type), BuildingTypes.SizeHeight(type));
         return id;
     }
 
@@ -1059,7 +1061,10 @@ public sealed class GameSim
         {
             AddResource(player, resourceKind, -unitCost.AmountOf(resourceKind) * cells.Count);
         }
-        InvalidateFields();
+        foreach ((int cellX, int cellY) in cells)
+        {
+            InvalidateFieldsForBlockedRect(cellX, cellY, 1, 1);
+        }
         return ids;
     }
 
@@ -1081,7 +1086,19 @@ public sealed class GameSim
         {
             return false;
         }
-        InvalidateFields();
+        if (targetState == BuildingSystem.GateOpen)
+        {
+            // 开城门是解除阻挡，任何地方都可能因此出现新捷径，只能全表失效。
+            InvalidateFields();
+        }
+        else
+        {
+            int gateX = (int)Fixed.ToInt(World.GetValue(gate, SimComponents.Position, SimComponents.X));
+            int gateY = (int)Fixed.ToInt(World.GetValue(gate, SimComponents.Position, SimComponents.Y));
+            int gateWidth = (int)World.GetValue(gate, SimComponents.Building, SimComponents.SizeWidth);
+            int gateHeight = (int)World.GetValue(gate, SimComponents.Building, SimComponents.SizeHeight);
+            InvalidateFieldsForBlockedRect(gateX, gateY, gateWidth, gateHeight);
+        }
         return true;
     }
 
@@ -1662,11 +1679,77 @@ public sealed class GameSim
     public FlowField FieldFor(int targetX, int targetY, long domain) =>
         FieldProvider(targetX, targetY, domain);
 
+    /// <summary>全表失效：用于「解除阻挡」等可能在任何位置开新路的变化，以及外部显式调用。</summary>
     public void InvalidateFields()
     {
+        foreach (FlowField field in _fields.Values)
+        {
+            _fieldPool.Push(field);
+        }
         _fields.Clear();
         _fieldNodes.Clear();
         _fieldRecency.Clear();
+    }
+
+    /// <summary>
+    /// 新增阻挡（建筑落位/完工、城门关闭）时只作废受影响流场：
+    /// 仅当矩形内存在对该目标格「可达」（旧代价 ≥ 0）的格子时该流场才可能变化；
+    /// 原本不可达的格被封不会改变任何代价，可直接保留，避免建造高峰整表重建。
+    /// </summary>
+    private void InvalidateFieldsForBlockedRect(int originX, int originY, int width, int height)
+    {
+        if (_fields.Count == 0)
+        {
+            return;
+        }
+        List<long>? dirty = null;
+        foreach (KeyValuePair<long, FlowField> entry in _fields)
+        {
+            if (FieldTouchesRect(entry.Value, originX, originY, width, height))
+            {
+                (dirty ??= new List<long>()).Add(entry.Key);
+            }
+        }
+        if (dirty == null)
+        {
+            return;
+        }
+        foreach (long key in dirty)
+        {
+            RemoveField(key);
+        }
+    }
+
+    private static bool FieldTouchesRect(FlowField field, int originX, int originY, int width, int height)
+    {
+        int minX = System.Math.Max(originX, 0);
+        int minY = System.Math.Max(originY, 0);
+        int maxX = System.Math.Min(originX + width, field.Width);
+        int maxY = System.Math.Min(originY + height, field.Height);
+        for (int y = minY; y < maxY; y++)
+        {
+            for (int x = minX; x < maxX; x++)
+            {
+                if (field.CostAt(x, y) >= 0)
+                {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    private void RemoveField(long key)
+    {
+        if (!_fields.Remove(key, out FlowField? field))
+        {
+            return;
+        }
+        if (_fieldNodes.Remove(key, out LinkedListNode<long>? node))
+        {
+            _fieldRecency.Remove(node);
+        }
+        _fieldPool.Push(field);
     }
 
     private void EnsureInventoryInitialized()
@@ -1707,15 +1790,13 @@ public sealed class GameSim
             _fieldRecency.AddLast(node);
             return field;
         }
-        field = new FlowField(Grid, Terrain, domain);
-        field.Compute(Grid, targetX, targetY);
         if (_fields.Count >= FieldCacheCapacity)
         {
-            LinkedListNode<long> oldest = _fieldRecency.First!;
-            _fieldRecency.RemoveFirst();
-            _fieldNodes.Remove(oldest.Value);
-            _fields.Remove(oldest.Value);
+            RemoveField(_fieldRecency.First!.Value);
         }
+        field = _fieldPool.Count > 0 ? _fieldPool.Pop() : new FlowField(Grid, Terrain, domain);
+        field.Reconfigure(Terrain, domain);
+        field.Compute(Grid, targetX, targetY);
         _fields[key] = field;
         _fieldNodes[key] = _fieldRecency.AddLast(key);
         FieldsCreatedThisTick += 1;

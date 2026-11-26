@@ -113,6 +113,44 @@ public static partial class KernelSelfTest
         Expect(failures, bounded.FieldCacheCount == 4, "flow field cache respects capacity");
         Expect(failures, bounded.FieldsCreatedTotal == 12, "distinct goals each created once");
         Expect(failures, bounded.FieldFor(2, 12).Reachable(0, 0), "evicted goal rebuilds reachable field");
+
+        // 命中：同目标格重复取用返回同一实例，不新建。
+        var hit = new GameSim(new NavGrid(16, 16), 903, 1, 6);
+        FlowField firstHit = hit.FieldFor(8, 8);
+        long createdAfterHit = hit.FieldsCreatedTotal;
+        Expect(failures, ReferenceEquals(firstHit, hit.FieldFor(8, 8)),
+            "flow field cache hit returns the same instance");
+        Expect(failures, hit.FieldsCreatedTotal == createdAfterHit,
+            "flow field cache hit creates nothing");
+
+        // 区域化失效：被墙隔开的对侧目标流场，不因另一侧新增阻挡而作废。
+        var split = new NavGrid(16, 16);
+        for (int wallY = 0; wallY < 16; wallY++)
+        {
+            split.SetBlocked(8, wallY, true);
+        }
+        var regional = new GameSim(split, 904, 1, 6);
+        regional.AddResource(0, GameSim.ResourceWood, 200);
+        FlowField leftField = regional.FieldFor(2, 2);
+        regional.FieldFor(14, 14);
+        Expect(failures, regional.FieldCacheCount == 2, "two goals cached before blocking");
+        long createdBeforeBlock = regional.FieldsCreatedTotal;
+        Expect(failures, regional.IssuePlaceBuilding(BuildingTypes.House, 10, 10, 0) >= 0,
+            "house placed on the far side");
+        Expect(failures, regional.FieldCacheCount == 1,
+            "blocking only drops the flow field on the affected side");
+        Expect(failures, ReferenceEquals(leftField, regional.FieldFor(2, 2)),
+            "disconnected goal keeps its cached flow field");
+        Expect(failures, regional.FieldsCreatedTotal == createdBeforeBlock,
+            "kept flow field is not recreated");
+        Expect(failures, regional.FieldFor(14, 14).CostAt(10, 10) < 0,
+            "rebuilt flow field treats the new building as blocked");
+
+        // 全表失效：无界变化（如解除阻挡）后整表清空，可按需重建。
+        regional.InvalidateFields();
+        Expect(failures, regional.FieldCacheCount == 0, "full invalidation clears the cache");
+        Expect(failures, regional.FieldFor(2, 2).Reachable(2, 3),
+            "invalidated goal rebuilds on demand");
     }
 
     private static void CheckOccupancy(List<string> failures)
