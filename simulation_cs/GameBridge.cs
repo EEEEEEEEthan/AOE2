@@ -750,7 +750,19 @@ public partial class GameBridge : Node
     public Godot.Collections.Array<Godot.Collections.Dictionary> UnitOptions()
     {
         var result = new Godot.Collections.Array<Godot.Collections.Dictionary>();
-        long[] types = { AoeSim.UnitDefs.Villager, AoeSim.UnitDefs.Swordsman, AoeSim.UnitDefs.Spearman, AoeSim.UnitDefs.Archer, AoeSim.UnitDefs.Knight, AoeSim.UnitDefs.BatteringRam, AoeSim.UnitDefs.Mangonel };
+        long[] types =
+        {
+            AoeSim.UnitDefs.Villager,
+            AoeSim.UnitDefs.Swordsman,
+            AoeSim.UnitDefs.Spearman,
+            AoeSim.UnitDefs.Archer,
+            AoeSim.UnitDefs.Skirmisher,
+            AoeSim.UnitDefs.Scout,
+            AoeSim.UnitDefs.Knight,
+            AoeSim.UnitDefs.Camel,
+            AoeSim.UnitDefs.BatteringRam,
+            AoeSim.UnitDefs.Mangonel,
+        };
         foreach (long type in types)
         {
             AoeSim.ResourceCost cost = AoeSim.UnitDefs.Cost(type);
