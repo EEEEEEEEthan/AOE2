@@ -77,6 +77,29 @@ public sealed class StaticMapFrame
     }
 }
 
+/// <summary>握手帧：服务器按接入顺序给该连接分配观察方 team，客户端据此渲染自己的视野。</summary>
+public sealed class WelcomeFrame
+{
+    public long ViewerTeam;
+
+    public byte[] Encode()
+    {
+        using var stream = new MemoryStream();
+        using (var writer = new BinaryWriter(stream, System.Text.Encoding.UTF8, leaveOpen: true))
+        {
+            writer.Write(ViewerTeam);
+        }
+        return stream.ToArray();
+    }
+
+    public static WelcomeFrame Decode(byte[] data)
+    {
+        using var stream = new MemoryStream(data);
+        using var reader = new BinaryReader(stream, System.Text.Encoding.UTF8, leaveOpen: true);
+        return new WelcomeFrame { ViewerTeam = reader.ReadInt64() };
+    }
+}
+
 public readonly struct EntitySnapshot
 {
     public readonly long Id;
