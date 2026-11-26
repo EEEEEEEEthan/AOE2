@@ -10,6 +10,7 @@ func _match_entry_has_no_auto_demo() -> void:
 	var bridge := GameBridge.new()
 	add_child(bridge)
 	bridge.StartLocalMatch()
+	check_true(not bridge.HasSession, "formal entry starts no match session")
 	check_eq(bridge.Snapshot().size(), 0, "formal entry spawns no units")
 	check_true(bridge.GridWidth > 0 and bridge.GridHeight > 0, "formal entry keeps the map grid")
 	bridge.queue_free()
