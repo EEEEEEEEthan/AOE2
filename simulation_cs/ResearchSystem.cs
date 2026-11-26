@@ -165,6 +165,11 @@ public static class ResearchSystem
         }
         Clear(world, entity);
         sim.ApplyProgressDelta(team, oldAge, oldResearch, newAge, newResearch);
+        if (kind == KindTech)
+        {
+            // 升级科技只做单位替换：把现存同家族单位原地升到新等级。
+            sim.ApplyUnitUpgrades(team, newResearch);
+        }
     }
 
     private static void Begin(

@@ -157,6 +157,98 @@ public sealed partial class GameSim
     private static long ToRangeCells(double tiles) =>
         (long)System.Math.Round(tiles, System.MidpointRounding.AwayFromZero);
 
+    /// <summary>
+    /// 升级科技完成后，把玩家现存该家族单位原地替换到最新等级：同步 UnitType 与 Combat 各列，
+    /// 当前血量按新旧上限同比缩放并封顶，避免升级直接回满。建筑、国王与水面单位（非步行家族）
+    /// 不参与替换。
+    /// </summary>
+    internal void ApplyUnitUpgrades(long team, long researchMask)
+    {
+        ComponentStore combatStore = World.Store(SimComponents.Combat);
+        if (combatStore.Count == 0)
+        {
+            return;
+        }
+        foreach (long id in World.Entities())
+        {
+            if (!World.IsAlive(id) || !combatStore.Has(id))
+            {
+                continue;
+            }
+            if (World.HasComponent(id, SimComponents.Building)
+                || World.HasComponent(id, SimComponents.King)
+                || World.HasComponent(id, SimComponents.Domain))
+            {
+                continue;
+            }
+            if (World.GetValue(id, SimComponents.Team, SimComponents.TeamId) != team)
+            {
+                continue;
+            }
+            long currentType = World.GetValue(id, SimComponents.Combat, SimComponents.UnitType);
+            long newType = UnitFamilies.ResolveUnit(researchMask, currentType);
+            if (newType != currentType)
+            {
+                ReapplyUnitDef(id, newType, team);
+            }
+        }
+    }
+
+    /// <summary>按兵种定义与当前时代/科技/文明加成重写单位战斗列；血量按上限比例迁移。</summary>
+    private void ReapplyUnitDef(long id, long unitType, long team)
+    {
+        UnitDef def = UnitDefs.Get(unitType);
+        long age = PlayerAge(team);
+        long research = PlayerResearch(team);
+        long civ = Civ(team);
+        long oldMax = World.GetValue(id, SimComponents.Health, SimComponents.MaxHp);
+        long oldHp = World.GetValue(id, SimComponents.Health, SimComponents.Hp);
+        long newMax = TechCatalog.EffectiveStat(
+            civ, age, research, TechCatalog.StatMaxHp, def.MaxHp);
+        long newHp = oldMax > 0 ? oldHp * newMax / oldMax : newMax;
+        newHp = System.Math.Clamp(newHp, 0, newMax);
+        if (oldHp > 0 && newHp <= 0)
+        {
+            newHp = 1;
+        }
+        World.SetValue(id, SimComponents.Combat, SimComponents.UnitType, unitType);
+        World.SetValue(id, SimComponents.Combat, SimComponents.AttackClass, def.AttackClass);
+        World.SetValue(id, SimComponents.Combat, SimComponents.ArmorClass, def.ArmorClass);
+        World.SetValue(id, SimComponents.Combat, SimComponents.IsRanged, def.IsRanged ? 1 : 0);
+        World.SetValue(id, SimComponents.Combat, SimComponents.ArmorMelee, def.ArmorMelee);
+        World.SetValue(id, SimComponents.Combat, SimComponents.ArmorPierce, def.ArmorPierce);
+        World.SetValue(id, SimComponents.Combat, SimComponents.ArmorSiege, def.ArmorSiege);
+        World.SetValue(
+            id,
+            SimComponents.Combat,
+            SimComponents.Cooldown,
+            TechCatalog.EffectiveStat(civ, age, research, TechCatalog.StatCooldown, def.Cooldown));
+        World.SetValue(
+            id,
+            SimComponents.Combat,
+            SimComponents.Damage,
+            TechCatalog.EffectiveStat(civ, age, research, TechCatalog.StatDamage, def.AttackDamage));
+        long rangeMin = ToRangeCells(def.MinRangeTiles);
+        long rangeMax = TechCatalog.EffectiveStat(
+            civ, age, research, TechCatalog.StatRangeMax, ToRangeCells(def.MaxRangeTiles));
+        if (rangeMax < rangeMin)
+        {
+            rangeMax = rangeMin;
+        }
+        World.SetValue(id, SimComponents.Combat, SimComponents.RangeMin, rangeMin);
+        World.SetValue(id, SimComponents.Combat, SimComponents.RangeMax, rangeMax);
+        World.SetValue(id, SimComponents.Health, SimComponents.MaxHp, newMax);
+        World.SetValue(id, SimComponents.Health, SimComponents.Hp, newHp);
+        if (World.HasComponent(id, SimComponents.Move))
+        {
+            World.SetValue(
+                id,
+                SimComponents.Move,
+                SimComponents.Speed,
+                Fixed.FromFloat(def.SpeedTilesPerTick));
+        }
+    }
+
     public long SpawnResourceNode(int cellX, int cellY, long nodeType, long amount, long subtype = ResourceSubtype.None)
     {
         EnsureInventoryInitialized();

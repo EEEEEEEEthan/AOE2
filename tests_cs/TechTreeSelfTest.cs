@@ -19,7 +19,10 @@ public static class TechTreeSelfTest
 
     private static void CheckCatalog(List<string> failures)
     {
-        Expect(failures, TechCatalog.TechCount == 3, "three techs in catalog");
+        Expect(failures, TechCatalog.TechCount == 15, "fifteen techs in catalog");
+        Expect(failures,
+            TechCatalog.TechCount <= 62,
+            "tech bits fit inside the long research mask");
         for (long techId = 0; techId < TechCatalog.TechCount; techId++)
         {
             Expect(failures, TechCatalog.IsValidTech(techId), "tech id valid");
