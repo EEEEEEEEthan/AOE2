@@ -19,6 +19,7 @@ const REASON_NAMES := {
 }
 
 var bridge: GameBridge
+var _last_tick := -1
 
 
 func _ready() -> void:
@@ -32,6 +33,7 @@ func _ready() -> void:
 	_start_session()
 	%WorldView.build_terrain(bridge)
 	%WorldView.refresh(bridge)
+	_last_tick = bridge.ClientTick()
 
 
 func _start_session() -> void:
@@ -42,7 +44,10 @@ func _process(delta: float) -> void:
 	if bridge == null or not bridge.HasSession:
 		return
 	bridge.Step(delta)
-	%WorldView.refresh(bridge)
+	var tick := bridge.ClientTick()
+	if tick != _last_tick:
+		_last_tick = tick
+		%WorldView.refresh(bridge)
 	_refresh_result()
 
 

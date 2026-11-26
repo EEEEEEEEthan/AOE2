@@ -29,6 +29,7 @@ func _capture() -> void:
 	for child in world.get_children():
 		child.free()
 	world.set("_units", {})
+	world.set("_unit_meshes", {})
 	world.build_terrain(bridge)
 	world.refresh(bridge)
 	var fog: Variant = world.get("_fog")

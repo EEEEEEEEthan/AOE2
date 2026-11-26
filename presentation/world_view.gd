@@ -66,8 +66,10 @@ const FOG_OFFSET := 0.04
 
 var _voxel_material: StandardMaterial3D
 var _models: Dictionary = {}
+var _unit_meshes: Dictionary = {}
 var _units: Dictionary = {}
 var _fog: MultiMeshInstance3D
+var _fog_states: PackedByteArray = PackedByteArray()
 var _fog_width := 0
 var _fog_height := 0
 var _terrain_width := 0
@@ -106,48 +108,111 @@ func build_terrain(bridge: GameBridge) -> void:
 
 
 func refresh(bridge: GameBridge) -> void:
+	var batch: Dictionary = bridge.SnapshotBatch()
+	if not batch.is_empty():
+		_refresh_entities(batch)
+	_refresh_fog(bridge)
+
+
+func _refresh_entities(batch: Dictionary) -> void:
+	var ids: PackedInt64Array = batch["ids"]
+	var positions_x: PackedFloat32Array = batch["x"]
+	var positions_y: PackedFloat32Array = batch["y"]
+	var teams: PackedInt32Array = batch["team"]
+	var kinds: PackedInt32Array = batch["kind"]
+	var node_types: PackedInt32Array = batch["node_type"]
+	var node_remainings: PackedInt32Array = batch["node_remaining"]
+	var building_types: PackedInt32Array = batch["building_type"]
+	var widths: PackedInt32Array = batch["width"]
+	var heights: PackedInt32Array = batch["height"]
+	var building_states: PackedInt32Array = batch["building_state"]
+	var building_progresses: PackedFloat32Array = batch["building_progress"]
+	var building_max_progresses: PackedFloat32Array = batch["building_max_progress"]
 	var alive: Dictionary = {}
-	for entity: Dictionary in bridge.Snapshot():
-		var id: int = entity["id"]
-		alive[id] = true
-		var unit: Node3D = _units.get(id)
-		if unit == null:
-			unit = _create_entity(entity)
-			_units[id] = unit
-		if entity["kind"] == KIND_BUILDING:
-			_update_building(unit, entity)
-		else:
-			unit.position = Vector3(
-				entity["x"],
-				_ground_level(entity["x"], entity["y"]),
-				entity["y"])
-		unit.visible = _is_visible_entity(entity)
+	for bucket: Dictionary in _unit_meshes.values():
+		bucket["transforms"].clear()
+	for index in int(batch["count"]):
+		var kind: int = kinds[index]
+		if kind == KIND_BUILDING:
+			var id: int = ids[index]
+			alive[id] = true
+			var building: Node3D = _units.get(id)
+			if building == null:
+				building = _create_building()
+				_units[id] = building
+			_update_building(building, {
+				"id": id,
+				"x": positions_x[index],
+				"y": positions_y[index],
+				"team": teams[index],
+				"kind": kind,
+				"node_type": node_types[index],
+				"node_remaining": node_remainings[index],
+				"building_type": building_types[index],
+				"width": widths[index],
+				"height": heights[index],
+				"building_state": building_states[index],
+				"building_progress": building_progresses[index],
+				"building_max_progress": building_max_progresses[index],
+			})
+		elif _is_visible_unit(kind, node_remainings[index]):
+			_append_unit(kind, teams[index], node_types[index], positions_x[index], positions_y[index])
 	for id in _units.keys():
 		if not alive.has(id):
 			var dead: Node3D = _units[id]
 			dead.queue_free()
 			_units.erase(id)
-	_refresh_fog(bridge)
+	_commit_units()
 
 
-func _create_unit(entity: Dictionary) -> Node3D:
-	var kind: int = entity["kind"]
+func _is_visible_unit(kind: int, node_remaining: int) -> bool:
+	if kind == KIND_RESOURCE_NODE:
+		return node_remaining > 0
+	return true
+
+
+func _append_unit(kind: int, team: int, node_type: int, tile_x: float, tile_y: float) -> void:
 	var path: String = MODEL_PATHS.get(kind, MODEL_PATHS[KIND_UNIT])
-	var model := _model_for(path, _color_for(entity))
-	var root := Node3D.new()
-	var visual := MeshInstance3D.new()
-	visual.mesh = model["mesh"]
-	visual.material_override = _get_voxel_material()
-	visual.position = model["offset"]
-	visual.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
-	root.add_child(visual)
-	add_child(root)
-	return root
+	var bucket: Dictionary = _unit_bucket(path, _color_for(kind, team, node_type))
+	var origin: Vector3 = Vector3(
+		tile_x, _ground_level(tile_x, tile_y), tile_y) + (bucket["offset"] as Vector3)
+	bucket["transforms"].append(Transform3D(Basis(), origin))
 
 
-func _create_entity(entity: Dictionary) -> Node3D:
-	if entity["kind"] != KIND_BUILDING:
-		return _create_unit(entity)
+func _unit_bucket(path: String, color: Color) -> Dictionary:
+	var key := "%s|%d" % [path, color.to_rgba32()]
+	var cached: Dictionary = _unit_meshes.get(key, {})
+	if not cached.is_empty():
+		return cached
+	var model := _model_for(path, color)
+	var multimesh := MultiMesh.new()
+	multimesh.transform_format = MultiMesh.TRANSFORM_3D
+	multimesh.mesh = model["mesh"]
+	multimesh.instance_count = 0
+	var instance := MultiMeshInstance3D.new()
+	instance.multimesh = multimesh
+	instance.material_override = _get_voxel_material()
+	instance.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
+	add_child(instance)
+	var bucket := {
+		"multimesh": multimesh,
+		"offset": model["offset"],
+		"transforms": [],
+	}
+	_unit_meshes[key] = bucket
+	return bucket
+
+
+func _commit_units() -> void:
+	for bucket: Dictionary in _unit_meshes.values():
+		var transforms: Array = bucket["transforms"]
+		var multimesh: MultiMesh = bucket["multimesh"]
+		multimesh.instance_count = transforms.size()
+		for index in transforms.size():
+			multimesh.set_instance_transform(index, transforms[index])
+
+
+func _create_building() -> Node3D:
 	var building := Node3D.new()
 	var visual := MeshInstance3D.new()
 	visual.name = "VoxelBuilding"
@@ -271,25 +336,18 @@ func _ground_level(tile_x: float, tile_y: float) -> float:
 	return _terrain_levels[index] * TERRAIN_LAYER
 
 
-func _is_visible_entity(entity: Dictionary) -> bool:
-	if entity["kind"] == KIND_RESOURCE_NODE:
-		return entity["node_remaining"] > 0
-	return true
-
-
-func _color_for(entity: Dictionary) -> Color:
-	var kind: int = entity["kind"]
+func _color_for(kind: int, team: int, node_type: int) -> Color:
 	if kind == KIND_RESOURCE_NODE:
-		return RESOURCE_NODE_COLORS[entity["node_type"]]
+		return RESOURCE_NODE_COLORS[node_type]
 	if kind == KIND_DROP_SITE:
 		return DROP_SITE_COLOR
-	var team: int = entity["team"]
 	return TEAM_COLORS.get(team, Color(0.8, 0.8, 0.8))
 
 
 func _build_fog(width: int, height: int) -> void:
 	_fog_width = width
 	_fog_height = height
+	_fog_states = PackedByteArray()
 	var quad := QuadMesh.new()
 	quad.size = Vector2(1.0, 1.0)
 	var mesh := MultiMesh.new()
@@ -309,6 +367,7 @@ func _build_fog(width: int, height: int) -> void:
 	material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
 	material.cull_mode = BaseMaterial3D.CULL_DISABLED
 	_fog = MultiMeshInstance3D.new()
+	_fog.name = "Fog"
 	_fog.multimesh = mesh
 	_fog.material_override = material
 	add_child(_fog)
@@ -324,12 +383,19 @@ func _height_at(tile_x: int, tile_y: int) -> int:
 func _refresh_fog(bridge: GameBridge) -> void:
 	if _fog == null:
 		return
-	var states := bridge.VisionStates()
+	var states: PackedByteArray = bridge.VisionStates()
 	if states.size() < _fog_width * _fog_height:
 		return
+	if _fog_states.size() != states.size():
+		_fog_states.resize(states.size())
+		_fog_states.fill(255)
 	var mesh := _fog.multimesh
 	for index in states.size():
-		match states[index]:
+		var state: int = states[index]
+		if state == _fog_states[index]:
+			continue
+		_fog_states[index] = state
+		match state:
 			2:
 				mesh.set_instance_color(index, FOG_VISIBLE_COLOR)
 			1:
