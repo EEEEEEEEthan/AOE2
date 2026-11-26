@@ -78,6 +78,7 @@ public partial class GameBridge : Node
         {
             int originY = team == 0 ? 2 : 8;
             sim.AddResource(team, AoeSim.GameSim.ResourceWood, 1000);
+            sim.AddResource(team, AoeSim.GameSim.ResourceStone, 1000);
             for (int index = 0; index < types.Length; index++)
             {
                 long id = sim.IssuePlaceBuilding(types[index], originsX[index], originY, team);

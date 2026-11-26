@@ -31,7 +31,7 @@ public static class MarketSelfTest
 
     private static long BuildMarket(GameSim sim, int cellX, int cellY, long team)
     {
-        sim.AddResource(team, GameSim.ResourceWood, BuildingTypes.Cost(BuildingTypes.Market));
+        sim.AddResource(team, GameSim.ResourceWood, BuildingTypes.Cost(BuildingTypes.Market).Wood);
         long id = sim.IssuePlaceBuilding(BuildingTypes.Market, cellX, cellY, team);
         BuildingSystem.Complete(sim.World, id);
         return id;
