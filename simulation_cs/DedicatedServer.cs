@@ -154,6 +154,7 @@ public sealed class DedicatedServer
     private readonly SimulationServer _server;
     private readonly byte[] _staticMapPayload;
     private readonly int _ticksPerSecond;
+    private readonly int _snapshotIntervalTicks;
     private readonly object _clientsGate = new();
     private readonly List<ClientChannel> _clients = new();
     private readonly HashSet<long> _assignedTeams = new();
@@ -161,16 +162,23 @@ public sealed class DedicatedServer
     private Thread? _simThread;
     private volatile bool _running;
 
-    public DedicatedServer(int port, GameSim sim, int ticksPerSecond = 30)
+    public DedicatedServer(int port, GameSim sim, int ticksPerSecond = 30, int snapshotIntervalTicks = 2)
     {
         _listener = new TcpListener(IPAddress.Any, port);
         _server = new SimulationServer(sim);
         _staticMapPayload = StaticMapFrame.FromTerrain(sim.Terrain).Encode();
         _ticksPerSecond = Math.Max(1, ticksPerSecond);
+        _snapshotIntervalTicks = Math.Max(1, snapshotIntervalTicks);
     }
 
     /// <summary>实际监听端口：构造时传 0 由系统分配，测试据此连接。</summary>
     public int Port { get; private set; }
+
+    /// <summary>每隔多少个模拟 tick 下发一次快照；模拟仍按 <see cref="TicksPerSimulationSecond"/> 推进。</summary>
+    public int SnapshotIntervalTicks => _snapshotIntervalTicks;
+
+    /// <summary>模拟频率，与快照下发频率解耦。</summary>
+    public int TicksPerSimulationSecond => _ticksPerSecond;
 
     public void Start()
     {
@@ -354,25 +362,38 @@ public sealed class DedicatedServer
     private void SimulateLoop()
     {
         int tickMilliseconds = 1000 / _ticksPerSecond;
+        int ticksSinceSnapshot = _snapshotIntervalTicks;
         while (_running)
         {
             long deadline = Environment.TickCount64 + tickMilliseconds;
             _server.Step();
+            ticksSinceSnapshot += 1;
             List<ClientChannel> channels = SnapshotClients();
             bool removed = false;
             foreach (ClientChannel channel in channels)
             {
-                if (!channel.Alive)
+                removed |= !channel.Alive;
+            }
+            bool due = ticksSinceSnapshot >= _snapshotIntervalTicks;
+            if (due)
+            {
+                ticksSinceSnapshot = 0;
+                // 同一 tick 的全量快照只构建一次，各连接仅按自己的队伍裁剪。
+                SnapshotFrame? full = null;
+                foreach (ClientChannel channel in channels)
                 {
-                    removed = true;
-                    continue;
-                }
-                SnapshotFrame snapshot = _server.Snapshot(channel.Team);
-                SnapshotFrame outgoing = channel.Delta.Build(snapshot);
-                if (!channel.Enqueue(NetFrameType.Snapshot, outgoing.Encode()))
-                {
-                    // 丢帧后客户端状态不再连续：本帧丢弃，下一 tick 重置并重发关键帧。
-                    channel.Delta.Reset();
+                    if (!channel.Alive)
+                    {
+                        continue;
+                    }
+                    full ??= _server.SnapshotFull();
+                    SnapshotFrame snapshot = _server.SnapshotFor(full, channel.Team);
+                    SnapshotFrame outgoing = channel.Delta.Build(snapshot);
+                    if (!channel.Enqueue(NetFrameType.Snapshot, outgoing.Encode()))
+                    {
+                        // 丢帧后客户端状态不再连续：本帧丢弃，下一次重置并重发关键帧。
+                        channel.Delta.Reset();
+                    }
                 }
             }
             if (removed)
@@ -427,6 +448,9 @@ public sealed class RemoteClient
 
     /// <summary>服务器在 Welcome 握手帧里分配的观察方 team；未握手时为 -1。</summary>
     public long ViewerTeam { get; private set; } = -1;
+
+    /// <summary>已应用的下行快照帧数，用于验证快照降频后仍持续推进。</summary>
+    public long SnapshotFrames { get; private set; }
 
     public void Connect(string host, int port)
     {
@@ -515,6 +539,7 @@ public sealed class RemoteClient
         if (frameType == NetFrameType.Snapshot)
         {
             State.ApplySnapshot(payload);
+            SnapshotFrames += 1;
             return true;
         }
         return false;

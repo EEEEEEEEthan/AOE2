@@ -70,6 +70,11 @@ const BUILDING_MODEL_PATHS := {
 	14: "res://assets/vox/fortified_wall.vox",
 }
 
+# 快照降频到 10~15Hz 后，单位按相邻快照间隔插值移动；间隔夹在 30Hz~4Hz 之间，
+# 避免首帧或卡顿时出现瞬移/永远追不上。
+const MIN_INTERP_SECONDS := 1.0 / 30.0
+const MAX_INTERP_SECONDS := 0.25
+
 const FOG_UNEXPLORED_COLOR := Color(0.0, 0.0, 0.0, 1.0)
 const FOG_EXPLORED_COLOR := Color(0.32, 0.34, 0.38, 0.55)
 const FOG_VISIBLE_COLOR := Color(0.0, 0.0, 0.0, 0.0)
@@ -93,6 +98,13 @@ var _pending_cell_drops: PackedInt32Array = PackedInt32Array()
 var _bridge: GameBridge
 var _selected_ids: Array = []
 var _entity_positions: Dictionary = {}
+var _render_positions: Dictionary = {}
+var _move_targets: Dictionary = {}
+var _move_starts: Dictionary = {}
+var _move_elapsed: Dictionary = {}
+var _move_duration: Dictionary = {}
+var _unit_slots: Dictionary = {}
+var _last_snapshot_ms := 0
 var _selection_mesh: MultiMeshInstance3D
 var _placement_mesh: MeshInstance3D
 var _placement_material: StandardMaterial3D
@@ -191,6 +203,14 @@ func adopt(source: WorldView) -> void:
 	_fog_height = source._fog_height
 	_fog_states = source._fog_states
 	_voxel_material = source._voxel_material
+	_entity_positions = source._entity_positions
+	_render_positions = source._render_positions
+	_move_targets = source._move_targets
+	_move_starts = source._move_starts
+	_move_elapsed = source._move_elapsed
+	_move_duration = source._move_duration
+	_unit_slots = source._unit_slots
+	_last_snapshot_ms = source._last_snapshot_ms
 	for child in source.get_children():
 		source.remove_child(child)
 		add_child(child)
@@ -223,6 +243,11 @@ func _refresh_entities(batch: Dictionary) -> void:
 	var building_progresses: PackedFloat32Array = batch["building_progress"]
 	var building_max_progresses: PackedFloat32Array = batch["building_max_progress"]
 	var gate_states: PackedInt32Array = batch["gate_state"]
+	var now := Time.get_ticks_msec()
+	var interval := MIN_INTERP_SECONDS
+	if _last_snapshot_ms > 0:
+		interval = clampf(float(now - _last_snapshot_ms) / 1000.0, MIN_INTERP_SECONDS, MAX_INTERP_SECONDS)
+	_last_snapshot_ms = now
 	var prod_units: PackedInt64Array = batch["prod_unit"]
 	var prod_ticks_lefts: PackedInt64Array = batch["prod_ticks_left"]
 	var prod_ticks_totals: PackedInt64Array = batch["prod_ticks_total"]
@@ -230,6 +255,7 @@ func _refresh_entities(batch: Dictionary) -> void:
 	var prod_repeats: PackedInt64Array = batch["prod_repeat"]
 	var alive: Dictionary = {}
 	_entity_positions.clear()
+	_unit_slots.clear()
 	for bucket: Dictionary in _unit_meshes.values():
 		bucket["transforms"].clear()
 	for index in int(batch["count"]):
@@ -264,19 +290,34 @@ func _refresh_entities(batch: Dictionary) -> void:
 			})
 			var size_w: int = maxi(1, widths[index])
 			var size_h: int = maxi(1, heights[index])
-			_entity_positions[id] = Vector3(
+			var building_position := Vector3(
 				positions_x[index] - 0.5 + size_w * 0.5,
 				_ground_level_rect(positions_x[index], positions_y[index], size_w, size_h),
 				positions_y[index] - 0.5 + size_h * 0.5)
+			_entity_positions[id] = building_position
+			_render_positions[id] = building_position
+			_move_targets.erase(id)
+			_move_starts.erase(id)
+			_move_elapsed.erase(id)
+			_move_duration.erase(id)
 		elif _is_visible_unit(kind, node_remainings[index]):
+			var id: int = ids[index]
+			alive[id] = true
 			_append_unit(
-				int(ids[index]), kind, teams[index], node_types[index],
-				positions_x[index], positions_y[index])
+				id, kind, teams[index], node_types[index],
+				positions_x[index], positions_y[index], interval)
 	for id in _units.keys():
 		if not alive.has(id):
 			var dead: Node3D = _units[id]
 			dead.queue_free()
 			_units.erase(id)
+	for id in _render_positions.keys():
+		if not alive.has(id):
+			_render_positions.erase(id)
+			_move_targets.erase(id)
+			_move_starts.erase(id)
+			_move_elapsed.erase(id)
+			_move_duration.erase(id)
 	_commit_units()
 	_refresh_selection_rings()
 
@@ -288,13 +329,25 @@ func _is_visible_unit(kind: int, node_remaining: int) -> bool:
 
 
 func _append_unit(
-	id: int, kind: int, team: int, node_type: int, tile_x: float, tile_y: float) -> void:
+	id: int, kind: int, team: int, node_type: int, tile_x: float, tile_y: float,
+	interval: float) -> void:
 	var path: String = MODEL_PATHS.get(kind, MODEL_PATHS[KIND_UNIT])
 	var bucket: Dictionary = _unit_bucket(path, _color_for(kind, team, node_type))
-	var ground := _ground_level(tile_x, tile_y)
-	var origin: Vector3 = Vector3(tile_x, ground, tile_y) + (bucket["offset"] as Vector3)
-	bucket["transforms"].append(Transform3D(Basis(), origin))
-	_entity_positions[id] = Vector3(tile_x, ground, tile_y)
+	var target := Vector3(tile_x, _ground_level(tile_x, tile_y), tile_y)
+	var current: Vector3 = _render_positions.get(id, target)
+	_move_starts[id] = current
+	_move_targets[id] = target
+	_move_elapsed[id] = 0.0
+	_move_duration[id] = interval
+	_render_positions[id] = current
+	_entity_positions[id] = current
+	var transforms: Array = bucket["transforms"]
+	transforms.append(Transform3D(Basis(), current + (bucket["offset"] as Vector3)))
+	_unit_slots[id] = {
+		"multimesh": bucket["multimesh"],
+		"index": transforms.size() - 1,
+		"offset": bucket["offset"],
+	}
 
 
 func _unit_bucket(path: String, color: Color) -> Dictionary:
@@ -328,6 +381,48 @@ func _commit_units() -> void:
 		multimesh.instance_count = transforms.size()
 		for index in transforms.size():
 			multimesh.set_instance_transform(index, transforms[index])
+
+
+func _process(delta: float) -> void:
+	advance_interpolation(delta)
+
+
+## 按真实帧时间推进单位位置：相邻两次快照之间线性插值，快照降频也不会跳格。
+## 只改渲染状态，不触碰模拟；单位死亡/刷新时以当前显示位置为新的起点。
+func advance_interpolation(elapsed: float) -> void:
+	if elapsed <= 0.0 or _unit_slots.is_empty():
+		return
+	var moved_selected := false
+	for id in _unit_slots.keys():
+		if not _render_positions.has(id) or not _move_targets.has(id):
+			continue
+		var current: Vector3 = _render_positions[id]
+		var duration: float = _move_duration.get(id, 0.0)
+		var progress := 1.0
+		var arrived := duration <= 0.0
+		if duration > 0.0:
+			var total: float = _move_elapsed.get(id, 0.0) + elapsed
+			_move_elapsed[id] = total
+			progress = clampf(total / duration, 0.0, 1.0)
+			arrived = total >= duration
+		var start: Vector3 = _move_starts.get(id, current)
+		var position := start.lerp(_move_targets[id], progress)
+		_render_positions[id] = position
+		_entity_positions[id] = position
+		var slot: Dictionary = _unit_slots[id]
+		var multimesh: MultiMesh = slot["multimesh"]
+		var index: int = slot["index"]
+		if index < multimesh.instance_count:
+			multimesh.set_instance_transform(
+				index, Transform3D(Basis(), position + (slot["offset"] as Vector3)))
+		if position != current and id in _selected_ids:
+			moved_selected = true
+		if arrived:
+			# 到位后不再逐帧重复写同一变换，直到下一次快照刷新。
+			_move_duration[id] = 0.0
+			_move_targets.erase(id)
+	if moved_selected:
+		_refresh_selection_rings()
 
 
 func _create_building() -> Node3D:
