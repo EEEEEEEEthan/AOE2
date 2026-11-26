@@ -21,6 +21,7 @@ public static partial class KernelSelfTest
         CheckCombat(failures);
         CheckUnitTypes(failures);
         CheckOccupancy(failures);
+        CheckIncrementalSpatial(failures);
         CheckGridRange(failures);
         CheckProjectile(failures);
         CheckAttack(failures);
