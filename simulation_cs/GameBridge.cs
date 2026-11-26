@@ -806,29 +806,32 @@ public partial class GameBridge : Node
             _session.Server.Sim.World, _grid, _terrain, unit, ship);
     }
 
-    public bool HasCompletedMarket()
+    public bool HasCompletedMarket
     {
-        if (_multiplayer != null)
+        get
         {
-            AoeSim.SnapshotFrame? frame = ClientState?.Latest;
-            if (frame == null)
+            if (_multiplayer != null)
             {
+                AoeSim.SnapshotFrame? frame = ClientState?.Latest;
+                if (frame == null)
+                {
+                    return false;
+                }
+                foreach (AoeSim.EntitySnapshot entity in frame.Entities)
+                {
+                    if (entity.Team == MyTeam
+                        && entity.Kind == AoeSim.EntityKind.Building
+                        && entity.BuildingType == AoeSim.BuildingTypes.Market
+                        && entity.BuildingState == AoeSim.BuildingSystem.StateComplete)
+                    {
+                        return true;
+                    }
+                }
                 return false;
             }
-            foreach (AoeSim.EntitySnapshot entity in frame.Entities)
-            {
-                if (entity.Team == MyTeam
-                    && entity.Kind == AoeSim.EntityKind.Building
-                    && entity.BuildingType == AoeSim.BuildingTypes.Market
-                    && entity.BuildingState == AoeSim.BuildingSystem.StateComplete)
-                {
-                    return true;
-                }
-            }
-            return false;
+            return _session != null
+                && AoeSim.MarketSystem.HasCompletedMarket(_session.Server.Sim.World, MyTeam);
         }
-        return _session != null
-            && AoeSim.MarketSystem.HasCompletedMarket(_session.Server.Sim.World, MyTeam);
     }
 
     public long MarketBaseRate(long resource)
@@ -866,7 +869,7 @@ public partial class GameBridge : Node
         if (_multiplayer != null)
         {
             AoeSim.PlayerSnapshot? player = MyPlayerSnapshot();
-            if (player == null || !HasCompletedMarket())
+            if (player == null || !HasCompletedMarket)
             {
                 return false;
             }
@@ -896,7 +899,7 @@ public partial class GameBridge : Node
         if (_multiplayer != null)
         {
             AoeSim.PlayerSnapshot? player = MyPlayerSnapshot();
-            return player != null && HasCompletedMarket()
+            return player != null && HasCompletedMarket
                 && MyResource(player.Value, resource) >= amount;
         }
         if (_session == null)
