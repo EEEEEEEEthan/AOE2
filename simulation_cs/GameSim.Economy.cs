@@ -14,11 +14,6 @@ public sealed partial class GameSim
                 World.SetValue(entity, SimComponents.Team, SimComponents.TeamId, team);
                 World.SetValue(entity, SimComponents.PlayerProgress, SimComponents.Age, TechCatalog.AgeDark);
                 World.SetValue(entity, SimComponents.PlayerProgress, SimComponents.Research, 0);
-                long civ = Civ(team);
-                if (civ != CivilizationCatalog.Generic)
-                {
-                    World.SetValue(entity, SimComponents.PlayerProgress, SimComponents.Civ, civ);
-                }
                 World.RegisterPlayerEntity(SimComponents.PlayerProgress, team, entity);
             }
             _progressIndex.Set(team, entity);

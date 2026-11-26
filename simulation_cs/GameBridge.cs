@@ -59,11 +59,20 @@ public partial class GameBridge : Node
     /// </summary>
     public void StartGeneratedMatch(
         long seed = 20261127, int playerCount = 2, AoeSim.MapType mapType = AoeSim.MapType.Arabia,
-        int aiDifficulty = 1)
+        int aiDifficulty = 1, int[]? civIds = null)
     {
         StopPlayback();
         AoeSim.MapData map = AoeSim.MapGenerator.Generate(mapType, seed, playerCount);
-        AoeSim.GameSim sim = AoeSim.MapSetup.BuildGeneratedMatch(map, seed, playerCount);
+        long[]? matchCivs = null;
+        if (civIds != null)
+        {
+            matchCivs = new long[civIds.Length];
+            for (int index = 0; index < civIds.Length; index++)
+            {
+                matchCivs[index] = civIds[index];
+            }
+        }
+        AoeSim.GameSim sim = AoeSim.MapSetup.BuildGeneratedMatch(map, seed, playerCount, matchCivs);
         _grid = sim.Grid;
         _terrain = sim.Terrain;
         var session = new AoeSim.LocalSession(sim);
