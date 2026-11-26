@@ -14,6 +14,7 @@ public static class MarketSelfTest
         CheckBuy(failures);
         CheckSell(failures);
         CheckBuySellRejections(failures);
+        CheckTradeAmountLimits(failures);
         CheckTribute(failures);
         CheckTradeRoute(failures);
         CheckTradeRouteRejections(failures);
@@ -81,6 +82,34 @@ public static class MarketSelfTest
         Expect(failures, !MarketSystem.Buy(sim, 0, GameSim.ResourceWood, 0), "zero amount buy is rejected");
         Expect(failures, !MarketSystem.Buy(sim, 0, 9, 100), "unknown resource buy is rejected");
         Expect(failures, sim.World.Checksum() == checksum, "rejected trades leave state unchanged");
+    }
+
+    private static void CheckTradeAmountLimits(List<string> failures)
+    {
+        var sim = new GameSim(new NavGrid(20, 20), 1211, 3, 6);
+        BuildMarket(sim, 4, 4, 0);
+        sim.AddResource(0, GameSim.ResourceGold, 100000);
+        sim.AddResource(0, GameSim.ResourceWood, MarketSystem.MaxTradeAmount + 1);
+        sim.AddResource(0, GameSim.ResourceFood, MarketSystem.MaxTradeAmount + 1);
+        long checksum = sim.World.Checksum();
+        long goldBefore = sim.Resource(0, GameSim.ResourceGold);
+        long woodBefore = sim.Resource(0, GameSim.ResourceWood);
+        long foodBefore = sim.Resource(0, GameSim.ResourceFood);
+        long[] oversized = { long.MaxValue, MarketSystem.MaxTradeAmount + 1 };
+        foreach (long amount in oversized)
+        {
+            Expect(failures, !MarketSystem.Buy(sim, 0, GameSim.ResourceWood, amount), "oversized buy is rejected");
+            Expect(failures, !MarketSystem.Sell(sim, 0, GameSim.ResourceWood, amount), "oversized sell is rejected");
+            Expect(failures, !MarketSystem.Tribute(sim, 0, 1, GameSim.ResourceFood, amount), "oversized tribute is rejected");
+        }
+        Expect(failures, sim.World.Checksum() == checksum, "oversized trades leave state unchanged");
+        Expect(failures, sim.Resource(0, GameSim.ResourceGold) == goldBefore, "oversized trades leave gold unchanged");
+        Expect(failures, sim.Resource(0, GameSim.ResourceWood) == woodBefore, "oversized trades leave resource unchanged");
+        Expect(failures, sim.Resource(0, GameSim.ResourceFood) == foodBefore, "oversized trades leave tribute stock unchanged");
+        Expect(failures, sim.Resource(1, GameSim.ResourceFood) == 0, "oversized tribute does not credit target");
+        Expect(failures,
+            MarketSystem.Buy(sim, 0, GameSim.ResourceWood, MarketSystem.MaxTradeAmount),
+            "buy at the amount cap still succeeds");
     }
 
     private static void CheckTribute(List<string> failures)
