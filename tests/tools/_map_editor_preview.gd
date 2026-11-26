@@ -45,7 +45,7 @@ func _capture() -> void:
 	editor.call("_fit_camera")
 	var camera := editor.get_node("Camera3D") as Camera3D
 	camera.ortho_size = 20.0
-	camera.call("_apply_view")
+	camera.call("refresh_view")
 	for frame in WARMUP_FRAMES:
 		await get_tree().process_frame
 	await _save("map_editor_overview.png")

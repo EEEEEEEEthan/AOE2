@@ -113,11 +113,11 @@ func _unhandled_key_input(event: InputEvent) -> void:
 
 
 func _fit_camera() -> void:
-	var camera: Camera3D = %Camera3D
+	var camera: IsoCamera = %Camera3D
 	camera.grid_width = float(_model.width)
 	camera.grid_height = float(_model.height)
 	camera.focus = Vector3(_model.width * 0.5, 0.0, _model.height * 0.5)
-	camera._apply_view()
+	camera.refresh_view()
 
 
 func _begin_paint(screen_position: Vector2) -> void:
@@ -181,7 +181,7 @@ func _apply_tool(tile: Vector2i) -> void:
 
 
 func _tile_at(screen_position: Vector2) -> Vector2i:
-	var camera: Camera3D = %Camera3D
+	var camera: IsoCamera = %Camera3D
 	var origin := camera.project_ray_origin(screen_position)
 	var direction := camera.project_ray_normal(screen_position)
 	if is_zero_approx(direction.y):

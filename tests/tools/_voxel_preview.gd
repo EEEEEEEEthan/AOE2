@@ -40,14 +40,14 @@ func _capture() -> void:
 	var camera: Variant = scene.get_node("Camera3D")
 	camera.set("focus", Vector3(16.0, 0.0, 9.0))
 	camera.set("ortho_size", 9.0)
-	camera.call("_apply_view")
+	camera.call("refresh_view")
 	for frame in SETTLE_FRAMES:
 		await get_tree().process_frame
 	await _save("voxel_cliff_closeup.png")
 
 	camera.set("focus", Vector3(9.0, 0.0, 9.0))
 	camera.set("ortho_size", 8.0)
-	camera.call("_apply_view")
+	camera.call("refresh_view")
 	for frame in SETTLE_FRAMES:
 		await get_tree().process_frame
 	await _save("voxel_village.png")

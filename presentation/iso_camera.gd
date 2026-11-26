@@ -1,3 +1,4 @@
+class_name IsoCamera
 extends Camera3D
 
 const PAN_SPEED := 14.0
@@ -13,7 +14,7 @@ const MAX_ORTHO_SIZE := 24.0
 
 func _ready() -> void:
 	projection = Camera3D.PROJECTION_ORTHOGONAL
-	_apply_view()
+	refresh_view()
 
 func _process(delta: float) -> void:
 	var pan := Vector3.ZERO
@@ -35,7 +36,7 @@ func _process(delta: float) -> void:
 	if pan == Vector3.ZERO:
 		return
 	focus += pan.normalized() * PAN_SPEED * delta
-	_apply_view()
+	refresh_view()
 
 func _unhandled_input(event: InputEvent) -> void:
 	if not event is InputEventMouseButton:
@@ -50,9 +51,9 @@ func _unhandled_input(event: InputEvent) -> void:
 
 func _zoom_by(amount: float) -> void:
 	ortho_size = clampf(ortho_size + amount, MIN_ORTHO_SIZE, MAX_ORTHO_SIZE)
-	_apply_view()
+	refresh_view()
 
-func _apply_view() -> void:
+func refresh_view() -> void:
 	focus.x = clampf(focus.x, 0.0, grid_width)
 	focus.y = 0.0
 	focus.z = clampf(focus.z, 0.0, grid_height)

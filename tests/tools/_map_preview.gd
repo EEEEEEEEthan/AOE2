@@ -42,14 +42,14 @@ func _capture() -> void:
 	camera.set("grid_height", height)
 	camera.set("focus", Vector3(width * 0.5, 0.0, height * 0.5))
 	camera.set("ortho_size", 42.0)
-	camera.call("_apply_view")
+	camera.call("refresh_view")
 	for frame in WARMUP_FRAMES:
 		await get_tree().process_frame
 	await _save("map_overview.png")
 
 	camera.set("focus", Vector3(width * 0.25, 0.0, height * 0.5))
 	camera.set("ortho_size", 16.0)
-	camera.call("_apply_view")
+	camera.call("refresh_view")
 	for frame in SETTLE_FRAMES:
 		await get_tree().process_frame
 	await _save("map_start_base.png")
