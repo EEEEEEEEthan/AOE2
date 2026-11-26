@@ -86,6 +86,10 @@ var _fog_height := 0
 var _terrain_width := 0
 var _terrain_height := 0
 var _terrain_levels: PackedInt32Array = PackedInt32Array()
+var _pending_vertex_heights: PackedInt32Array = PackedInt32Array()
+var _pending_cell_colors: PackedColorArray = PackedColorArray()
+var _pending_cell_side_colors: PackedColorArray = PackedColorArray()
+var _pending_cell_drops: PackedInt32Array = PackedInt32Array()
 var _bridge: GameBridge
 var _selected_ids: Array = []
 var _entity_positions: Dictionary = {}
@@ -95,15 +99,37 @@ var _placement_material: StandardMaterial3D
 
 
 func build_terrain(bridge: GameBridge) -> void:
+	if not _prepare_terrain(bridge):
+		return
+	_build_terrain_mesh()
+
+
+## 分帧构建地形：先准备格子数据并让出一帧让加载界面刷新，再生成整张网格。
+## on_progress 收到 0..1 的进度，供加载场景驱动进度条。
+func build_terrain_staged(bridge: GameBridge, on_progress: Callable = Callable()) -> void:
+	if not _prepare_terrain(bridge):
+		return
+	_report_progress(on_progress, 0.5)
+	await get_tree().process_frame
+	_build_terrain_mesh()
+	_report_progress(on_progress, 1.0)
+	await get_tree().process_frame
+
+
+func is_terrain_ready() -> bool:
+	return _terrain_width > 0 and _terrain_height > 0 and _terrain_levels.size() > 0
+
+
+func _prepare_terrain(bridge: GameBridge) -> bool:
 	_bridge = bridge
 	_terrain_width = bridge.TerrainWidth
 	_terrain_height = bridge.TerrainHeight
 	if _terrain_width == 0 or _terrain_height == 0:
-		return
+		return false
 	var types := bridge.TerrainTypes()
 	var vertex_heights := PackedInt32Array(bridge.TerrainVertexHeights())
 	if vertex_heights.size() != (_terrain_width + 1) * (_terrain_height + 1):
-		return
+		return false
 	var stride := _terrain_width + 1
 	var cells := _terrain_width * _terrain_height
 	var cell_colors := PackedColorArray()
@@ -126,9 +152,21 @@ func build_terrain(bridge: GameBridge) -> void:
 			cell_colors[index] = _terrain_color(types[index], true)
 			cell_side_colors[index] = _terrain_color(types[index], false)
 			cell_drops[index] = drop
+	_pending_vertex_heights = vertex_heights
+	_pending_cell_colors = cell_colors
+	_pending_cell_side_colors = cell_side_colors
+	_pending_cell_drops = cell_drops
+	return true
+
+
+func _build_terrain_mesh() -> void:
 	var mesh: ArrayMesh = VOXEL_MESHER.heightfield_mesh(
-		vertex_heights, _terrain_width, _terrain_height, TERRAIN_LAYER,
-		cell_colors, cell_side_colors, cell_drops)
+		_pending_vertex_heights, _terrain_width, _terrain_height, TERRAIN_LAYER,
+		_pending_cell_colors, _pending_cell_side_colors, _pending_cell_drops)
+	_pending_vertex_heights = PackedInt32Array()
+	_pending_cell_colors = PackedColorArray()
+	_pending_cell_side_colors = PackedColorArray()
+	_pending_cell_drops = PackedInt32Array()
 	var terrain := MeshInstance3D.new()
 	terrain.name = "VoxelTerrain"
 	terrain.mesh = mesh
@@ -136,6 +174,31 @@ func build_terrain(bridge: GameBridge) -> void:
 	terrain.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
 	add_child(terrain)
 	_build_fog(_terrain_width, _terrain_height)
+
+
+func _report_progress(on_progress: Callable, value: float) -> void:
+	if on_progress.is_valid():
+		on_progress.call(value)
+
+
+## 接管加载场景预先建好的地形节点与状态，避免对局场景重新计算整张网格。
+func adopt(source: WorldView) -> void:
+	_bridge = source._bridge
+	_terrain_width = source._terrain_width
+	_terrain_height = source._terrain_height
+	_terrain_levels = source._terrain_levels
+	_fog_width = source._fog_width
+	_fog_height = source._fog_height
+	_fog_states = source._fog_states
+	_voxel_material = source._voxel_material
+	for child in source.get_children():
+		source.remove_child(child)
+		add_child(child)
+	_fog = null
+	for child in get_children():
+		if child.name == "Fog":
+			_fog = child as MultiMeshInstance3D
+	source.queue_free()
 
 
 func refresh(bridge: GameBridge) -> void:
