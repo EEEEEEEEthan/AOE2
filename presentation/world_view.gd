@@ -9,14 +9,6 @@ const VOXELS_PER_CELL := 16
 # TERRAIN_LAYER 只负责把高度层换算成 1/16 单位，模型与高度层共用这一密度。
 const TERRAIN_LAYER := 1.0 / float(VOXELS_PER_CELL)
 
-const TEAM_COLORS := {
-	0: Color(0.82, 0.22, 0.2),
-	1: Color(0.2, 0.42, 0.85),
-}
-const VILLAGER_COLORS := {
-	0: Color(0.95, 0.58, 0.46),
-	1: Color(0.46, 0.66, 0.95),
-}
 const RESOURCE_NODE_COLORS := [
 	Color(0.36, 0.24, 0.12),
 	Color(0.25, 0.6, 0.25),
@@ -264,7 +256,7 @@ func _update_building(building: Node3D, entity: Dictionary) -> void:
 func _show_building_model(building: Node3D, entity: Dictionary, path: String) -> void:
 	var size_w: int = maxi(1, int(entity["width"]))
 	var size_h: int = maxi(1, int(entity["height"]))
-	var team_color: Color = TEAM_COLORS.get(entity["team"], Color(0.7, 0.7, 0.7))
+	var team_color: Color = PlayerColors.color_of(entity["team"])
 	if int(entity.get("building_type", 0)) == BUILDING_TYPE_GATE and int(entity.get("gate_state", 0)) == GATE_STATE_LOCKED:
 		team_color = team_color.darkened(0.45)
 	var model := _model_for(path, team_color)
@@ -318,7 +310,7 @@ func _building_layers(entity: Dictionary, state: int) -> int:
 func _building_color(entity: Dictionary, state: int) -> Color:
 	if state == BUILDING_STATE_RUINS:
 		return BUILDING_RUIN_COLOR
-	var team_color: Color = TEAM_COLORS.get(entity["team"], Color(0.7, 0.7, 0.7))
+	var team_color: Color = PlayerColors.color_of(entity["team"])
 	if state == BUILDING_STATE_COMPLETE:
 		return team_color.darkened(0.15)
 	return BUILDING_FOUNDATION_TINT.lerp(team_color, 0.35)
@@ -382,7 +374,7 @@ func _color_for(kind: int, team: int, node_type: int) -> Color:
 		return RESOURCE_NODE_COLORS[node_type]
 	if kind == KIND_DROP_SITE:
 		return DROP_SITE_COLOR
-	return TEAM_COLORS.get(team, Color(0.8, 0.8, 0.8))
+	return PlayerColors.color_of(team)
 
 
 func _build_fog(width: int, height: int) -> void:

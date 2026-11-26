@@ -23,7 +23,7 @@ func _capture() -> void:
 		bridge = scene.get("bridge")
 		waited += 1
 
-	var camera: Variant = scene.get_node("Camera3D")
+	var camera: Variant = scene.find_child("Camera3D", true, false)
 
 	bridge.call("StartBuildingShowcase")
 	bridge.call("RevealAllVision")
@@ -80,7 +80,7 @@ func _capture() -> void:
 
 
 func _reset_world(scene: Node, bridge: Variant) -> void:
-	var world: Node3D = scene.get_node("WorldView")
+	var world: Node3D = scene.find_child("WorldView", true, false)
 	for child in world.get_children():
 		child.free()
 	world.set("_units", {})

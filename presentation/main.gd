@@ -1,12 +1,8 @@
-extends Node3D
+extends Control
 
 const DEDICATED_FEATURE := "dedicated_server"
 const SERVER_ARGUMENT := "--server"
 const DEFAULT_PORT := 27015
-const TEAM_NAMES := {
-	0: "蓝方",
-	1: "红方",
-}
 const REASON_NAMES := {
 	-1: "无",
 	0: "征服",
@@ -70,7 +66,7 @@ func _result_title() -> String:
 	var winner := bridge.MatchWinnerTeam()
 	if winner < 0:
 		return "平局"
-	return "%s 胜利" % TEAM_NAMES.get(winner, "玩家 %d" % winner)
+	return "%s 胜利" % PlayerColors.name_of(winner)
 
 
 func _result_stats() -> String:
@@ -79,7 +75,7 @@ func _result_stats() -> String:
 		var team: int = player["team"]
 		var state := _player_state_text(player)
 		lines.append("%s　%d 分　单位/建筑 %d　木%d 食%d 金%d 石%d　%s" % [
-			TEAM_NAMES.get(team, "玩家 %d" % team),
+			PlayerColors.name_of(team),
 			player["score"],
 			player["participants"],
 			player["wood"],

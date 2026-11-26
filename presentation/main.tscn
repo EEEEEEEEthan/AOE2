@@ -1,8 +1,9 @@
-[gd_scene load_steps=5 format=3]
+[gd_scene load_steps=6 format=3]
 
 [ext_resource type="Script" path="res://presentation/main.gd" id="1_main"]
 [ext_resource type="Script" path="res://presentation/iso_camera.gd" id="2_camera"]
 [ext_resource type="Script" path="res://presentation/world_view.gd" id="3_world"]
+[ext_resource type="Theme" path="res://presentation/ui_theme.tres" id="4_theme"]
 
 [sub_resource type="Environment" id="Env_main"]
 background_mode = 1
@@ -11,76 +12,118 @@ ambient_light_source = 2
 ambient_light_color = Color(0.62, 0.66, 0.74, 1)
 ambient_light_energy = 0.7
 
-[node name="Main" type="Node3D"]
+[node name="Main" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme = ExtResource("4_theme")
 script = ExtResource("1_main")
 
-[node name="WorldEnvironment" type="WorldEnvironment" parent="."]
+[node name="WorldContainer" type="SubViewportContainer" parent="."]
+layout_mode = 1
+anchor_right = 1.0
+anchor_bottom = 0.75
+grow_horizontal = 2
+grow_vertical = 2
+stretch = true
+
+[node name="SubViewport" type="SubViewport" parent="WorldContainer"]
+size = Vector2i(1152, 648)
+render_target_update_mode = 4
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="WorldContainer/SubViewport"]
 environment = SubResource("Env_main")
 
-[node name="DirectionalLight3D" type="DirectionalLight3D" parent="."]
+[node name="DirectionalLight3D" type="DirectionalLight3D" parent="WorldContainer/SubViewport"]
 transform = Transform3D(1, 0, 0, 0, 0.5, -0.866, 0, 0.866, 0.5, 0, 20, 0)
 light_energy = 1.1
 
-[node name="WorldView" type="Node3D" parent="."]
+[node name="WorldView" type="Node3D" parent="WorldContainer/SubViewport"]
 unique_name_in_owner = true
 script = ExtResource("3_world")
 
-[node name="Camera3D" type="Camera3D" parent="."]
+[node name="Camera3D" type="Camera3D" parent="WorldContainer/SubViewport"]
+current = true
 script = ExtResource("2_camera")
 
-[node name="Hud" type="CanvasLayer" parent="."]
-
-[node name="SurrenderButton" type="Button" parent="Hud"]
-unique_name_in_owner = true
-offset_left = 16.0
-offset_top = 16.0
-offset_right = 104.0
-offset_bottom = 52.0
-text = "投降"
-
-[node name="ResultPanel" type="PanelContainer" parent="Hud"]
-unique_name_in_owner = true
-anchors_preset = 8
-anchor_left = 0.5
-anchor_top = 0.5
-anchor_right = 0.5
-anchor_bottom = 0.5
-offset_left = -240.0
-offset_top = -150.0
-offset_right = 240.0
-offset_bottom = 150.0
+[node name="Hud" type="PanelContainer" parent="."]
+layout_mode = 1
+anchor_top = 0.75
+anchor_right = 1.0
+anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
 
-[node name="Margin" type="MarginContainer" parent="Hud/ResultPanel"]
+[node name="HudMargin" type="MarginContainer" parent="Hud"]
 layout_mode = 2
 
-[node name="Content" type="VBoxContainer" parent="Hud/ResultPanel/Margin"]
+[node name="HudContent" type="HBoxContainer" parent="Hud/HudMargin"]
 layout_mode = 2
-theme_override_constants/separation = 16
+alignment = 1
 
-[node name="ResultTitle" type="Label" parent="Hud/ResultPanel/Margin/Content"]
+[node name="SurrenderButton" type="Button" parent="Hud/HudMargin/HudContent"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "投降"
+
+[node name="InfoLabel" type="Label" parent="Hud/HudMargin/HudContent"]
+layout_mode = 2
+text = "WASD 移动　滚轮缩放"
+
+[node name="ResultOverlay" type="Control" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+
+[node name="Center" type="CenterContainer" parent="ResultOverlay"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+
+[node name="ResultPanel" type="PanelContainer" parent="ResultOverlay/Center"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(480, 300)
+layout_mode = 2
+
+[node name="Margin" type="MarginContainer" parent="ResultOverlay/Center/ResultPanel"]
+layout_mode = 2
+
+[node name="Content" type="VBoxContainer" parent="ResultOverlay/Center/ResultPanel/Margin"]
+layout_mode = 2
+
+[node name="ResultTitle" type="Label" parent="ResultOverlay/Center/ResultPanel/Margin/Content"]
 unique_name_in_owner = true
 layout_mode = 2
 text = "对局结束"
 horizontal_alignment = 1
 
-[node name="ResultDetail" type="Label" parent="Hud/ResultPanel/Margin/Content"]
+[node name="ResultDetail" type="Label" parent="ResultOverlay/Center/ResultPanel/Margin/Content"]
 unique_name_in_owner = true
 layout_mode = 2
 text = "胜利条件：征服"
 horizontal_alignment = 1
 
-[node name="ResultStats" type="Label" parent="Hud/ResultPanel/Margin/Content"]
+[node name="ResultStats" type="Label" parent="ResultOverlay/Center/ResultPanel/Margin/Content"]
 unique_name_in_owner = true
 layout_mode = 2
 text = "蓝方 0 分 / 红方 0 分"
 horizontal_alignment = 1
 
-[node name="ExitButton" type="Button" parent="Hud/ResultPanel/Margin/Content"]
+[node name="ExitButton" type="Button" parent="ResultOverlay/Center/ResultPanel/Margin/Content"]
 unique_name_in_owner = true
 layout_mode = 2
 text = "退出"
 
-[connection signal="pressed" from="Hud/SurrenderButton" to="." method="_on_surrender_pressed"]
-[connection signal="pressed" from="Hud/ResultPanel/Margin/Content/ExitButton" to="." method="_on_exit_pressed"]
+[connection signal="pressed" from="Hud/HudMargin/HudContent/SurrenderButton" to="." method="_on_surrender_pressed"]
+[connection signal="pressed" from="ResultOverlay/Center/ResultPanel/Margin/Content/ExitButton" to="." method="_on_exit_pressed"]
