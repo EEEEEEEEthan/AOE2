@@ -862,8 +862,58 @@ public sealed class GameSim
     public bool ApplyRallyTo(long building, long unit) =>
         OrderSystem.ApplyRally(World, building, unit);
 
-    public void ApplyCommand(LockstepCommand command)
+    /// <summary>
+    /// 服务器权威校验：指令玩家必须落在本局玩家范围内；作用于实体的指令还要求该实体属于该玩家。
+    /// 作用于玩家的指令（投降/时代/科技/放置建筑）只校验玩家本身。
+    /// </summary>
+    public bool IsCommandAllowed(LockstepCommand command)
     {
+        if (command.Player < 0 || command.Player >= Lockstep.PlayerCount)
+        {
+            return false;
+        }
+        if (IsPlayerCommand(command.Kind))
+        {
+            return true;
+        }
+        if (!IsEntityCommand(command.Kind) || !World.IsAlive(command.Entity))
+        {
+            return false;
+        }
+        return World.HasComponent(command.Entity, SimComponents.Team)
+            && World.GetValue(command.Entity, SimComponents.Team, SimComponents.TeamId) == command.Player;
+    }
+
+    private static bool IsPlayerCommand(long kind) =>
+        kind == LockstepCommand.KindSurrender
+        || kind == LockstepCommand.KindAgeUp
+        || kind == LockstepCommand.KindResearch
+        || kind == LockstepCommand.KindPlaceBuilding;
+
+    private static bool IsEntityCommand(long kind) =>
+        kind == LockstepCommand.KindMove
+        || kind == LockstepCommand.KindAttack
+        || kind == LockstepCommand.KindStop
+        || kind == LockstepCommand.KindGather
+        || kind == LockstepCommand.KindHeal
+        || kind == LockstepCommand.KindConvert
+        || kind == LockstepCommand.KindPickupRelic
+        || kind == LockstepCommand.KindDepositRelic
+        || kind == LockstepCommand.KindStance
+        || kind == LockstepCommand.KindAttackMove
+        || kind == LockstepCommand.KindPatrol
+        || kind == LockstepCommand.KindGuard
+        || kind == LockstepCommand.KindFollow
+        || kind == LockstepCommand.KindHold
+        || kind == LockstepCommand.KindSetRally
+        || kind == LockstepCommand.KindConstruct;
+
+    public bool ApplyCommand(LockstepCommand command)
+    {
+        if (!IsCommandAllowed(command))
+        {
+            return false;
+        }
         switch (command.Kind)
         {
             case LockstepCommand.KindMove:
@@ -932,6 +982,7 @@ public sealed class GameSim
                 IssueConstruct(command.Entity, command.TargetEntity);
                 break;
         }
+        return true;
     }
 
     public void SimulateTick()

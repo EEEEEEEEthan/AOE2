@@ -59,4 +59,14 @@ public sealed class Lockstep
     }
 
     public int PendingTurns() => _turns.Count;
+
+    /// <summary>
+    /// 服务器按固定 tick 节奏推进回合编号：服务器自己收集各玩家本回合输入，
+    /// 到回合边界后直接递增 Turn，不依赖客户端一侧的 SubmitTurn/CanAdvance 等待。
+    /// </summary>
+    public void AdvanceTurn()
+    {
+        _turns.Remove(Turn);
+        Turn += 1;
+    }
 }

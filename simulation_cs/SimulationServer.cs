@@ -2,10 +2,21 @@ using System.Collections.Generic;
 
 namespace AoeSim;
 
+/// <summary>
+/// 权威服务器：每 tick 推进模拟，按 <see cref="CommandFrame.Turn"/> 收集各玩家输入，在回合边界统一应用。
+/// 玩家身份由连接层绑定，<see cref="CommandFrame.Player"/> 与指令自报的 Player 都不被信任；
+/// 越权/过期/非法指令直接丢弃并计数，不进入模拟。
+/// </summary>
 public sealed class SimulationServer
 {
-    private readonly List<LockstepCommand> _pending = new();
+    /// <summary>允许客户端提前提交的回合数上限，避免伪造超远回合占满内部队列。</summary>
+    private const int TurnLookahead = 8;
+
+    private readonly Dictionary<long, List<LockstepCommand>[]> _turns = new();
     private readonly object _gate = new();
+    private long _rejectedCommands;
+    private long _acceptedCommands;
+    private int _turnTicks;
 
     public GameSim Sim { get; }
     public long ViewTeam { get; set; }
@@ -21,43 +32,113 @@ public sealed class SimulationServer
         }
     }
 
+    /// <summary>运行期间被服务器拒绝的指令数（越权、过期、非法或执行时实体已失效）。</summary>
+    public long RejectedCommands
+    {
+        get
+        {
+            lock (_gate)
+            {
+                return _rejectedCommands;
+            }
+        }
+    }
+
+    /// <summary>已通过归属校验并进入回合队列的指令数。</summary>
+    public long AcceptedCommands
+    {
+        get
+        {
+            lock (_gate)
+            {
+                return _acceptedCommands;
+            }
+        }
+    }
+
     public SimulationServer(GameSim sim)
     {
         Sim = sim;
     }
 
-    public void Enqueue(CommandFrame frame)
+    /// <summary>本地/可信调用：以帧里声明的 Player 作为来源玩家。</summary>
+    public void Enqueue(CommandFrame frame) => Enqueue(frame, frame.Player);
+
+    /// <summary>
+    /// 连接层入口：来源玩家由服务器按连接分配，帧与指令自报的 Player 一律被覆写。
+    /// 当前回合已开始过的帧顺延到下一回合；早于当前回合的帧整帧丢弃。
+    /// </summary>
+    public void Enqueue(CommandFrame frame, long sourcePlayer)
     {
         lock (_gate)
         {
+            if (sourcePlayer < 0 || sourcePlayer >= Sim.Lockstep.PlayerCount)
+            {
+                _rejectedCommands += frame.Commands.Length;
+                return;
+            }
+            long current = Sim.Lockstep.Turn;
+            if (frame.Turn < current || frame.Turn > current + TurnLookahead)
+            {
+                _rejectedCommands += frame.Commands.Length;
+                return;
+            }
+            long target = frame.Turn == current && _turnTicks > 0 ? current + 1 : frame.Turn;
+            List<LockstepCommand>[] slots = SlotsFor(target);
             foreach (LockstepCommand command in frame.Commands)
             {
-                _pending.Add(command);
+                command.Player = sourcePlayer;
+                if (Sim.IsCommandAllowed(command))
+                {
+                    slots[sourcePlayer].Add(command);
+                    _acceptedCommands += 1;
+                }
+                else
+                {
+                    _rejectedCommands += 1;
+                }
             }
         }
     }
 
+    /// <summary>可信的本地批量入口，玩家取指令自身的 Player。</summary>
     public void Enqueue(IEnumerable<LockstepCommand> commands)
     {
         lock (_gate)
         {
-            _pending.AddRange(commands);
+            long current = Sim.Lockstep.Turn;
+            long target = _turnTicks > 0 ? current + 1 : current;
+            foreach (LockstepCommand command in commands)
+            {
+                if (command.Player < 0 || command.Player >= Sim.Lockstep.PlayerCount
+                    || !Sim.IsCommandAllowed(command))
+                {
+                    _rejectedCommands += 1;
+                    continue;
+                }
+                SlotsFor(target)[command.Player].Add(command);
+                _acceptedCommands += 1;
+            }
         }
     }
 
+    /// <summary>推进一个模拟 tick；到回合边界时应用该回合已收到的输入并递增回合号。</summary>
     public long Step()
     {
         lock (_gate)
         {
-            if (_pending.Count > 0)
+            if (_turnTicks == 0)
             {
-                foreach (LockstepCommand command in _pending)
-                {
-                    Sim.ApplyCommand(command);
-                }
-                _pending.Clear();
+                ApplyTurnCommands(Sim.Lockstep.Turn);
             }
             Sim.SimulateTick();
+            _turnTicks += 1;
+            if (_turnTicks >= Sim.Lockstep.TicksPerTurn)
+            {
+                _turnTicks = 0;
+                Sim.Lockstep.AdvanceTurn();
+                PrunePastTurns(Sim.Lockstep.Turn);
+            }
             return Sim.World.Checksum();
         }
     }
@@ -87,6 +168,60 @@ public sealed class SimulationServer
         lock (_gate)
         {
             return Sim.World.Checksum();
+        }
+    }
+
+    /// <summary>按玩家升序应用本回合输入，保证同一回合内的指令顺序确定。</summary>
+    private void ApplyTurnCommands(long turn)
+    {
+        if (!_turns.Remove(turn, out List<LockstepCommand>[]? slots))
+        {
+            return;
+        }
+        foreach (List<LockstepCommand> commands in slots)
+        {
+            foreach (LockstepCommand command in commands)
+            {
+                if (!Sim.ApplyCommand(command))
+                {
+                    _rejectedCommands += 1;
+                }
+            }
+        }
+    }
+
+    private List<LockstepCommand>[] SlotsFor(long turn)
+    {
+        if (!_turns.TryGetValue(turn, out List<LockstepCommand>[]? slots))
+        {
+            slots = new List<LockstepCommand>[Sim.Lockstep.PlayerCount];
+            for (int player = 0; player < slots.Length; player++)
+            {
+                slots[player] = new List<LockstepCommand>();
+            }
+            _turns[turn] = slots;
+        }
+        return slots;
+    }
+
+    /// <summary>丢弃在回合号已推进后仍残留的过期队列（正常路径下已由回合边界消费）。</summary>
+    private void PrunePastTurns(long currentTurn)
+    {
+        if (_turns.Count == 0)
+        {
+            return;
+        }
+        List<long> stale = new();
+        foreach (long turn in _turns.Keys)
+        {
+            if (turn < currentTurn)
+            {
+                stale.Add(turn);
+            }
+        }
+        foreach (long turn in stale)
+        {
+            _turns.Remove(turn);
         }
     }
 }
