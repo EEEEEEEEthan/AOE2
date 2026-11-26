@@ -184,6 +184,27 @@ public sealed class SimulationServer
         }
     }
 
+    /// <summary>同一 tick 的全量快照（不裁剪视野），供多观察者共享构建后按队伍过滤。</summary>
+    public SnapshotFrame SnapshotFull()
+    {
+        lock (_gate)
+        {
+            return SnapshotFrame.Build(Sim.World, Sim.Lockstep.Turn, Sim.Match);
+        }
+    }
+
+    /// <summary>复用全量快照，仅按观察方裁剪实体并附上其视野位图。</summary>
+    public SnapshotFrame SnapshotFor(SnapshotFrame full, long viewerTeam)
+    {
+        lock (_gate)
+        {
+            VisionGrid? vision = Sim.VisionFor(viewerTeam);
+            return vision == null
+                ? full
+                : SnapshotFrame.Filter(Sim.World, full, vision, viewerTeam);
+        }
+    }
+
     private SnapshotFrame BuildSnapshot(long viewerTeam) =>
         SnapshotFrame.Build(Sim.World, Sim.Lockstep.Turn, Sim.Match, Sim.VisionFor(viewerTeam), viewerTeam);
 

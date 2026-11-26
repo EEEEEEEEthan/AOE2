@@ -618,6 +618,39 @@ public sealed class SnapshotFrame
         return frame;
     }
 
+    /// <summary>
+    /// 从同 tick 的全量快照按观察方视野裁剪。全量快照的实体、玩家与市场价格只构建一次，
+    /// 各连接只复用它并按队伍裁剪实体，避免每个观察者都重新遍历世界、重算玩家派生数据。
+    /// </summary>
+    public static SnapshotFrame Filter(SimWorld world, SnapshotFrame full, VisionGrid vision, long viewerTeam)
+    {
+        var layout = new SnapshotLayout(world);
+        List<EntitySnapshot> kept = _entityBuffer ??= new List<EntitySnapshot>();
+        kept.Clear();
+        foreach (EntitySnapshot entity in full.Entities)
+        {
+            if (ShouldInclude(entity.Id, vision, viewerTeam, layout))
+            {
+                kept.Add(entity);
+            }
+        }
+        return new SnapshotFrame
+        {
+            Tick = full.Tick,
+            Turn = full.Turn,
+            Phase = full.Phase,
+            WinnerTeam = full.WinnerTeam,
+            Reason = full.Reason,
+            EndTick = full.EndTick,
+            Players = full.Players,
+            Entities = kept.ToArray(),
+            VisionWidth = vision.Width,
+            VisionHeight = vision.Height,
+            HasVision = true,
+            VisionStates = vision.States(),
+        };
+    }
+
     private static long ClassifyEntity(long id, in SnapshotLayout layout)
     {
         // 农田同时持有 Building 与 ResourceNode：先判建筑，否则会被当成普通资源点丢掉建筑字段。
