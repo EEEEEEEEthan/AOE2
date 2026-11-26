@@ -119,6 +119,8 @@ public readonly struct EntitySnapshot
     public readonly long BuildingState;
     public readonly long BuildingProgress;
     public readonly long BuildingMaxProgress;
+    public readonly long GarrisonCount;
+    public readonly long GarrisonCapacity;
     public readonly long RepairState;
     public readonly long RepairTarget;
 
@@ -140,6 +142,8 @@ public readonly struct EntitySnapshot
         long buildingState,
         long buildingProgress,
         long buildingMaxProgress,
+        long garrisonCount,
+        long garrisonCapacity,
         long repairState,
         long repairTarget)
     {
@@ -160,6 +164,8 @@ public readonly struct EntitySnapshot
         BuildingState = buildingState;
         BuildingProgress = buildingProgress;
         BuildingMaxProgress = buildingMaxProgress;
+        GarrisonCount = garrisonCount;
+        GarrisonCapacity = garrisonCapacity;
         RepairState = repairState;
         RepairTarget = repairTarget;
     }
@@ -286,6 +292,8 @@ public sealed class SnapshotFrame
             long buildingState = 0;
             long buildingProgress = 0;
             long buildingMaxProgress = 0;
+            long garrisonCount = 0;
+            long garrisonCapacity = 0;
             long repairState = 0;
             long repairTarget = -1;
             if (kind == EntityKind.Villager && world.HasComponent(id, SimComponents.Repair))
@@ -301,6 +309,11 @@ public sealed class SnapshotFrame
                 buildingState = world.GetValue(id, SimComponents.Building, SimComponents.State);
                 buildingProgress = world.GetValue(id, SimComponents.Building, SimComponents.Progress);
                 buildingMaxProgress = world.GetValue(id, SimComponents.Building, SimComponents.MaxProgress);
+                if (world.HasComponent(id, SimComponents.Garrison))
+                {
+                    garrisonCount = world.GetValue(id, SimComponents.Garrison, SimComponents.Count);
+                    garrisonCapacity = world.GetValue(id, SimComponents.Garrison, SimComponents.Capacity);
+                }
             }
             entities.Add(new EntitySnapshot(
                 id,
@@ -320,6 +333,8 @@ public sealed class SnapshotFrame
                 buildingState,
                 buildingProgress,
                 buildingMaxProgress,
+                garrisonCount,
+                garrisonCapacity,
                 repairState,
                 repairTarget));
         }
@@ -517,6 +532,8 @@ public sealed class SnapshotFrame
                 writer.Write(entity.BuildingState);
                 writer.Write(entity.BuildingProgress);
                 writer.Write(entity.BuildingMaxProgress);
+                writer.Write(entity.GarrisonCount);
+                writer.Write(entity.GarrisonCapacity);
                 writer.Write(entity.RepairState);
                 writer.Write(entity.RepairTarget);
             }
@@ -630,6 +647,8 @@ public sealed class SnapshotFrame
         for (int index = 0; index < count; index++)
         {
             entities[index] = new EntitySnapshot(
+                reader.ReadInt64(),
+                reader.ReadInt64(),
                 reader.ReadInt64(),
                 reader.ReadInt64(),
                 reader.ReadInt64(),

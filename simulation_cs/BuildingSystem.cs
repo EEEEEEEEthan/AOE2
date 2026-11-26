@@ -111,6 +111,7 @@ public static class BuildingSystem
         world.SetValue(id, SimComponents.Building, SimComponents.Progress, maxProgress);
         world.SetValue(id, SimComponents.Building, SimComponents.State, StateComplete);
         AddPopulationCap(world, id);
+        GarrisonSystem.EnsureBuildingCombat(world, id);
     }
 
     public static void Ruin(SimWorld world, NavGrid grid, long id)
@@ -132,6 +133,8 @@ public static class BuildingSystem
         world.Detach(id, SimComponents.Health);
         world.Detach(id, SimComponents.Footprint);
         world.Detach(id, SimComponents.ResourceNode);
+        world.Detach(id, SimComponents.Combat);
+        world.Detach(id, SimComponents.Garrison);
         SetBlock(world, grid, id, false);
     }
 

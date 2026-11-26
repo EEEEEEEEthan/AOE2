@@ -29,6 +29,8 @@ public static class SimComponents
     public const string RelicSlot = "relic_slot";
     public const string Order = "order";
     public const string Rally = "rally";
+    public const string Garrison = "garrison";
+    public const string Garrisoned = "garrisoned";
 
     public const string X = "x";
     public const string Y = "y";
@@ -138,6 +140,15 @@ public static class SimComponents
     public const string RallyX = "rally_x";
     public const string RallyY = "rally_y";
     public const string RallyTarget = "rally_target";
+
+    public const string Count = "count";
+    public const string Capacity = "capacity";
+    public const string BonusDamage = "bonus_damage";
+    public const string BaseDamage = "base_damage";
+    public const string BaseCooldown = "base_cooldown";
+    public const string TownBell = "town_bell";
+    public const string Contribution = "contribution";
+    public const string HadGather = "had_gather";
 
     /// <summary>待执行指令队列固定深度：每槽存 type/target/x/y/aux_x/aux_y 六列。</summary>
     public const int QueueDepth = 3;

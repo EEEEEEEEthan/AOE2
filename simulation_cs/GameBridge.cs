@@ -328,6 +328,8 @@ public partial class GameBridge : Node
                 { "building_state", entity.BuildingState },
                 { "building_progress", entity.BuildingProgress },
                 { "building_max_progress", entity.BuildingMaxProgress },
+                { "garrison_count", entity.GarrisonCount },
+                { "garrison_capacity", entity.GarrisonCapacity },
                 { "repair_state", entity.RepairState },
                 { "repair_target", entity.RepairTarget },
             });
@@ -372,6 +374,8 @@ public partial class GameBridge : Node
         var buildingStates = new int[count];
         var buildingProgresses = new float[count];
         var buildingMaxProgresses = new float[count];
+        var garrisonCounts = new int[count];
+        var garrisonCapacities = new int[count];
         var repairStates = new int[count];
         var repairTargets = new int[count];
         for (int index = 0; index < count; index++)
@@ -391,6 +395,8 @@ public partial class GameBridge : Node
             buildingStates[index] = (int)entity.BuildingState;
             buildingProgresses[index] = (float)AoeSim.Fixed.ToFloat(entity.BuildingProgress);
             buildingMaxProgresses[index] = (float)AoeSim.Fixed.ToFloat(entity.BuildingMaxProgress);
+            garrisonCounts[index] = (int)entity.GarrisonCount;
+            garrisonCapacities[index] = (int)entity.GarrisonCapacity;
             repairStates[index] = (int)entity.RepairState;
             repairTargets[index] = (int)entity.RepairTarget;
         }
@@ -412,6 +418,8 @@ public partial class GameBridge : Node
             { "building_state", buildingStates },
             { "building_progress", buildingProgresses },
             { "building_max_progress", buildingMaxProgresses },
+            { "garrison_count", garrisonCounts },
+            { "garrison_capacity", garrisonCapacities },
             { "repair_state", repairStates },
             { "repair_target", repairTargets },
         };
