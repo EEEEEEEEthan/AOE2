@@ -31,6 +31,8 @@ public static class SimComponents
     public const string Rally = "rally";
     public const string Garrison = "garrison";
     public const string Garrisoned = "garrisoned";
+    public const string MarketState = "market_state";
+    public const string Trade = "trade";
 
     public const string X = "x";
     public const string Y = "y";
@@ -149,6 +151,10 @@ public static class SimComponents
     public const string TownBell = "town_bell";
     public const string Contribution = "contribution";
     public const string HadGather = "had_gather";
+
+    public static readonly string[] RateColumns = { "rate_wood", "rate_food", "rate_gold", "rate_stone" };
+    public const string TradeHome = "trade_home";
+    public const string TradeTarget = "trade_target";
 
     /// <summary>待执行指令队列固定深度：每槽存 type/target/x/y/aux_x/aux_y 六列。</summary>
     public const int QueueDepth = 3;

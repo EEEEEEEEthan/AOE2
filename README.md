@@ -67,6 +67,13 @@
 - `MapSetup`（`simulation_cs/MapSetup.cs`）把地图落进模拟层：静态阻塞随 `NavGrid` 进入寻路，资源点生成资源实体，起始位置由建筑/经济系统摆放已完工城镇中心、投放点与初始村民。
 - `MapSelfTest` 覆盖同种子一致、双方资源镜像、地形与阻塞一致、起点可建、资源点合法、JSON 往返与生成对局落地；`tests/tools/_map_preview.gd` 抓取全景与起始基地截图。
 
+## 市场交易、商队与进贡
+
+- 市场不再是空建筑：`MarketSystem`（`simulation_cs/MarketSystem.cs`）为每个玩家维护木/食/金/石的整数基准价，买入价与卖出价按固定价差展开；每次成交按数量推动基准价，并夹在上下限内，全部整数运算。
+- 指令：`KindMarketBuy` / `KindMarketSell`（资源类型放 `Aux`、数量放 `CellX`）、`KindTribute`（目标玩家 `Aux`、资源 `CellX`、数量 `CellY`）。买卖要求该玩家至少有一座完工市场；进贡校验目标与库存后原子转移，可向队友或对手输送。
+- 陆路商队：`SpawnTradeCart` 直接生成贸易车，`KindTradeRoute` 指定本玩家完工市场为起点、任意完工市场为终点；`TradeSystem` 复用邻接接近逻辑让车往返，抵达时按两市场曼哈顿距离与价差结算黄金。海上商队/贸易船随 AOE-60。
+- 失败指令（无市场、越权、库存不足、非法目标）直接丢弃且不改变状态；市场基准价随快照下发，并全部纳入校验和。`tests/market.gd` 覆盖买卖、进贡、路线产金、异常拒绝、快照与确定性。
+
 ## 对局与胜负
 
 `MatchState` / `PlayerState` 与其它状态一样存放在 ECS 世界里，随校验和与快照一起推进，表现层只经快照读取：
