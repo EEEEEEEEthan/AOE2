@@ -356,7 +356,15 @@ public readonly struct ComponentAccess
 
     public long Get(long id, int columnId) => columnId < 0 ? 0 : Store.GetValue(id, columnId);
 
-    public void Set(long id, int columnId, long value) => _world.SetValue(id, ComponentId, columnId, value);
+    public void Set(long id, int columnId, long value)
+    {
+        if (columnId < 0)
+        {
+            System.Diagnostics.Debug.Fail("ComponentAccess.Set 收到未创建的列 id，写入已忽略；请改用 ColumnForWrite 获取写列句柄。");
+            return;
+        }
+        _world.SetValue(id, ComponentId, columnId, value);
+    }
 
     public bool Has(long id) => Store.Has(id);
 

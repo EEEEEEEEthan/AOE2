@@ -177,6 +177,7 @@ public partial class SimulationBridge : Node
         long clientTick = session.Client.Tick;
         int clientEntities = session.Client.EntityCount;
         AoeSim.VisionGrid? vision = session.Server.Sim.VisionFor(session.Server.ViewTeam);
+        AoeSim.SnapshotFrame.SnapshotLayout layout = AoeSim.SnapshotFrame.CreateLayout(session.Server.Sim.World);
         int expectedEntities = 0;
         foreach (long id in session.Server.Sim.World.Entities())
         {
@@ -184,7 +185,7 @@ public partial class SimulationBridge : Node
             {
                 continue;
             }
-            if (vision == null || AoeSim.SnapshotFrame.ShouldInclude(session.Server.Sim.World, id, vision, session.Server.ViewTeam))
+            if (vision == null || AoeSim.SnapshotFrame.ShouldInclude(id, vision, session.Server.ViewTeam, layout))
             {
                 expectedEntities += 1;
             }
