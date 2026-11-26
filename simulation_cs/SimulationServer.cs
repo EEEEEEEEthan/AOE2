@@ -40,7 +40,7 @@ public sealed class SimulationServer
     }
 
     public SnapshotFrame Snapshot() =>
-        SnapshotFrame.Build(Sim.World, Turn, Sim.Match, Sim.VisionFor(ViewTeam), ViewTeam, Sim.Terrain);
+        SnapshotFrame.Build(Sim.World, Turn, Sim.Match, Sim.VisionFor(ViewTeam), ViewTeam);
 
     public long Checksum() => Sim.World.Checksum();
 }

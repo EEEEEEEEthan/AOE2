@@ -16,6 +16,67 @@ public static class EntityKind
     public const long Building = 8;
 }
 
+/// <summary>网络协议版本：静态地图帧携带，握手时校验两端一致。</summary>
+public static class NetProtocol
+{
+    public const int Version = 2;
+}
+
+/// <summary>
+/// 对局内不变的静态地图数据，连接建立时下发一次；之后每帧快照不再重复携带地形。
+/// </summary>
+public sealed class StaticMapFrame
+{
+    public int Version = NetProtocol.Version;
+    public long Width;
+    public long Height;
+    public byte[] TerrainTypes = System.Array.Empty<byte>();
+    public byte[] TerrainHeights = System.Array.Empty<byte>();
+
+    public static StaticMapFrame FromTerrain(TerrainGrid terrain) => new()
+    {
+        Width = terrain.Width,
+        Height = terrain.Height,
+        TerrainTypes = (byte[])terrain.Types.Clone(),
+        TerrainHeights = (byte[])terrain.Heights.Clone(),
+    };
+
+    public byte[] Encode()
+    {
+        using var stream = new MemoryStream();
+        using (var writer = new BinaryWriter(stream, System.Text.Encoding.UTF8, leaveOpen: true))
+        {
+            writer.Write(Version);
+            writer.Write(Width);
+            writer.Write(Height);
+            writer.Write(TerrainTypes.Length);
+            writer.Write(TerrainTypes);
+            writer.Write(TerrainHeights.Length);
+            writer.Write(TerrainHeights);
+        }
+        return stream.ToArray();
+    }
+
+    public static StaticMapFrame Decode(byte[] data)
+    {
+        using var stream = new MemoryStream(data);
+        using var reader = new BinaryReader(stream, System.Text.Encoding.UTF8, leaveOpen: true);
+        int version = reader.ReadInt32();
+        if (version != NetProtocol.Version)
+        {
+            throw new InvalidDataException($"protocol version mismatch: {version}");
+        }
+        return new StaticMapFrame
+        {
+            Version = version,
+            Width = reader.ReadInt64(),
+            Height = reader.ReadInt64(),
+            TerrainTypes = reader.ReadBytes(reader.ReadInt32()),
+            TerrainHeights = reader.ReadBytes(reader.ReadInt32()),
+        };
+    }
+}
+
 public readonly struct EntitySnapshot
 {
     public readonly long Id;
@@ -127,23 +188,24 @@ public sealed class SnapshotFrame
     public long VisionWidth;
     public long VisionHeight;
     public byte[] VisionStates = System.Array.Empty<byte>();
-    public long TerrainWidth;
-    public long TerrainHeight;
-    public byte[] TerrainTypes = System.Array.Empty<byte>();
-    public byte[] TerrainHeights = System.Array.Empty<byte>();
     public PlayerSnapshot[] Players = System.Array.Empty<PlayerSnapshot>();
     public EntitySnapshot[] Entities = System.Array.Empty<EntitySnapshot>();
+
+    [System.ThreadStatic] private static List<EntitySnapshot>? _entityBuffer;
+    [System.ThreadStatic] private static Dictionary<long, long>? _inventoryBuffer;
+    [System.ThreadStatic] private static MemoryStream? _encodeStream;
 
     public static SnapshotFrame Build(
         SimWorld world,
         long turn,
         MatchState? match = null,
         VisionGrid? vision = null,
-        long viewerTeam = -1,
-        TerrainGrid? terrain = null)
+        long viewerTeam = -1)
     {
-        var entities = new List<EntitySnapshot>();
-        var inventories = new Dictionary<long, long>();
+        List<EntitySnapshot> entities = _entityBuffer ??= new List<EntitySnapshot>();
+        entities.Clear();
+        Dictionary<long, long> inventories = _inventoryBuffer ??= new Dictionary<long, long>();
+        inventories.Clear();
         foreach (long id in world.Entities())
         {
             if (world.HasComponent(id, SimComponents.Resource) && world.HasComponent(id, SimComponents.Team))
@@ -217,13 +279,6 @@ public sealed class SnapshotFrame
             frame.VisionWidth = vision.Width;
             frame.VisionHeight = vision.Height;
             frame.VisionStates = vision.States();
-        }
-        if (terrain != null)
-        {
-            frame.TerrainWidth = terrain.Width;
-            frame.TerrainHeight = terrain.Height;
-            frame.TerrainTypes = (byte[])terrain.Types.Clone();
-            frame.TerrainHeights = (byte[])terrain.Heights.Clone();
         }
         if (match != null)
         {
@@ -336,7 +391,18 @@ public sealed class SnapshotFrame
 
     public byte[] Encode()
     {
-        using var stream = new MemoryStream();
+        byte[] buffer = EncodeToBuffer(out int length);
+        var result = new byte[length];
+        System.Buffer.BlockCopy(buffer, 0, result, 0, length);
+        return result;
+    }
+
+    /// <summary>写入可复用的内部缓冲，返回起始缓冲与有效长度；调用方须在下一次 EncodeToBuffer 前用完。</summary>
+    public byte[] EncodeToBuffer(out int length)
+    {
+        MemoryStream stream = _encodeStream ??= new MemoryStream(64 * 1024);
+        stream.SetLength(0);
+        stream.Position = 0;
         using (var writer = new BinaryWriter(stream, System.Text.Encoding.UTF8, leaveOpen: true))
         {
             writer.Write(Tick);
@@ -383,16 +449,72 @@ public sealed class SnapshotFrame
             }
             writer.Write(VisionWidth);
             writer.Write(VisionHeight);
-            writer.Write(VisionStates.Length);
-            writer.Write(VisionStates);
-            writer.Write(TerrainWidth);
-            writer.Write(TerrainHeight);
-            writer.Write(TerrainTypes.Length);
-            writer.Write(TerrainTypes);
-            writer.Write(TerrainHeights.Length);
-            writer.Write(TerrainHeights);
+            WriteVisionStates(writer, VisionStates);
         }
-        return stream.ToArray();
+        length = (int)stream.Length;
+        return stream.GetBuffer();
+    }
+
+    private static void WriteVisionStates(BinaryWriter writer, byte[] states)
+    {
+        writer.Write(states.Length);
+        if (states.Length == 0)
+        {
+            return;
+        }
+        int runCount = 0;
+        for (int index = 0; index < states.Length;)
+        {
+            byte value = states[index];
+            while (index < states.Length && states[index] == value)
+            {
+                index++;
+            }
+            runCount++;
+        }
+        bool useRle = runCount * 5 < states.Length;
+        writer.Write(useRle);
+        if (!useRle)
+        {
+            writer.Write(states);
+            return;
+        }
+        writer.Write(runCount);
+        for (int index = 0; index < states.Length;)
+        {
+            byte value = states[index];
+            int runStart = index;
+            while (index < states.Length && states[index] == value)
+            {
+                index++;
+            }
+            writer.Write(value);
+            writer.Write(index - runStart);
+        }
+    }
+
+    private static byte[] ReadVisionStates(BinaryReader reader)
+    {
+        int length = reader.ReadInt32();
+        if (length == 0)
+        {
+            return System.Array.Empty<byte>();
+        }
+        if (!reader.ReadBoolean())
+        {
+            return reader.ReadBytes(length);
+        }
+        var states = new byte[length];
+        int runCount = reader.ReadInt32();
+        int offset = 0;
+        for (int run = 0; run < runCount; run++)
+        {
+            byte value = reader.ReadByte();
+            int count = reader.ReadInt32();
+            System.Array.Fill(states, value, offset, count);
+            offset += count;
+        }
+        return states;
     }
 
     public static SnapshotFrame Decode(byte[] data)
@@ -452,14 +574,7 @@ public sealed class SnapshotFrame
         frame.Entities = entities;
         frame.VisionWidth = reader.ReadInt64();
         frame.VisionHeight = reader.ReadInt64();
-        int visionCount = reader.ReadInt32();
-        frame.VisionStates = reader.ReadBytes(visionCount);
-        frame.TerrainWidth = reader.ReadInt64();
-        frame.TerrainHeight = reader.ReadInt64();
-        int terrainTypeCount = reader.ReadInt32();
-        frame.TerrainTypes = reader.ReadBytes(terrainTypeCount);
-        int terrainHeightCount = reader.ReadInt32();
-        frame.TerrainHeights = reader.ReadBytes(terrainHeightCount);
+        frame.VisionStates = ReadVisionStates(reader);
         return frame;
     }
 }
