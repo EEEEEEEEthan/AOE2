@@ -28,29 +28,42 @@ func _capture() -> void:
 	bridge.call("StartBuildingShowcase")
 	bridge.call("RevealAllVision")
 	_reset_world(scene, bridge)
-	camera.set("grid_width", 24.0)
+	camera.set("grid_width", 28.0)
 	camera.set("grid_height", 12.0)
-	camera.set("focus", Vector3(11.5, 0.0, 6.5))
-	camera.set("ortho_size", 20.0)
+	camera.set("focus", Vector3(13.0, 0.0, 6.5))
+	camera.set("ortho_size", 24.0)
 	camera.call("refresh_view")
 	for frame in WARMUP_FRAMES:
 		await get_tree().process_frame
 	await _save("building_showcase.png")
 
-	camera.set("focus", Vector3(11.5, 0.0, 3.8))
+	camera.set("focus", Vector3(13.0, 0.0, 3.8))
 	camera.set("ortho_size", 12.0)
 	camera.call("refresh_view")
 	for frame in SETTLE_FRAMES:
 		await get_tree().process_frame
 	await _save("building_showcase_team_blue.png")
 
-	camera.set("focus", Vector3(11.5, 0.0, 9.5))
+	camera.set("focus", Vector3(13.0, 0.0, 9.5))
 	camera.call("refresh_view")
 	for frame in SETTLE_FRAMES:
 		await get_tree().process_frame
 	await _save("building_showcase_team_red.png")
 
-	bridge.call("StartGeneratedMatch", SEED, PLAYERS)
+	camera.set("focus", Vector3(24.0, 0.0, 2.0))
+	camera.set("ortho_size", 8.0)
+	camera.call("refresh_view")
+	for frame in SETTLE_FRAMES:
+		await get_tree().process_frame
+	await _save("building_showcase_walls_closed.png")
+
+	camera.set("focus", Vector3(24.0, 0.0, 8.0))
+	camera.call("refresh_view")
+	for frame in SETTLE_FRAMES:
+		await get_tree().process_frame
+	await _save("building_showcase_walls_open.png")
+
+	bridge.call("StartGeneratedMatch", SEED, PLAYERS, 0)
 	bridge.call("RevealAllVision")
 	_reset_world(scene, bridge)
 	var width := float(bridge.GridWidth)

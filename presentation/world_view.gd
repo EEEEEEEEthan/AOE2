@@ -34,6 +34,10 @@ const KIND_BUILDING := 8
 const BUILDING_STATE_FOUNDATION := 0
 const BUILDING_STATE_COMPLETE := 1
 const BUILDING_STATE_RUINS := 2
+const BUILDING_TYPE_GATE := 13
+const GATE_STATE_OPEN := 1
+const GATE_STATE_LOCKED := 2
+const GATE_OPEN_MODEL_PATH := "res://assets/vox/gate_open.vox"
 const BUILDING_RUIN_COLOR := Color(0.24, 0.22, 0.2)
 const BUILDING_FOUNDATION_TINT := Color(0.72, 0.66, 0.55)
 
@@ -61,6 +65,9 @@ const BUILDING_MODEL_PATHS := {
 	5: "res://assets/vox/tower.vox",
 	6: "res://assets/vox/market.vox",
 	7: "res://assets/vox/farm.vox",
+	12: "res://assets/vox/palisade_wall.vox",
+	13: "res://assets/vox/gate.vox",
+	14: "res://assets/vox/fortified_wall.vox",
 }
 
 const FOG_UNEXPLORED_COLOR := Color(0.0, 0.0, 0.0, 1.0)
@@ -145,6 +152,7 @@ func _refresh_entities(batch: Dictionary) -> void:
 	var building_states: PackedInt32Array = batch["building_state"]
 	var building_progresses: PackedFloat32Array = batch["building_progress"]
 	var building_max_progresses: PackedFloat32Array = batch["building_max_progress"]
+	var gate_states: PackedInt32Array = batch["gate_state"]
 	var alive: Dictionary = {}
 	for bucket: Dictionary in _unit_meshes.values():
 		bucket["transforms"].clear()
@@ -171,6 +179,7 @@ func _refresh_entities(batch: Dictionary) -> void:
 				"building_state": building_states[index],
 				"building_progress": building_progresses[index],
 				"building_max_progress": building_max_progresses[index],
+				"gate_state": gate_states[index],
 			})
 		elif _is_visible_unit(kind, node_remainings[index]):
 			_append_unit(kind, teams[index], node_types[index], positions_x[index], positions_y[index])
@@ -245,6 +254,8 @@ func _update_building(building: Node3D, entity: Dictionary) -> void:
 	var type: int = int(entity.get("building_type", 0))
 	var path: String = BUILDING_MODEL_PATHS.get(type, "")
 	if state == BUILDING_STATE_COMPLETE and not path.is_empty():
+		if type == BUILDING_TYPE_GATE and int(entity.get("gate_state", 0)) == GATE_STATE_OPEN:
+			path = GATE_OPEN_MODEL_PATH
 		_show_building_model(building, entity, path)
 	else:
 		_show_building_block(building, entity, state)
@@ -254,6 +265,8 @@ func _show_building_model(building: Node3D, entity: Dictionary, path: String) ->
 	var size_w: int = maxi(1, int(entity["width"]))
 	var size_h: int = maxi(1, int(entity["height"]))
 	var team_color: Color = TEAM_COLORS.get(entity["team"], Color(0.7, 0.7, 0.7))
+	if int(entity.get("building_type", 0)) == BUILDING_TYPE_GATE and int(entity.get("gate_state", 0)) == GATE_STATE_LOCKED:
+		team_color = team_color.darkened(0.45)
 	var model := _model_for(path, team_color)
 	var visual := building.get_node("VoxelBuilding") as MeshInstance3D
 	var key := "model:%s:%d" % [path, team_color.to_rgba32()]

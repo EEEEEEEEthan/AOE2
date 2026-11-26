@@ -72,9 +72,9 @@ public partial class GameBridge : Node
             AoeSim.BuildingTypes.Tower,
             AoeSim.BuildingTypes.Market,
             AoeSim.BuildingTypes.Farm,
-            AoeSim.BuildingTypes.PalisadeWall,
-            AoeSim.BuildingTypes.Gate,
             AoeSim.BuildingTypes.FortifiedWall,
+            AoeSim.BuildingTypes.Gate,
+            AoeSim.BuildingTypes.PalisadeWall,
         };
         int[] originsX = { 0, 5, 8, 12, 14, 16, 20, 23, 24, 25 };
         for (int team = 0; team < 2; team++)
@@ -88,6 +88,11 @@ public partial class GameBridge : Node
                 if (id >= 0)
                 {
                     CompleteBuilding(sim, id);
+                    if (team == 1 && types[index] == AoeSim.BuildingTypes.Gate)
+                    {
+                        AoeSim.BuildingSystem.SetGateState(
+                            sim.World, grid, id, AoeSim.BuildingSystem.GateOpen);
+                    }
                 }
             }
         }
