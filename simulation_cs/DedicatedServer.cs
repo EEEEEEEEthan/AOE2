@@ -72,7 +72,12 @@ public static class NetFraming
     }
 }
 
-/// <summary>Dedicated server：独立进程跑权威模拟，30Hz 为每个连接按其 team 下发快照、接收客户端指令。</summary>
+/// <summary>
+/// Dedicated server：独立进程跑权威模拟，30Hz 为每个连接按其 team 下发快照、接收客户端指令。
+/// 连接层负责把「连接 → 玩家」绑定好，指令入队时以该玩家覆写自报身份；
+/// 模拟按锁步回合推进：每 <see cref="Lockstep.TicksPerTurn"/> 个 tick 为一次回合边界，回合开始时
+/// 统一应用该回合收到的全部输入，缺输入的玩家按空输入推进（服务器不会因等待输入而停顿）。
+/// </summary>
 public sealed class DedicatedServer
 {
     /// <summary>单条连接的收发状态：读线程收指令，写线程按有界队列发下行帧，慢客户端只丢旧快照。</summary>
@@ -146,10 +151,10 @@ public sealed class DedicatedServer
     private readonly int _ticksPerSecond;
     private readonly object _clientsGate = new();
     private readonly List<ClientChannel> _clients = new();
+    private readonly HashSet<long> _assignedTeams = new();
     private Thread? _acceptThread;
     private Thread? _simThread;
     private volatile bool _running;
-    private long _nextTeam;
 
     public DedicatedServer(int port, GameSim sim, int ticksPerSecond = 30)
     {
@@ -189,6 +194,7 @@ public sealed class DedicatedServer
         {
             channels = new List<ClientChannel>(_clients);
             _clients.Clear();
+            _assignedTeams.Clear();
         }
         foreach (ClientChannel channel in channels)
         {
@@ -222,18 +228,23 @@ public sealed class DedicatedServer
     private void RegisterClient(TcpClient client)
     {
         client.NoDelay = true;
-        long team = _nextTeam % Math.Max(1, _server.Sim.Lockstep.PlayerCount);
-        _nextTeam += 1;
+        if (!TryReserveTeam(out long team))
+        {
+            // 已满员：不再分配可复用 team，避免第三个连接冒充已有玩家。
+            client.Close();
+            return;
+        }
         var channel = new ClientChannel(client, team);
         try
         {
-            // 握手必须先于任何快照写入，客户端据此知道自己观察哪一方。
+            // 握手必须先于任何快照写入，客户端据此知道自己观察哪一方，也据此提交本回合指令。
             NetFraming.WriteFrame(channel.Stream, NetFrameType.Welcome, new WelcomeFrame { ViewerTeam = team }.Encode());
             NetFraming.WriteFrame(channel.Stream, NetFrameType.StaticMap, _staticMapPayload);
         }
         catch (Exception)
         {
             channel.Close();
+            ReleaseTeam(team);
             return;
         }
         channel.Reader = new Thread(() => ReadLoop(channel)) { IsBackground = true };
@@ -243,6 +254,33 @@ public sealed class DedicatedServer
         lock (_clientsGate)
         {
             _clients.Add(channel);
+        }
+    }
+
+    /// <summary>为连接分配一个空闲玩家位；满员时返回 false。</summary>
+    private bool TryReserveTeam(out long team)
+    {
+        lock (_clientsGate)
+        {
+            for (long candidate = 0; candidate < _server.Sim.Lockstep.PlayerCount; candidate++)
+            {
+                if (!_assignedTeams.Contains(candidate))
+                {
+                    _assignedTeams.Add(candidate);
+                    team = candidate;
+                    return true;
+                }
+            }
+        }
+        team = -1;
+        return false;
+    }
+
+    private void ReleaseTeam(long team)
+    {
+        lock (_clientsGate)
+        {
+            _assignedTeams.Remove(team);
         }
     }
 
@@ -258,7 +296,8 @@ public sealed class DedicatedServer
                 }
                 if (frameType == NetFrameType.Command)
                 {
-                    _server.Enqueue(CommandFrame.Decode(payload));
+                    // 指令来源以连接分配的 team 为准，客户端自报的 Player 不可信。
+                    _server.Enqueue(CommandFrame.Decode(payload), channel.Team);
                 }
             }
         }
@@ -363,6 +402,7 @@ public sealed class DedicatedServer
         foreach (ClientChannel channel in dead)
         {
             channel.Close();
+            ReleaseTeam(channel.Team);
         }
     }
 }
