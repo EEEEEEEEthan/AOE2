@@ -13,6 +13,8 @@ public static class UnitCatalog
     public const long Spearman = UnitDefs.Spearman;
     public const long Archer = UnitDefs.Archer;
     public const long Knight = UnitDefs.Knight;
+    public const long BatteringRam = UnitDefs.BatteringRam;
+    public const long Mangonel = UnitDefs.Mangonel;
 
     public static bool IsProducible(GameSim sim, long team, long buildingType, long unitType)
     {
@@ -31,6 +33,8 @@ public static class UnitCatalog
                 unitType == UnitDefs.Swordsman || unitType == UnitDefs.Spearman,
             BuildingTypes.ArcheryRange => unitType == UnitDefs.Archer,
             BuildingTypes.Stable => unitType == UnitDefs.Knight,
+            BuildingTypes.SiegeWorkshop =>
+                unitType == UnitDefs.BatteringRam || unitType == UnitDefs.Mangonel,
             BuildingTypes.Castle => unitType == CivilizationCatalog.UniqueUnit(civ),
             _ => false,
         };
@@ -43,6 +47,8 @@ public static class UnitCatalog
         UnitDefs.Spearman => 22,
         UnitDefs.Archer => 35,
         UnitDefs.Knight => 30,
+        UnitDefs.BatteringRam => 36,
+        UnitDefs.Mangonel => 40,
         _ => 35,
     };
 

@@ -32,6 +32,7 @@ public sealed class UnitDef
     public long ArmorMelee { get; init; }
     public long ArmorPierce { get; init; }
     public long ArmorSiege { get; init; }
+    public bool IsUnique { get; init; }
 }
 
 /// <summary>
@@ -50,6 +51,10 @@ public static class UnitDefs
 
     /// <summary>不列颠独特单位：射程更远的精锐长弓兵。</summary>
     public const long Longbowman = 4;
+
+    /// <summary>攻城武器：编号接在独特单位之后，避免打乱既有存档与快照编号。</summary>
+    public const long BatteringRam = 5;
+    public const long Mangonel = 6;
 
     private static readonly UnitDef[] Table =
     {
@@ -82,6 +87,19 @@ public static class UnitDefs
             MaxHp = 45, AttackDamage = 7, AttackClass = UnitAttackClass.Pierce, ArmorClass = UnitArmorClass.Archer,
             IsRanged = true, MinRangeTiles = 1.0, MaxRangeTiles = 7.0, SpeedTilesPerTick = 0.09, Cooldown = 8,
             ArmorMelee = 0, ArmorPierce = 1, ArmorSiege = 0,
+            IsUnique = true,
+        },
+        new UnitDef
+        {
+            MaxHp = 175, AttackDamage = 5, AttackClass = UnitAttackClass.Siege, ArmorClass = UnitArmorClass.Infantry,
+            IsRanged = false, MinRangeTiles = 1.0, MaxRangeTiles = 1.0, SpeedTilesPerTick = 0.07, Cooldown = 8,
+            ArmorMelee = 0, ArmorPierce = 0, ArmorSiege = 2,
+        },
+        new UnitDef
+        {
+            MaxHp = 50, AttackDamage = 25, AttackClass = UnitAttackClass.Siege, ArmorClass = UnitArmorClass.Infantry,
+            IsRanged = true, MinRangeTiles = 3.0, MaxRangeTiles = 7.0, SpeedTilesPerTick = 0.06, Cooldown = 10,
+            ArmorMelee = 0, ArmorPierce = 0, ArmorSiege = 0,
         },
     };
 
@@ -98,6 +116,8 @@ public static class UnitDefs
         Archer => "弓兵",
         Knight => "骑士",
         Longbowman => "长弓兵",
+        BatteringRam => "冲车",
+        Mangonel => "投石机",
         _ => "单位",
     };
 
@@ -109,6 +129,8 @@ public static class UnitDefs
         Archer => new ResourceCost(wood: 25, food: 0, gold: 45, stone: 0),
         Knight => new ResourceCost(wood: 0, food: 60, gold: 75, stone: 0),
         Longbowman => new ResourceCost(wood: 35, food: 0, gold: 40, stone: 0),
+        BatteringRam => new ResourceCost(wood: 160, food: 0, gold: 75, stone: 0),
+        Mangonel => new ResourceCost(wood: 160, food: 0, gold: 135, stone: 0),
         _ => default,
     };
 
@@ -121,7 +143,7 @@ public static class UnitDefs
         {
             return false;
         }
-        return unitType < BaseUnitCount
+        return !Table[(int)unitType].IsUnique
             || CivilizationCatalog.UniqueUnit(civ) == unitType;
     }
 
@@ -130,6 +152,8 @@ public static class UnitDefs
     {
         Spearman when targetArmorClass == UnitArmorClass.Cavalry => 15,
         Archer when targetArmorClass == UnitArmorClass.Infantry => 1,
+        BatteringRam when targetArmorClass == UnitArmorClass.Building => 90,
+        Mangonel when targetArmorClass == UnitArmorClass.Building => 40,
         _ => 0,
     };
 }

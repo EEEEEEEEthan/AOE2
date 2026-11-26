@@ -90,8 +90,8 @@ public partial class GameBridge : Node
     public void StartBuildingShowcase()
     {
         StopPlayback();
-        var grid = new AoeSim.NavGrid(60, 16);
-        var terrain = AoeSim.TerrainGrid.Flat(60, 16);
+        var grid = new AoeSim.NavGrid(72, 16);
+        var terrain = AoeSim.TerrainGrid.Flat(72, 16);
         var sim = new AoeSim.GameSim(grid, 7, 2, 6, AoeSim.MatchConfig.Standard, terrain);
         _grid = grid;
         _terrain = terrain;
@@ -106,6 +106,7 @@ public partial class GameBridge : Node
             AoeSim.BuildingTypes.Monastery,
             AoeSim.BuildingTypes.University,
             AoeSim.BuildingTypes.Castle,
+            AoeSim.BuildingTypes.SiegeWorkshop,
             AoeSim.BuildingTypes.Wall,
             AoeSim.BuildingTypes.Tower,
             AoeSim.BuildingTypes.Market,
@@ -728,7 +729,7 @@ public partial class GameBridge : Node
     public Godot.Collections.Array<Godot.Collections.Dictionary> BuildingOptions()
     {
         var result = new Godot.Collections.Array<Godot.Collections.Dictionary>();
-        for (long type = AoeSim.BuildingTypes.TownCenter; type <= AoeSim.BuildingTypes.Castle; type++)
+        for (long type = AoeSim.BuildingTypes.TownCenter; type <= AoeSim.BuildingTypes.MaxKnown; type++)
         {
             AoeSim.ResourceCost cost = AoeSim.BuildingTypes.Cost(type);
             result.Add(new Godot.Collections.Dictionary
@@ -749,7 +750,7 @@ public partial class GameBridge : Node
     public Godot.Collections.Array<Godot.Collections.Dictionary> UnitOptions()
     {
         var result = new Godot.Collections.Array<Godot.Collections.Dictionary>();
-        long[] types = { AoeSim.UnitDefs.Villager, AoeSim.UnitDefs.Swordsman, AoeSim.UnitDefs.Spearman, AoeSim.UnitDefs.Archer, AoeSim.UnitDefs.Knight };
+        long[] types = { AoeSim.UnitDefs.Villager, AoeSim.UnitDefs.Swordsman, AoeSim.UnitDefs.Spearman, AoeSim.UnitDefs.Archer, AoeSim.UnitDefs.Knight, AoeSim.UnitDefs.BatteringRam, AoeSim.UnitDefs.Mangonel };
         foreach (long type in types)
         {
             AoeSim.ResourceCost cost = AoeSim.UnitDefs.Cost(type);

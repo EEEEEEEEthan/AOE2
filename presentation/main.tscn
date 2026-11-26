@@ -420,6 +420,11 @@ layout_mode = 2
 text = "加固墙"
 metadata/building_type = 14
 
+[node name="SiegeWorkshop" type="Button" parent="Hud/CommandPanel/Margin/Content/BuildGrid"]
+layout_mode = 2
+text = "攻城武器工厂"
+metadata/building_type = 21
+
 [node name="TrainTitle" type="Label" parent="Hud/CommandPanel/Margin/Content"]
 layout_mode = 2
 text = "生产"
@@ -453,6 +458,16 @@ metadata/unit_type = 2
 layout_mode = 2
 text = "骑士"
 metadata/unit_type = 3
+
+[node name="BatteringRam" type="Button" parent="Hud/CommandPanel/Margin/Content/TrainRow"]
+layout_mode = 2
+text = "冲车"
+metadata/unit_type = 5
+
+[node name="Mangonel" type="Button" parent="Hud/CommandPanel/Margin/Content/TrainRow"]
+layout_mode = 2
+text = "投石机"
+metadata/unit_type = 6
 
 [node name="TechTitle" type="Label" parent="Hud/CommandPanel/Margin/Content"]
 layout_mode = 2

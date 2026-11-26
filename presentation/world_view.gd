@@ -542,6 +542,10 @@ func _unit_name(unit_type: int) -> String:
 			return "骑士"
 		4:
 			return "长弓兵"
+		5:
+			return "冲车"
+		6:
+			return "投石机"
 		_:
 			return "单位"
 
