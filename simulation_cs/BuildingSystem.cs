@@ -13,6 +13,11 @@ public static class BuildingSystem
     public const long ConstructActive = 0;
     public const long ConstructDone = 1;
 
+    /// <summary>城门状态：关闭阻挡通行、开启放行、锁定为关闭的强化语义，均纳入快照与校验和。</summary>
+    public const long GateClosed = 0;
+    public const long GateOpen = 1;
+    public const long GateLocked = 2;
+
     public static bool CanPlace(NavGrid grid, TerrainGrid terrain, long type, int originX, int originY)
     {
         if (!BuildingTypes.IsKnown(type))
@@ -99,6 +104,10 @@ public static class BuildingSystem
         world.SetValue(id, SimComponents.Building, SimComponents.Progress, 0);
         world.SetValue(id, SimComponents.Building, SimComponents.MaxProgress, BuildingTypes.BuildTicks(type));
         world.SetValue(id, SimComponents.Building, SimComponents.State, StateFoundation);
+        if (BuildingTypes.IsGate(type))
+        {
+            world.SetValue(id, SimComponents.Building, SimComponents.GateState, GateClosed);
+        }
         world.SetValue(id, SimComponents.Footprint, SimComponents.FootprintWidth, sizeWidth);
         world.SetValue(id, SimComponents.Footprint, SimComponents.FootprintHeight, sizeHeight);
         SetBlock(world, grid, id, true);
@@ -135,6 +144,39 @@ public static class BuildingSystem
         AddPopulationCap(world, id);
         AttachDropSite(world, id);
         GarrisonSystem.EnsureBuildingCombat(world, id);
+    }
+
+    /// <summary>
+    /// 切换已完工城门状态：开启时把占地标记为可通行，关闭/锁定时恢复阻挡。
+    /// 状态写入 Building 组件，随校验和与快照同步；调用方负责重算流场。
+    /// </summary>
+    public static bool SetGateState(SimWorld world, NavGrid grid, long id, long state)
+    {
+        if (!world.IsAlive(id) || !world.HasComponent(id, SimComponents.Building))
+        {
+            return false;
+        }
+        long type = world.GetValue(id, SimComponents.Building, SimComponents.BuildingType);
+        if (!BuildingTypes.IsGate(type))
+        {
+            return false;
+        }
+        if (state < GateClosed || state > GateLocked)
+        {
+            return false;
+        }
+        if (world.GetValue(id, SimComponents.Building, SimComponents.State) != StateComplete)
+        {
+            return false;
+        }
+        world.SetValue(id, SimComponents.Building, SimComponents.GateState, state);
+        int originX = (int)Fixed.ToInt(world.GetValue(id, SimComponents.Position, SimComponents.X));
+        int originY = (int)Fixed.ToInt(world.GetValue(id, SimComponents.Position, SimComponents.Y));
+        int sizeWidth = (int)world.GetValue(id, SimComponents.Building, SimComponents.SizeWidth);
+        int sizeHeight = (int)world.GetValue(id, SimComponents.Building, SimComponents.SizeHeight);
+        grid.SetStructurePassableRect(
+            originX, originY, sizeWidth, sizeHeight, state == GateOpen);
+        return true;
     }
 
     public static void Ruin(SimWorld world, NavGrid grid, long id)
@@ -389,5 +431,9 @@ public static class BuildingSystem
         int sizeWidth = (int)world.GetValue(id, SimComponents.Building, SimComponents.SizeWidth);
         int sizeHeight = (int)world.GetValue(id, SimComponents.Building, SimComponents.SizeHeight);
         grid.SetBuildingBlockedRect(originX, originY, sizeWidth, sizeHeight, value);
+        if (!value)
+        {
+            grid.SetStructurePassableRect(originX, originY, sizeWidth, sizeHeight, false);
+        }
     }
 }
