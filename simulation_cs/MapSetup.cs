@@ -1,10 +1,9 @@
-using System.Collections.Generic;
-
 namespace AoeSim;
 
 /// <summary>
 /// 把一份 <see cref="MapData"/> 落进模拟层：静态阻塞已随地图进入 NavGrid，
-/// 这里生成资源实体，并用建筑/经济系统摆出每位玩家的城镇中心、投放点与初始村民。
+/// 这里生成资源实体，并用建筑/经济系统摆出每位玩家的城镇中心与初始村民；
+/// 城镇中心完工后自带全资源投放能力，村民就近回送到它。
 /// </summary>
 public static class MapSetup
 {
@@ -29,7 +28,6 @@ public static class MapSetup
 
     public static void Apply(GameSim sim, MapData map)
     {
-        var drops = new Dictionary<int, long>();
         foreach (PlayerStart start in map.Starts)
         {
             sim.AddResource(start.Team, GameSim.ResourceWood, StartingWood);
@@ -42,9 +40,6 @@ public static class MapSetup
             {
                 BuildingSystem.Complete(sim.World, townCenter);
             }
-            int centerX = start.X + BuildingTypes.SizeWidth(BuildingTypes.TownCenter) / 2;
-            int centerY = start.Y + BuildingTypes.SizeHeight(BuildingTypes.TownCenter) / 2;
-            drops[start.Team] = sim.SpawnDropSite(centerX, centerY, 0b1111);
         }
 
         foreach (ResourcePoint point in map.Resources)
@@ -59,11 +54,11 @@ public static class MapSetup
 
         foreach (PlayerStart start in map.Starts)
         {
-            SpawnVillagers(sim, map, start, drops[start.Team]);
+            SpawnVillagers(sim, map, start);
         }
     }
 
-    private static void SpawnVillagers(GameSim sim, MapData map, PlayerStart start, long drop)
+    private static void SpawnVillagers(GameSim sim, MapData map, PlayerStart start)
     {
         int centerX = start.X + BuildingTypes.SizeWidth(BuildingTypes.TownCenter) / 2;
         int centerY = start.Y + BuildingTypes.SizeHeight(BuildingTypes.TownCenter) / 2;
@@ -87,7 +82,7 @@ public static class MapSetup
                 long node = FindNodeAt(sim, target.X, target.Y);
                 if (node >= 0)
                 {
-                    sim.IssueGather(villager, node, drop);
+                    sim.IssueGather(villager, node, -1);
                 }
             }
         }

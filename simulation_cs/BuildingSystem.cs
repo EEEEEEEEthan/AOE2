@@ -133,19 +133,8 @@ public static class BuildingSystem
         world.SetValue(id, SimComponents.Building, SimComponents.Progress, maxProgress);
         world.SetValue(id, SimComponents.Building, SimComponents.State, StateComplete);
         AddPopulationCap(world, id);
-        AttachDockDropSite(world, id);
+        AttachDropSite(world, id);
         GarrisonSystem.EnsureBuildingCombat(world, id);
-    }
-
-    /// <summary>码头完工后作为海上投放点：渔船把食物直接卸进码头。</summary>
-    private static void AttachDockDropSite(SimWorld world, long id)
-    {
-        if (world.GetValue(id, SimComponents.Building, SimComponents.BuildingType) != BuildingTypes.Dock)
-        {
-            return;
-        }
-        world.Attach(id, SimComponents.DropSite);
-        world.SetValue(id, SimComponents.DropSite, SimComponents.AcceptMask, 0b1111);
     }
 
     public static void Ruin(SimWorld world, NavGrid grid, long id)
@@ -171,6 +160,22 @@ public static class BuildingSystem
         world.Detach(id, SimComponents.Combat);
         world.Detach(id, SimComponents.Garrison);
         SetBlock(world, grid, id, false);
+    }
+
+    /// <summary>完工后按建筑类型挂载投放能力；未完工的施工现场不提供投放点。</summary>
+    private static void AttachDropSite(SimWorld world, long id)
+    {
+        long type = world.GetValue(id, SimComponents.Building, SimComponents.BuildingType);
+        long mask = BuildingTypes.DropMask(type);
+        if (mask == 0)
+        {
+            return;
+        }
+        if (!world.HasComponent(id, SimComponents.DropSite))
+        {
+            world.Attach(id, SimComponents.DropSite);
+        }
+        world.SetValue(id, SimComponents.DropSite, SimComponents.AcceptMask, mask);
     }
 
     /// <summary>
