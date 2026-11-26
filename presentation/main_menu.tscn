@@ -117,7 +117,7 @@ dialog_text = "该功能正在开发中，敬请期待。"
 
 [connection signal="pressed" from="Center/Content/StandardGameButton" to="." method="_on_standard_game_pressed"]
 [connection signal="pressed" from="Center/Content/CampaignButton" to="." method="_on_unavailable_pressed"]
-[connection signal="pressed" from="Center/Content/MultiplayerButton" to="." method="_on_unavailable_pressed"]
+[connection signal="pressed" from="Center/Content/MultiplayerButton" to="." method="_on_multiplayer_pressed"]
 [connection signal="pressed" from="Center/Content/TechTreeButton" to="." method="_on_unavailable_pressed"]
 [connection signal="pressed" from="Center/Content/ReplayButton" to="." method="_on_replay_pressed"]
 [connection signal="pressed" from="Center/Content/MapEditorButton" to="." method="_on_map_editor_pressed"]

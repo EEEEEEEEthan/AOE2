@@ -35,11 +35,22 @@ func _ready() -> void:
 		%TechTreeButton.hide()
 		bridge.StartDedicatedServer(_server_port())
 		return
+	if MatchSetup.has_network():
+		_adopt_network_match()
+		return
 	if MatchSetup.has_prepared():
 		_adopt_prepared_match()
 		return
 	_start_session()
 	%WorldView.build_terrain(bridge)
+	_finish_setup()
+
+
+## 大厅已连上服务器，本机只消费快照渲染与转发指令。
+func _adopt_network_match() -> void:
+	bridge.AdoptMultiplayer(MatchSetup.take_network())
+	if bridge.TerrainWidth > 0:
+		%WorldView.build_terrain(bridge)
 	_finish_setup()
 
 
@@ -77,6 +88,8 @@ func _process(delta: float) -> void:
 	if bridge == null or not bridge.HasSession:
 		return
 	bridge.Step(delta)
+	if bridge.IsRemote and bridge.TerrainWidth > 0 and not %WorldView.is_terrain_ready():
+		%WorldView.build_terrain(bridge)
 	var tick := bridge.ClientTick()
 	if tick != _last_tick:
 		_last_tick = tick

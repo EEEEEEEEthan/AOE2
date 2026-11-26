@@ -202,6 +202,17 @@ public sealed class TerrainGrid
         return grid;
     }
 
+    /// <summary>从网络静态地图还原地形：客户端只在本地建渲染用的地形，不参与模拟。</summary>
+    public static TerrainGrid FromArrays(int width, int height, byte[] types, byte[] vertexHeights)
+    {
+        var grid = new TerrainGrid(width, height)
+        {
+            Types = (byte[])types.Clone(),
+            VertexHeights = (byte[])vertexHeights.Clone(),
+        };
+        return grid;
+    }
+
     public long Checksum()
     {
         long hash = SimWorld.FnvOffset;
