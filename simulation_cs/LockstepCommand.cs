@@ -24,9 +24,10 @@ public sealed class LockstepCommand
     public const long KindConstruct = 19;
     public const long KindCancelResearch = 20;
     public const long KindReseedFarm = 21;
-    public const long KindGarrison = 22;
-    public const long KindUngarrison = 23;
-    public const long KindTownBell = 24;
+    public const long KindRepair = 22;
+    public const long KindGarrison = 23;
+    public const long KindUngarrison = 24;
+    public const long KindTownBell = 25;
 
     public const int FieldCount = 12;
 

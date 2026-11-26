@@ -662,6 +662,7 @@ public sealed class GameSim
         World.Detach(id, SimComponents.AttackTarget);
         World.Detach(id, SimComponents.Engage);
         World.Detach(id, SimComponents.Order);
+        World.Detach(id, SimComponents.Repair);
         World.SetValue(id, SimComponents.Move, SimComponents.TargetX, cellX);
         World.SetValue(id, SimComponents.Move, SimComponents.TargetY, cellY);
         World.SetValue(id, SimComponents.Move, SimComponents.Active, 1);
@@ -757,6 +758,32 @@ public sealed class GameSim
         World.Attach(villager, SimComponents.Construct);
         World.SetValue(villager, SimComponents.Construct, SimComponents.TargetBase, building);
         World.SetValue(villager, SimComponents.Construct, SimComponents.State, BuildingSystem.ConstructActive);
+        World.Detach(villager, SimComponents.Repair);
+    }
+
+    /// <summary>村民修理受损友方建筑：校验归属与目标状态后挂载 Repair 组件。</summary>
+    public bool IssueRepair(long villager, long building, long player)
+    {
+        if (!World.IsAlive(villager) || !World.HasComponent(villager, SimComponents.Gather))
+        {
+            return false;
+        }
+        if (World.GetValue(villager, SimComponents.Team, SimComponents.TeamId) != player)
+        {
+            return false;
+        }
+        if (!RepairSystem.CanRepair(World, villager, building))
+        {
+            return false;
+        }
+        World.SetValue(villager, SimComponents.Gather, SimComponents.GatherState, GatherSystem.GatherStateIdle);
+        World.SetValue(villager, SimComponents.Gather, SimComponents.NodeEntity, -1);
+        World.SetValue(villager, SimComponents.Gather, SimComponents.Progress, 0);
+        World.Detach(villager, SimComponents.Construct);
+        World.Attach(villager, SimComponents.Repair);
+        World.SetValue(villager, SimComponents.Repair, SimComponents.TargetBase, building);
+        World.SetValue(villager, SimComponents.Repair, SimComponents.State, RepairSystem.StateActive);
+        return true;
     }
 
     public void IssueAttack(long attacker, long target)
@@ -792,6 +819,7 @@ public sealed class GameSim
         {
             return;
         }
+        World.Detach(villager, SimComponents.Repair);
         World.SetValue(villager, SimComponents.Gather, SimComponents.GatherState, GatherSystem.GatherStateGathering);
         World.SetValue(villager, SimComponents.Gather, SimComponents.NodeEntity, node);
         World.SetValue(villager, SimComponents.Gather, SimComponents.DropEntity, drop);
@@ -892,6 +920,7 @@ public sealed class GameSim
         World.Detach(id, SimComponents.AttackTarget);
         World.Detach(id, SimComponents.Engage);
         World.Detach(id, SimComponents.Order);
+        World.Detach(id, SimComponents.Repair);
         World.SetValue(id, SimComponents.Move, SimComponents.Active, 0);
         World.SetValue(id, SimComponents.Velocity, SimComponents.X, 0);
         World.SetValue(id, SimComponents.Velocity, SimComponents.Y, 0);
@@ -962,7 +991,7 @@ public sealed class GameSim
         kind == LockstepCommand.KindSurrender
         || kind == LockstepCommand.KindAgeUp
         || kind == LockstepCommand.KindResearch
-        ||         kind == LockstepCommand.KindCancelResearch
+        || kind == LockstepCommand.KindCancelResearch
         || kind == LockstepCommand.KindPlaceBuilding
         || kind == LockstepCommand.KindTownBell;
 
@@ -985,7 +1014,8 @@ public sealed class GameSim
         || kind == LockstepCommand.KindConstruct
         || kind == LockstepCommand.KindReseedFarm
         || kind == LockstepCommand.KindGarrison
-        || kind == LockstepCommand.KindUngarrison;
+        || kind == LockstepCommand.KindUngarrison
+        || kind == LockstepCommand.KindRepair;
 
     public bool ApplyCommand(LockstepCommand command)
     {
@@ -1075,6 +1105,9 @@ public sealed class GameSim
             case LockstepCommand.KindTownBell:
                 IssueTownBell(command.Player, command.Aux != 0);
                 break;
+            case LockstepCommand.KindRepair:
+                IssueRepair(command.Entity, command.TargetEntity, command.Player);
+                break;
         }
         return true;
     }
@@ -1096,6 +1129,7 @@ public sealed class GameSim
         OrderSystem.Step(World, Spatial);
         BuildingSystem.Step(World, Grid, Terrain);
         GarrisonSystem.Step(World);
+        RepairSystem.Step(World, Grid, Terrain, this);
         MovementSystem.Step(World, Grid, Occupancy, FieldProvider, Terrain);
         Spatial.Rebuild(World);
         List<long> dead = ProjectileSystem.Step(World);

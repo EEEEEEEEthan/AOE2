@@ -121,6 +121,8 @@ public readonly struct EntitySnapshot
     public readonly long BuildingMaxProgress;
     public readonly long GarrisonCount;
     public readonly long GarrisonCapacity;
+    public readonly long RepairState;
+    public readonly long RepairTarget;
 
     public EntitySnapshot(
         long id,
@@ -141,7 +143,9 @@ public readonly struct EntitySnapshot
         long buildingProgress,
         long buildingMaxProgress,
         long garrisonCount,
-        long garrisonCapacity)
+        long garrisonCapacity,
+        long repairState,
+        long repairTarget)
     {
         Id = id;
         X = x;
@@ -162,6 +166,8 @@ public readonly struct EntitySnapshot
         BuildingMaxProgress = buildingMaxProgress;
         GarrisonCount = garrisonCount;
         GarrisonCapacity = garrisonCapacity;
+        RepairState = repairState;
+        RepairTarget = repairTarget;
     }
 }
 
@@ -288,6 +294,13 @@ public sealed class SnapshotFrame
             long buildingMaxProgress = 0;
             long garrisonCount = 0;
             long garrisonCapacity = 0;
+            long repairState = 0;
+            long repairTarget = -1;
+            if (kind == EntityKind.Villager && world.HasComponent(id, SimComponents.Repair))
+            {
+                repairState = world.GetValue(id, SimComponents.Repair, SimComponents.State);
+                repairTarget = world.GetValue(id, SimComponents.Repair, SimComponents.TargetBase);
+            }
             if (kind == EntityKind.Building)
             {
                 buildingType = world.GetValue(id, SimComponents.Building, SimComponents.BuildingType);
@@ -321,7 +334,9 @@ public sealed class SnapshotFrame
                 buildingProgress,
                 buildingMaxProgress,
                 garrisonCount,
-                garrisonCapacity));
+                garrisonCapacity,
+                repairState,
+                repairTarget));
         }
         var frame = new SnapshotFrame { Tick = world.Tick, Turn = turn, Entities = entities.ToArray() };
         if (vision != null)
@@ -519,6 +534,8 @@ public sealed class SnapshotFrame
                 writer.Write(entity.BuildingMaxProgress);
                 writer.Write(entity.GarrisonCount);
                 writer.Write(entity.GarrisonCapacity);
+                writer.Write(entity.RepairState);
+                writer.Write(entity.RepairTarget);
             }
             writer.Write(VisionWidth);
             writer.Write(VisionHeight);
@@ -630,6 +647,8 @@ public sealed class SnapshotFrame
         for (int index = 0; index < count; index++)
         {
             entities[index] = new EntitySnapshot(
+                reader.ReadInt64(),
+                reader.ReadInt64(),
                 reader.ReadInt64(),
                 reader.ReadInt64(),
                 reader.ReadInt64(),
