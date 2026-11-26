@@ -12,6 +12,7 @@ public sealed class GameSim
     public SimWorld World { get; }
     public NavGrid Grid { get; }
     public SpatialHash Spatial { get; }
+    public OccupancyMap Occupancy { get; }
     public Lockstep Lockstep { get; }
     public MatchState? Match { get; }
 
@@ -23,6 +24,7 @@ public sealed class GameSim
         Grid = grid;
         World = new SimWorld(seed);
         Spatial = new SpatialHash(4);
+        Occupancy = new OccupancyMap(grid.Width, grid.Height);
         Lockstep = new Lockstep(playerCount, ticksPerTurn);
         if (matchConfig != null)
         {
@@ -30,13 +32,15 @@ public sealed class GameSim
         }
     }
 
+    /// <summary>射程按格子配置：rangeMinTiles/rangeMaxTiles 只在生成边界转成格数，相邻格即为近战。</summary>
     public long SpawnUnit(
         int cellX,
         int cellY,
         long team,
         long maxHp,
         long damage,
-        double rangeTiles,
+        double rangeMinTiles,
+        double rangeMaxTiles,
         double speedTilesPerTick)
     {
         long id = World.Spawn();
@@ -46,6 +50,7 @@ public sealed class GameSim
         World.Attach(id, SimComponents.Health);
         World.Attach(id, SimComponents.Combat);
         World.Attach(id, SimComponents.Team);
+        World.Attach(id, SimComponents.Footprint);
         World.SetValue(id, SimComponents.Position, SimComponents.X, Fixed.Add(Fixed.FromInt(cellX), Fixed.Half));
         World.SetValue(id, SimComponents.Position, SimComponents.Y, Fixed.Add(Fixed.FromInt(cellY), Fixed.Half));
         World.SetValue(id, SimComponents.Velocity, SimComponents.X, 0);
@@ -56,14 +61,25 @@ public sealed class GameSim
         World.SetValue(id, SimComponents.Move, SimComponents.Active, 0);
         World.SetValue(id, SimComponents.Health, SimComponents.Hp, maxHp);
         World.SetValue(id, SimComponents.Health, SimComponents.MaxHp, maxHp);
-        long rangeFixed = Fixed.FromFloat(rangeTiles);
+        long rangeMin = ToRangeCells(rangeMinTiles);
+        long rangeMax = ToRangeCells(rangeMaxTiles);
+        if (rangeMax < rangeMin)
+        {
+            rangeMax = rangeMin;
+        }
         World.SetValue(id, SimComponents.Combat, SimComponents.Damage, damage);
-        World.SetValue(id, SimComponents.Combat, SimComponents.RangeSq, Fixed.Mul(rangeFixed, rangeFixed));
+        World.SetValue(id, SimComponents.Combat, SimComponents.RangeMin, rangeMin);
+        World.SetValue(id, SimComponents.Combat, SimComponents.RangeMax, rangeMax);
         World.SetValue(id, SimComponents.Combat, SimComponents.Cooldown, 6);
         World.SetValue(id, SimComponents.Combat, SimComponents.CooldownLeft, 0);
         World.SetValue(id, SimComponents.Team, SimComponents.TeamId, team);
+        World.SetValue(id, SimComponents.Footprint, SimComponents.FootprintWidth, 1);
+        World.SetValue(id, SimComponents.Footprint, SimComponents.FootprintHeight, 1);
         return id;
     }
+
+    private static long ToRangeCells(double tiles) =>
+        (long)System.Math.Round(tiles, System.MidpointRounding.AwayFromZero);
 
     public long SpawnResourceNode(int cellX, int cellY, long nodeType, long amount)
     {
@@ -105,6 +121,7 @@ public sealed class GameSim
         World.Attach(id, SimComponents.Move);
         World.Attach(id, SimComponents.Team);
         World.Attach(id, SimComponents.Gather);
+        World.Attach(id, SimComponents.Footprint);
         World.SetValue(id, SimComponents.Position, SimComponents.X, Fixed.Add(Fixed.FromInt(cellX), Fixed.Half));
         World.SetValue(id, SimComponents.Position, SimComponents.Y, Fixed.Add(Fixed.FromInt(cellY), Fixed.Half));
         World.SetValue(id, SimComponents.Velocity, SimComponents.X, 0);
@@ -122,6 +139,8 @@ public sealed class GameSim
         World.SetValue(id, SimComponents.Gather, SimComponents.CarryAmount, 0);
         World.SetValue(id, SimComponents.Gather, SimComponents.CarryCapacity, carryCapacity);
         World.SetValue(id, SimComponents.Gather, SimComponents.Progress, 0);
+        World.SetValue(id, SimComponents.Footprint, SimComponents.FootprintWidth, 1);
+        World.SetValue(id, SimComponents.Footprint, SimComponents.FootprintHeight, 1);
         return id;
     }
 
@@ -131,10 +150,11 @@ public sealed class GameSim
         long team,
         long maxHp,
         long damage,
-        double rangeTiles,
+        double rangeMinTiles,
+        double rangeMaxTiles,
         double speedTilesPerTick)
     {
-        long id = SpawnUnit(cellX, cellY, team, maxHp, damage, rangeTiles, speedTilesPerTick);
+        long id = SpawnUnit(cellX, cellY, team, maxHp, damage, rangeMinTiles, rangeMaxTiles, speedTilesPerTick);
         World.Attach(id, SimComponents.King);
         if (Match != null && team >= 0 && team < Match.PlayerCount)
         {
@@ -150,11 +170,14 @@ public sealed class GameSim
         World.Attach(id, SimComponents.Health);
         World.Attach(id, SimComponents.Team);
         World.Attach(id, SimComponents.Building);
+        World.Attach(id, SimComponents.Footprint);
         World.SetValue(id, SimComponents.Position, SimComponents.X, Fixed.Add(Fixed.FromInt(cellX), Fixed.Half));
         World.SetValue(id, SimComponents.Position, SimComponents.Y, Fixed.Add(Fixed.FromInt(cellY), Fixed.Half));
         World.SetValue(id, SimComponents.Health, SimComponents.Hp, maxHp);
         World.SetValue(id, SimComponents.Health, SimComponents.MaxHp, maxHp);
         World.SetValue(id, SimComponents.Team, SimComponents.TeamId, team);
+        World.SetValue(id, SimComponents.Footprint, SimComponents.FootprintWidth, 1);
+        World.SetValue(id, SimComponents.Footprint, SimComponents.FootprintHeight, 1);
         return id;
     }
 
@@ -208,6 +231,7 @@ public sealed class GameSim
         World.Attach(id, SimComponents.Health);
         World.Attach(id, SimComponents.Team);
         World.Attach(id, SimComponents.Monk);
+        World.Attach(id, SimComponents.Footprint);
         World.SetValue(id, SimComponents.Position, SimComponents.X, Fixed.Add(Fixed.FromInt(cellX), Fixed.Half));
         World.SetValue(id, SimComponents.Position, SimComponents.Y, Fixed.Add(Fixed.FromInt(cellY), Fixed.Half));
         World.SetValue(id, SimComponents.Velocity, SimComponents.X, 0);
@@ -229,6 +253,8 @@ public sealed class GameSim
         World.SetValue(id, SimComponents.Monk, SimComponents.ConversionResistance, conversionResistance);
         World.SetValue(id, SimComponents.Monk, SimComponents.RangeSq, Fixed.Mul(rangeFixed, rangeFixed));
         World.SetValue(id, SimComponents.Monk, SimComponents.LastHp, maxHp);
+        World.SetValue(id, SimComponents.Footprint, SimComponents.FootprintWidth, 1);
+        World.SetValue(id, SimComponents.Footprint, SimComponents.FootprintHeight, 1);
         return id;
     }
 
@@ -500,7 +526,8 @@ public sealed class GameSim
         }
         GatherSystem.Step(World, InventoryForTeam);
         MonkSystem.Step(World);
-        MovementSystem.Step(World, Grid, FieldProvider);
+        MovementSystem.Step(World, Grid, Occupancy, FieldProvider);
+        ProjectileSystem.Step(World);
         CombatSystem.Step(World, Spatial);
         RelicSystem.Step(World, InventoryForTeam);
         if (Match != null)

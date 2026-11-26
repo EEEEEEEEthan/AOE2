@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 
 namespace AoeSim;
@@ -34,7 +35,7 @@ public static class CombatSystem
             {
                 if (InRange(world, id, explicitTarget))
                 {
-                    ApplyDamage(world, id, explicitTarget, dead);
+                    Attack(world, id, explicitTarget, dead);
                 }
                 continue;
             }
@@ -43,7 +44,7 @@ public static class CombatSystem
             {
                 continue;
             }
-            ApplyDamage(world, id, target, dead);
+            Attack(world, id, target, dead);
         }
         foreach (long id in dead)
         {
@@ -97,15 +98,19 @@ public static class CombatSystem
 
     private static bool InRange(SimWorld world, long attacker, long target)
     {
-        long rangeSq = world.GetValue(attacker, SimComponents.Combat, SimComponents.RangeSq);
-        long deltaX = Fixed.Sub(
-            world.GetValue(target, SimComponents.Position, SimComponents.X),
-            world.GetValue(attacker, SimComponents.Position, SimComponents.X));
-        long deltaY = Fixed.Sub(
-            world.GetValue(target, SimComponents.Position, SimComponents.Y),
-            world.GetValue(attacker, SimComponents.Position, SimComponents.Y));
-        long distanceSq = Fixed.Add(Fixed.Mul(deltaX, deltaX), Fixed.Mul(deltaY, deltaY));
-        return distanceSq <= rangeSq;
+        long rangeMin = world.GetValue(attacker, SimComponents.Combat, SimComponents.RangeMin);
+        long rangeMax = world.GetValue(attacker, SimComponents.Combat, SimComponents.RangeMax);
+        long distance = CellDistance(world, attacker, target);
+        return distance >= rangeMin && distance <= rangeMax;
+    }
+
+    private static long CellDistance(SimWorld world, long first, long second)
+    {
+        int firstX = (int)Fixed.ToInt(world.GetValue(first, SimComponents.Position, SimComponents.X));
+        int firstY = (int)Fixed.ToInt(world.GetValue(first, SimComponents.Position, SimComponents.Y));
+        int secondX = (int)Fixed.ToInt(world.GetValue(second, SimComponents.Position, SimComponents.X));
+        int secondY = (int)Fixed.ToInt(world.GetValue(second, SimComponents.Position, SimComponents.Y));
+        return Math.Max(Math.Abs(secondX - firstX), Math.Abs(secondY - firstY));
     }
 
     private static void Chase(SimWorld world, long attacker, long target)
@@ -138,16 +143,25 @@ public static class CombatSystem
         world.SetValue(id, SimComponents.Velocity, SimComponents.Y, 0);
     }
 
+    /// <summary>格子制射程：切比雪夫距离落在 [RANGE_MIN, RANGE_MAX] 内才算可攻击。</summary>
     private static long NearestEnemy(SimWorld world, SpatialHash spatial, long attacker)
     {
         long team = world.GetValue(attacker, SimComponents.Team, SimComponents.TeamId);
-        long rangeSq = world.GetValue(attacker, SimComponents.Combat, SimComponents.RangeSq);
+        long rangeMin = world.GetValue(attacker, SimComponents.Combat, SimComponents.RangeMin);
+        long rangeMax = world.GetValue(attacker, SimComponents.Combat, SimComponents.RangeMax);
+        if (rangeMax <= 0)
+        {
+            return -1;
+        }
         long x = world.GetValue(attacker, SimComponents.Position, SimComponents.X);
         long y = world.GetValue(attacker, SimComponents.Position, SimComponents.Y);
-        long rangeFixed = Fixed.Sqrt(rangeSq);
-        List<long> candidates = spatial.QueryRadius(x, y, rangeFixed);
+        long queryRadius = Fixed.Add(Fixed.FromInt(rangeMax * 2), Fixed.Half);
+        List<long> candidates = spatial.QueryRadius(x, y, queryRadius);
+        int attackerCellX = (int)Fixed.ToInt(x);
+        int attackerCellY = (int)Fixed.ToInt(y);
         long best = -1;
-        long bestDistance = 0;
+        long bestCellDistance = 0;
+        long bestDistanceSq = 0;
         foreach (long candidate in candidates)
         {
             if (candidate == attacker)
@@ -168,27 +182,46 @@ public static class CombatSystem
             }
             long candidateX = world.GetValue(candidate, SimComponents.Position, SimComponents.X);
             long candidateY = world.GetValue(candidate, SimComponents.Position, SimComponents.Y);
-            long deltaX = Fixed.Sub(candidateX, x);
-            long deltaY = Fixed.Sub(candidateY, y);
-            long distance = Fixed.Add(Fixed.Mul(deltaX, deltaX), Fixed.Mul(deltaY, deltaY));
-            if (distance > rangeSq)
+            int cellDistance = Math.Max(
+                Math.Abs((int)Fixed.ToInt(candidateX) - attackerCellX),
+                Math.Abs((int)Fixed.ToInt(candidateY) - attackerCellY));
+            if (cellDistance < rangeMin || cellDistance > rangeMax)
             {
                 continue;
             }
-            if (best < 0 || distance < bestDistance || (distance == bestDistance && candidate < best))
+            long deltaX = Fixed.Sub(candidateX, x);
+            long deltaY = Fixed.Sub(candidateY, y);
+            long distanceSq = Fixed.Add(Fixed.Mul(deltaX, deltaX), Fixed.Mul(deltaY, deltaY));
+            if (best < 0
+                || cellDistance < bestCellDistance
+                || (cellDistance == bestCellDistance && (distanceSq < bestDistanceSq || (distanceSq == bestDistanceSq && candidate < best))))
             {
                 best = candidate;
-                bestDistance = distance;
+                bestCellDistance = cellDistance;
+                bestDistanceSq = distanceSq;
             }
         }
         return best;
     }
 
-    private static void ApplyDamage(SimWorld world, long attacker, long target, List<long> dead)
+    private static void Attack(SimWorld world, long attacker, long target, List<long> dead)
     {
         long damage = world.GetValue(attacker, SimComponents.Combat, SimComponents.Damage);
         long cooldown = world.GetValue(attacker, SimComponents.Combat, SimComponents.Cooldown);
-        world.SetValue(attacker, SimComponents.Combat, SimComponents.CooldownLeft, System.Math.Max(1, cooldown));
+        world.SetValue(attacker, SimComponents.Combat, SimComponents.CooldownLeft, Math.Max(1, cooldown));
+        long rangeMax = world.GetValue(attacker, SimComponents.Combat, SimComponents.RangeMax);
+        if (rangeMax <= 1)
+        {
+            ApplyDamage(world, target, damage, dead);
+        }
+        else
+        {
+            ProjectileSystem.Launch(world, attacker, target, damage);
+        }
+    }
+
+    private static void ApplyDamage(SimWorld world, long target, long damage, List<long> dead)
+    {
         long hp = world.GetValue(target, SimComponents.Health, SimComponents.Hp) - damage;
         world.SetValue(target, SimComponents.Health, SimComponents.Hp, hp);
         if (hp <= 0 && !dead.Contains(target))

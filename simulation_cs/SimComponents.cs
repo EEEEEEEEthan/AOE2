@@ -10,6 +10,8 @@ public static class SimComponents
     public const string AttackTarget = "attack_target";
     public const string Team = "team";
     public const string Gather = "gather";
+    public const string Footprint = "footprint";
+    public const string Projectile = "projectile";
     public const string Resource = "resource";
     public const string ResourceNode = "resource_node";
     public const string DropSite = "drop_site";
@@ -32,10 +34,17 @@ public static class SimComponents
     public const string MaxHp = "max_hp";
     public const string Damage = "damage";
     public const string RangeSq = "range_sq";
+    public const string RangeMin = "range_min";
+    public const string RangeMax = "range_max";
     public const string Cooldown = "cooldown";
     public const string CooldownLeft = "cooldown_left";
     public const string TeamId = "team_id";
     public const string TargetEntity = "target_entity";
+    public const string FootprintWidth = "width";
+    public const string FootprintHeight = "height";
+    public const string ProjectileTarget = "projectile_target";
+    public const string ProjectileDamage = "projectile_damage";
+    public const string ProjectileTicksLeft = "projectile_ticks_left";
 
     public const string Wood = "wood";
     public const string Food = "food";
