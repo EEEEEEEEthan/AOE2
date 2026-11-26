@@ -36,6 +36,7 @@ public sealed class LockstepCommand
     public const long KindTransportLoad = 31;
     public const long KindTransportUnload = 32;
     public const long KindPlaceWallSegment = 33;
+    public const long KindTrain = 34;
 
     public const int FieldCount = 12;
 

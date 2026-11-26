@@ -19,17 +19,15 @@ public partial class GameBridge : Node
 
     public bool HasSession => _session != null;
 
+    public int MyTeam => (int)(_session?.Server.ViewTeam ?? 0);
+
     public override void _ExitTree()
     {
         _dedicated?.Stop();
         _dedicated = null;
     }
 
-    public void StartLocalMatch()
-    {
-        _grid = AoeSim.DemoScenario.BuildGrid();
-        _terrain = AoeSim.DemoScenario.BuildTerrain();
-    }
+    public void StartLocalMatch() => StartGeneratedMatch();
 
     public void StartLocalDemo()
     {
@@ -212,24 +210,184 @@ public partial class GameBridge : Node
                 { "food", player.Food },
                 { "gold", player.Gold },
                 { "stone", player.Stone },
+                { "population_used", player.PopulationUsed },
+                { "population_cap", player.PopulationCap },
             });
         }
         return result;
     }
 
-    public void Surrender()
+    private void SubmitCommands(AoeSim.LockstepCommand[] commands)
     {
-        if (_session == null)
+        if (_session == null || commands.Length == 0)
         {
             return;
         }
+        int player = MyTeam;
         var frame = new AoeSim.CommandFrame
         {
-            Player = 0,
+            Player = player,
             Turn = _session.Server.Turn,
-            Commands = new[] { new AoeSim.LockstepCommand(0, AoeSim.LockstepCommand.KindSurrender) },
+            Commands = commands,
         };
         _session.Submit(frame);
+    }
+
+    public void MoveUnits(long[] ids, long cellX, long cellY)
+    {
+        var commands = new AoeSim.LockstepCommand[ids.Length];
+        for (int index = 0; index < ids.Length; index++)
+        {
+            commands[index] = new AoeSim.LockstepCommand(
+                MyTeam, AoeSim.LockstepCommand.KindMove, ids[index], cellX, cellY);
+        }
+        SubmitCommands(commands);
+    }
+
+    public void AttackUnits(long[] ids, long target)
+    {
+        var commands = new AoeSim.LockstepCommand[ids.Length];
+        for (int index = 0; index < ids.Length; index++)
+        {
+            commands[index] = new AoeSim.LockstepCommand(
+                MyTeam, AoeSim.LockstepCommand.KindAttack, ids[index], 0, 0, target);
+        }
+        SubmitCommands(commands);
+    }
+
+    public void GatherUnits(long[] ids, long node)
+    {
+        var commands = new AoeSim.LockstepCommand[ids.Length];
+        for (int index = 0; index < ids.Length; index++)
+        {
+            commands[index] = new AoeSim.LockstepCommand(
+                MyTeam, AoeSim.LockstepCommand.KindGather, ids[index], 0, 0, node, -1);
+        }
+        SubmitCommands(commands);
+    }
+
+    public void StopUnits(long[] ids)
+    {
+        var commands = new AoeSim.LockstepCommand[ids.Length];
+        for (int index = 0; index < ids.Length; index++)
+        {
+            commands[index] = new AoeSim.LockstepCommand(
+                MyTeam, AoeSim.LockstepCommand.KindStop, ids[index]);
+        }
+        SubmitCommands(commands);
+    }
+
+    public void SetRally(long building, long cellX, long cellY) =>
+        SetRally(building, cellX, cellY, -1);
+
+    public void SetRally(long building, long cellX, long cellY, long target)
+    {
+        SubmitCommands(new[]
+        {
+            new AoeSim.LockstepCommand(
+                MyTeam, AoeSim.LockstepCommand.KindSetRally, building, cellX, cellY, target),
+        });
+    }
+
+    public void PlaceBuilding(long type, long cellX, long cellY)
+    {
+        SubmitCommands(new[]
+        {
+            new AoeSim.LockstepCommand(
+                MyTeam, AoeSim.LockstepCommand.KindPlaceBuilding, -1, cellX, cellY, -1, -1, -1, 0, 0, type),
+        });
+    }
+
+    public void ResearchTech(long techId)
+    {
+        SubmitCommands(new[]
+        {
+            new AoeSim.LockstepCommand(
+                MyTeam, AoeSim.LockstepCommand.KindResearch, -1, 0, 0, -1, -1, -1, 0, 0, techId),
+        });
+    }
+
+    public void AgeUp(long targetAge)
+    {
+        SubmitCommands(new[]
+        {
+            new AoeSim.LockstepCommand(
+                MyTeam, AoeSim.LockstepCommand.KindAgeUp, -1, 0, 0, -1, -1, -1, 0, 0, targetAge),
+        });
+    }
+
+    public void Train(long building, long unitType)
+    {
+        SubmitCommands(new[]
+        {
+            new AoeSim.LockstepCommand(
+                MyTeam, AoeSim.LockstepCommand.KindTrain, building, 0, 0, -1, -1, -1, 0, 0, unitType),
+        });
+    }
+
+    public bool CanPlaceBuilding(long type, long cellX, long cellY) =>
+        _grid != null
+        && _terrain != null
+        && AoeSim.BuildingSystem.CanPlace(_grid, _terrain, type, (int)cellX, (int)cellY);
+
+    public bool CanTrainBuilding(long building, long unitType) =>
+        _session != null && _session.Server.Sim.CanTrain(building, MyTeam, unitType);
+
+    public Godot.Collections.Array<Godot.Collections.Dictionary> BuildingOptions()
+    {
+        var result = new Godot.Collections.Array<Godot.Collections.Dictionary>();
+        for (long type = AoeSim.BuildingTypes.TownCenter; type <= AoeSim.BuildingTypes.FortifiedWall; type++)
+        {
+            AoeSim.ResourceCost cost = AoeSim.BuildingTypes.Cost(type);
+            result.Add(new Godot.Collections.Dictionary
+            {
+                { "id", type },
+                { "name", AoeSim.BuildingTypes.DisplayName(type) },
+                { "width", AoeSim.BuildingTypes.SizeWidth(type) },
+                { "height", AoeSim.BuildingTypes.SizeHeight(type) },
+                { "wood", cost.Wood },
+                { "food", cost.Food },
+                { "gold", cost.Gold },
+                { "stone", cost.Stone },
+            });
+        }
+        return result;
+    }
+
+    public Godot.Collections.Array<Godot.Collections.Dictionary> UnitOptions()
+    {
+        var result = new Godot.Collections.Array<Godot.Collections.Dictionary>();
+        long[] types = { AoeSim.UnitDefs.Villager, AoeSim.UnitDefs.Swordsman, AoeSim.UnitDefs.Spearman, AoeSim.UnitDefs.Archer, AoeSim.UnitDefs.Knight };
+        foreach (long type in types)
+        {
+            AoeSim.ResourceCost cost = AoeSim.UnitDefs.Cost(type);
+            result.Add(new Godot.Collections.Dictionary
+            {
+                { "id", type },
+                { "name", AoeSim.UnitDefs.DisplayName(type) },
+                { "wood", cost.Wood },
+                { "food", cost.Food },
+                { "gold", cost.Gold },
+                { "stone", cost.Stone },
+            });
+        }
+        return result;
+    }
+
+    public string UnitName(long unitType) => AoeSim.UnitDefs.DisplayName(unitType);
+
+    public string BuildingName(long buildingType) => AoeSim.BuildingTypes.DisplayName(buildingType);
+
+    public int BuildingWidth(long buildingType) => AoeSim.BuildingTypes.SizeWidth(buildingType);
+
+    public int BuildingHeight(long buildingType) => AoeSim.BuildingTypes.SizeHeight(buildingType);
+
+    public void Surrender()
+    {
+        SubmitCommands(new[]
+        {
+            new AoeSim.LockstepCommand(MyTeam, AoeSim.LockstepCommand.KindSurrender),
+        });
     }
 
     public void FastForward(int maxTicks)
@@ -245,6 +403,10 @@ public partial class GameBridge : Node
     }
 
     public long ServerChecksum() => _session?.Server.Checksum() ?? -1;
+
+    public long AcceptedCommands => _session?.Server.AcceptedCommands ?? 0;
+
+    public long RejectedCommands => _session?.Server.RejectedCommands ?? 0;
 
     public int GridWidth => _grid?.Width ?? 0;
 
@@ -376,6 +538,8 @@ public partial class GameBridge : Node
                 { "team", entity.Team },
                 { "kind", entity.Kind },
                 { "hp", entity.Hp },
+                { "max_hp", entity.MaxHp },
+                { "unit_type", entity.UnitType },
                 { "node_type", entity.NodeType },
                 { "node_subtype", entity.NodeSubtype },
                 { "node_remaining", entity.NodeRemaining },
@@ -427,6 +591,8 @@ public partial class GameBridge : Node
         var teams = new int[count];
         var kinds = new int[count];
         var hitPoints = new int[count];
+        var maxHitPoints = new int[count];
+        var unitTypes = new int[count];
         var nodeTypes = new int[count];
         var nodeSubtypes = new int[count];
         var nodeRemainings = new int[count];
@@ -450,6 +616,8 @@ public partial class GameBridge : Node
             teams[index] = (int)entity.Team;
             kinds[index] = (int)entity.Kind;
             hitPoints[index] = (int)entity.Hp;
+            maxHitPoints[index] = (int)entity.MaxHp;
+            unitTypes[index] = (int)entity.UnitType;
             nodeTypes[index] = (int)entity.NodeType;
             nodeSubtypes[index] = (int)entity.NodeSubtype;
             nodeRemainings[index] = (int)entity.NodeRemaining;
@@ -475,6 +643,8 @@ public partial class GameBridge : Node
             { "team", teams },
             { "kind", kinds },
             { "hp", hitPoints },
+            { "max_hp", maxHitPoints },
+            { "unit_type", unitTypes },
             { "node_type", nodeTypes },
             { "node_subtype", nodeSubtypes },
             { "node_remaining", nodeRemainings },

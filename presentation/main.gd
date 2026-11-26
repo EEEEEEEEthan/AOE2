@@ -37,6 +37,7 @@ func _ready() -> void:
 	_start_session()
 	%WorldView.build_terrain(bridge)
 	%WorldView.refresh(bridge)
+	%BattleController.setup(bridge)
 	_last_tick = bridge.ClientTick()
 
 
@@ -52,6 +53,7 @@ func _process(delta: float) -> void:
 	if tick != _last_tick:
 		_last_tick = tick
 		%WorldView.refresh(bridge)
+		%BattleController.refresh()
 	_refresh_result()
 
 

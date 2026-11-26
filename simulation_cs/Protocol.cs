@@ -21,7 +21,7 @@ public static class EntityKind
 /// <summary>网络协议版本：静态地图帧携带，握手时校验两端一致。</summary>
 public static class NetProtocol
 {
-    public const int Version = 7;
+    public const int Version = 8;
 }
 
 /// <summary>
@@ -127,6 +127,8 @@ public readonly struct EntitySnapshot
     public readonly long RepairState;
     public readonly long RepairTarget;
     public readonly long GateState;
+    public readonly long UnitType;
+    public readonly long MaxHp;
 
     public EntitySnapshot(
         long id,
@@ -151,7 +153,9 @@ public readonly struct EntitySnapshot
         long garrisonCapacity,
         long repairState,
         long repairTarget,
-        long gateState)
+        long gateState,
+        long unitType,
+        long maxHp)
     {
         Id = id;
         X = x;
@@ -176,6 +180,8 @@ public readonly struct EntitySnapshot
         RepairState = repairState;
         RepairTarget = repairTarget;
         GateState = gateState;
+        UnitType = unitType;
+        MaxHp = maxHp;
     }
 }
 
@@ -200,6 +206,8 @@ public readonly struct PlayerSnapshot
     public readonly long MarketFood;
     public readonly long MarketGold;
     public readonly long MarketStone;
+    public readonly long PopulationUsed;
+    public readonly long PopulationCap;
 
     public PlayerSnapshot(
         long team,
@@ -220,7 +228,9 @@ public readonly struct PlayerSnapshot
         long marketWood,
         long marketFood,
         long marketGold,
-        long marketStone)
+        long marketStone,
+        long populationUsed,
+        long populationCap)
     {
         Team = team;
         Defeated = defeated;
@@ -241,6 +251,8 @@ public readonly struct PlayerSnapshot
         MarketFood = marketFood;
         MarketGold = marketGold;
         MarketStone = marketStone;
+        PopulationUsed = populationUsed;
+        PopulationCap = populationCap;
     }
 }
 
@@ -290,6 +302,12 @@ public sealed class SnapshotFrame
             long kind = ClassifyEntity(world, id);
             long team = world.GetValue(id, SimComponents.Team, SimComponents.TeamId);
             long hp = world.GetValue(id, SimComponents.Health, SimComponents.Hp);
+            long maxHp = world.HasComponent(id, SimComponents.Health)
+                ? world.GetValue(id, SimComponents.Health, SimComponents.MaxHp)
+                : hp;
+            long unitType = world.HasComponent(id, SimComponents.Combat)
+                ? world.GetValue(id, SimComponents.Combat, SimComponents.UnitType)
+                : -1;
             long nodeType = 0;
             long nodeSubtype = 0;
             long nodeRemaining = 0;
@@ -369,7 +387,9 @@ public sealed class SnapshotFrame
                 garrisonCapacity,
                 repairState,
                 repairTarget,
-                gateState));
+                gateState,
+                unitType,
+                maxHp));
         }
         var frame = new SnapshotFrame { Tick = world.Tick, Turn = turn, Entities = entities.ToArray() };
         if (vision != null)
@@ -437,7 +457,9 @@ public sealed class SnapshotFrame
                     MarketSystem.Rate(world, team, GameSim.ResourceWood),
                     MarketSystem.Rate(world, team, GameSim.ResourceFood),
                     MarketSystem.Rate(world, team, GameSim.ResourceGold),
-                    MarketSystem.Rate(world, team, GameSim.ResourceStone));
+                    MarketSystem.Rate(world, team, GameSim.ResourceStone),
+                    PopulationSystem.Used(world, team),
+                    PopulationSystem.Cap(world, team));
             }
             frame.Players = players;
         }
@@ -564,6 +586,8 @@ public sealed class SnapshotFrame
                 writer.Write(player.MarketFood);
                 writer.Write(player.MarketGold);
                 writer.Write(player.MarketStone);
+                writer.Write(player.PopulationUsed);
+                writer.Write(player.PopulationCap);
             }
             writer.Write(Entities.Length);
             foreach (EntitySnapshot entity in Entities)
@@ -591,6 +615,8 @@ public sealed class SnapshotFrame
                 writer.Write(entity.RepairState);
                 writer.Write(entity.RepairTarget);
                 writer.Write(entity.GateState);
+                writer.Write(entity.UnitType);
+                writer.Write(entity.MaxHp);
             }
             writer.Write(VisionWidth);
             writer.Write(VisionHeight);
@@ -698,6 +724,8 @@ public sealed class SnapshotFrame
                 reader.ReadInt64(),
                 reader.ReadInt64(),
                 reader.ReadInt64(),
+                reader.ReadInt64(),
+                reader.ReadInt64(),
                 reader.ReadInt64());
         }
         frame.Players = players;
@@ -706,6 +734,8 @@ public sealed class SnapshotFrame
         for (int index = 0; index < count; index++)
         {
             entities[index] = new EntitySnapshot(
+                reader.ReadInt64(),
+                reader.ReadInt64(),
                 reader.ReadInt64(),
                 reader.ReadInt64(),
                 reader.ReadInt64(),

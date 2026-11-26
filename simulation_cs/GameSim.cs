@@ -919,6 +919,103 @@ public sealed class GameSim
         return id;
     }
 
+    public bool CanTrain(long building, long player, long unitType)
+    {
+        if (!World.IsAlive(building) || !World.HasComponent(building, SimComponents.Building))
+        {
+            return false;
+        }
+        if (World.GetValue(building, SimComponents.Team, SimComponents.TeamId) != player)
+        {
+            return false;
+        }
+        if (World.GetValue(building, SimComponents.Building, SimComponents.State) != BuildingSystem.StateComplete)
+        {
+            return false;
+        }
+        long buildingType = World.GetValue(building, SimComponents.Building, SimComponents.BuildingType);
+        if (unitType == UnitDefs.Villager)
+        {
+            return buildingType == BuildingTypes.TownCenter;
+        }
+        if (buildingType != BuildingTypes.Barracks)
+        {
+            return false;
+        }
+        return UnitDefs.IsUnitAvailable(Civ(player), unitType);
+    }
+
+    public bool TrainUnit(long building, long player, long unitType)
+    {
+        if (!CanTrain(building, player, unitType))
+        {
+            return false;
+        }
+        long popCost = UnitDefs.PopulationCost(unitType);
+        if (!PopulationSystem.CanSpawn(World, player, popCost))
+        {
+            return false;
+        }
+        ResourceCost cost = UnitDefs.Cost(unitType);
+        for (long resourceKind = ResourceWood; resourceKind <= ResourceStone; resourceKind++)
+        {
+            if (Resource(player, resourceKind) < cost.AmountOf(resourceKind))
+            {
+                return false;
+            }
+        }
+        if (!TryFindTrainCell(building, out int cellX, out int cellY))
+        {
+            return false;
+        }
+        long unit = unitType == UnitDefs.Villager
+            ? SpawnVillager(
+                cellX, cellY, player, MapSetup.VillagerSpeed,
+                MapSetup.VillagerCarryCapacity, MapSetup.VillagerGatherRate, popCost)
+            : SpawnUnit(cellX, cellY, player, unitType, CombatStance.Aggressive, popCost);
+        if (unit < 0)
+        {
+            return false;
+        }
+        for (long resourceKind = ResourceWood; resourceKind <= ResourceStone; resourceKind++)
+        {
+            AddResource(player, resourceKind, -cost.AmountOf(resourceKind));
+        }
+        ApplyRallyTo(building, unit);
+        return true;
+    }
+
+    private bool TryFindTrainCell(long building, out int cellX, out int cellY)
+    {
+        long originX = Fixed.ToInt(World.GetValue(building, SimComponents.Position, SimComponents.X));
+        long originY = Fixed.ToInt(World.GetValue(building, SimComponents.Position, SimComponents.Y));
+        long width = World.GetValue(building, SimComponents.Building, SimComponents.SizeWidth);
+        long height = World.GetValue(building, SimComponents.Building, SimComponents.SizeHeight);
+        for (long y = originY - 1; y <= originY + height; y++)
+        {
+            for (long x = originX - 1; x <= originX + width; x++)
+            {
+                bool onRing = x < originX || x >= originX + width || y < originY || y >= originY + height;
+                if (!onRing)
+                {
+                    continue;
+                }
+                int candidateX = (int)x;
+                int candidateY = (int)y;
+                if (!Terrain.IsLandPassable(candidateX, candidateY) || Grid.IsBlocked(candidateX, candidateY))
+                {
+                    continue;
+                }
+                cellX = candidateX;
+                cellY = candidateY;
+                return true;
+            }
+        }
+        cellX = 0;
+        cellY = 0;
+        return false;
+    }
+
     /// <summary>
     /// 按段拖拽放置城墙体系：起止两格经 <see cref="WallSegment.Rasterize"/> 展开为整段，
     /// 单回合内原子落位——任一格非法或总造价不足则整段拒绝、不扣费、不落地。
@@ -1344,7 +1441,8 @@ public sealed class GameSim
         || kind == LockstepCommand.KindTradeRoute
         || kind == LockstepCommand.KindToggleGate
         || kind == LockstepCommand.KindTransportLoad
-        || kind == LockstepCommand.KindTransportUnload;
+        || kind == LockstepCommand.KindTransportUnload
+        || kind == LockstepCommand.KindTrain;
 
     public bool ApplyCommand(LockstepCommand command)
     {
@@ -1464,6 +1562,9 @@ public sealed class GameSim
                 break;
             case LockstepCommand.KindTransportUnload:
                 IssueTransportUnload(command.Entity);
+                break;
+            case LockstepCommand.KindTrain:
+                TrainUnit(command.Entity, command.Player, command.Aux);
                 break;
         }
         return true;
