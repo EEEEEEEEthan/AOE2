@@ -9,13 +9,17 @@ public sealed class GameSim
     public const long ResourceGold = 2;
     public const long ResourceStone = 3;
 
+    public const double DefaultSightTiles = 4.0;
+
     public SimWorld World { get; }
     public NavGrid Grid { get; }
     public SpatialHash Spatial { get; }
     public OccupancyMap Occupancy { get; }
     public Lockstep Lockstep { get; }
     public MatchState? Match { get; }
+    public List<VisionGrid> Vision { get; } = new();
 
+    private readonly long _sightRadius = Fixed.FromFloat(DefaultSightTiles);
     private readonly Dictionary<long, FlowField> _fields = new();
     private readonly Dictionary<long, long> _inventoryEntities = new();
 
@@ -26,6 +30,10 @@ public sealed class GameSim
         Spatial = new SpatialHash(4);
         Occupancy = new OccupancyMap(grid.Width, grid.Height);
         Lockstep = new Lockstep(playerCount, ticksPerTurn);
+        for (int player = 0; player < playerCount; player++)
+        {
+            Vision.Add(new VisionGrid(grid.Width, grid.Height));
+        }
         if (matchConfig != null)
         {
             Match = MatchState.Create(World, Lockstep.PlayerCount, matchConfig);
@@ -562,7 +570,23 @@ public sealed class GameSim
         {
             MatchSystem.Step(World, Match);
         }
+        VisionSystem.Step(World, Vision, _sightRadius);
         World.Tick += 1;
+    }
+
+    public VisionGrid? VisionFor(long team) =>
+        team >= 0 && team < Vision.Count ? Vision[(int)team] : null;
+
+    /// <summary>世界状态 + 各玩家可视性位图的混合校验和，用于视野确定性对拍。</summary>
+    public long Checksum()
+    {
+        long hash = World.Checksum();
+        foreach (VisionGrid grid in Vision)
+        {
+            hash = (hash ^ grid.Checksum()) & SimWorld.Mask32;
+            hash = (hash * SimWorld.FnvPrime) & SimWorld.Mask32;
+        }
+        return hash;
     }
 
     public long SimulateTurn()

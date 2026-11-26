@@ -7,6 +7,7 @@
 | 模块 | 目录 | 职责 |
 | --- | --- | --- |
 | C# 模拟内核 | `simulation_cs/` | 定点、随机、ECS、寻路/流场/移动、战斗、采集、对局胜负、锁步、`GameSim`，引擎无关 |
+| 战争迷雾 | `simulation_cs/VisionGrid.cs`、`VisionSystem.cs` | 按玩家的可视性网格（未探索/已探索/可见），定点圆揭示，随快照下发 |
 | 协议与网络 | `simulation_cs/Protocol.cs`、`DedicatedServer.cs` | 快照/指令帧编解码、TCP dedicated server |
 | 服务器权威 | `SimulationServer` / `LocalSession` / `SimulationClient` | 权威模拟出快照，瘦客户端只消费快照 |
 | 表现 | `presentation/` | 3D 等距相机、单位与地形渲染、经 `GameBridge` 消费快照 |
@@ -30,6 +31,12 @@
 - **瘦客户端**：`SimulationClient` 只保存解码后的快照用于渲染，从不直接读服务器模拟对象；本地局用 `LocalSession` 内嵌本机服务器，快照同样走编码/解码。
 - **表现层**：`presentation/` 通过 `GameBridge` 读快照渲染，不再引用任何模拟类。
 - **确定性**：整数/定点、`String` 内容排序、FNV 校验和、实体升序迭代全部保留；`tests/determinism.gd` 用固化黄金校验和守住回归，`tests/kernel.gd` 覆盖各模块语义。
+
+## 战争迷雾
+
+- 每个玩家一份 `VisionGrid`（`_visible` 每 tick 重置、`_explored` 持久），`VisionSystem` 每 tick 以定点欧氏圆揭示单位/建筑视距内的格子并写回已探索。
+- 视野随 `SnapshotFrame` 下发：快照按观察者玩家裁剪实体（己方恒见、中立与静态建筑按已探索、敌方单位仅当前可见），并附带整张可视性位图。
+- 表现层 `WorldView` 依据位图渲染迷雾（未探索黑 / 已探索灰 / 可见透明）并隐藏未探索地形；`GameBridge` 只暴露解码后的客户端快照。`KernelSelfTest` 覆盖揭示、离开转已探索、双玩家独立、快照裁剪与确定性。
 
 ## 对局与胜负
 
@@ -60,3 +67,4 @@ dotnet build AOE2Framework.sln           # 单独编译 C# 内核
 - [x] 阶段五：3D 等距视角演示
 - [x] 迁移：切 Godot .NET 版、模拟内核移植 C#、服务器权威拆分（dedicated server + 协议 + 快照渲染 + 本地局本机服务器）
 - [x] 对局流程：`MatchState`/`PlayerState`、可配置胜负条件、每 tick 确定性结算与结算界面
+- [x] 战争迷雾与视野：C# 视距网格、快照按玩家裁剪、瘦客户端迷雾渲染

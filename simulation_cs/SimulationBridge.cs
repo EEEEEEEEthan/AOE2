@@ -67,15 +67,25 @@ public partial class SimulationBridge : Node
         }
         long clientTick = session.Client.Tick;
         int clientEntities = session.Client.EntityCount;
-        int serverEntities = 0;
+        AoeSim.VisionGrid? vision = session.Server.Sim.VisionFor(session.Server.ViewTeam);
+        int expectedEntities = 0;
         foreach (long id in session.Server.Sim.World.Entities())
         {
-            if (session.Server.Sim.World.HasComponent(id, AoeSim.SimComponents.Position))
+            if (!session.Server.Sim.World.HasComponent(id, AoeSim.SimComponents.Position))
             {
-                serverEntities += 1;
+                continue;
+            }
+            if (vision == null || AoeSim.SnapshotFrame.ShouldInclude(session.Server.Sim.World, id, vision, session.Server.ViewTeam))
+            {
+                expectedEntities += 1;
             }
         }
-        return clientTick == 30 && clientEntities == serverEntities && clientEntities > 0 && firstChecksum != 0;
+        bool hasVision = session.Client.Latest != null && session.Client.Latest.VisionStates.Length > 0;
+        return clientTick == 30
+            && clientEntities == expectedEntities
+            && expectedEntities > 0
+            && hasVision
+            && firstChecksum != 0;
     }
 
     public long DemoChecksum(long ticks) => AoeSim.DeterminismScenarios.DemoChecksum(ticks);
