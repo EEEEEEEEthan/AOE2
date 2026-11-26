@@ -57,7 +57,7 @@ public sealed class GameSim
     /// 按兵种生成单位：HP/攻击/射程/护甲/克制全部取自 <see cref="UnitDefs"/>，
     /// 写进 Combat 列随校验和同步。旧签名继续可用，内部转调同一套底层生成逻辑。
     /// </summary>
-    public long SpawnUnit(int cellX, int cellY, long team, long unitType, long stance = CombatStance.Aggressive)
+    public long SpawnUnit(int cellX, int cellY, long team, long unitType, long stance = CombatStance.Aggressive, long popCost = 0)
     {
         UnitDef def = UnitDefs.Get(unitType);
         long id = SpawnUnitCore(
@@ -69,7 +69,12 @@ public sealed class GameSim
             def.MinRangeTiles,
             def.MaxRangeTiles,
             def.SpeedTilesPerTick,
-            stance);
+            stance,
+            popCost);
+        if (id < 0)
+        {
+            return -1;
+        }
         World.SetValue(id, SimComponents.Combat, SimComponents.Cooldown, def.Cooldown);
         World.SetValue(id, SimComponents.Combat, SimComponents.UnitType, unitType);
         World.SetValue(id, SimComponents.Combat, SimComponents.AttackClass, def.AttackClass);
@@ -91,7 +96,8 @@ public sealed class GameSim
         double rangeMinTiles,
         double rangeMaxTiles,
         double speedTilesPerTick,
-        long stance = CombatStance.Aggressive)
+        long stance = CombatStance.Aggressive,
+        long popCost = 0)
     {
         long id = SpawnUnitCore(
             cellX,
@@ -102,7 +108,12 @@ public sealed class GameSim
             rangeMinTiles,
             rangeMaxTiles,
             speedTilesPerTick,
-            stance);
+            stance,
+            popCost);
+        if (id < 0)
+        {
+            return -1;
+        }
         bool ranged = World.GetValue(id, SimComponents.Combat, SimComponents.RangeMax) > 1;
         World.SetValue(id, SimComponents.Combat, SimComponents.UnitType, UnitDefs.Swordsman);
         World.SetValue(
@@ -127,8 +138,13 @@ public sealed class GameSim
         double rangeMinTiles,
         double rangeMaxTiles,
         double speedTilesPerTick,
-        long stance)
+        long stance,
+        long popCost)
     {
+        if (!PopulationSystem.CanSpawn(World, team, popCost))
+        {
+            return -1;
+        }
         long id = World.Spawn();
         World.Attach(id, SimComponents.Position);
         World.Attach(id, SimComponents.Velocity);
@@ -168,7 +184,20 @@ public sealed class GameSim
         World.SetValue(id, SimComponents.Team, SimComponents.TeamId, team);
         World.SetValue(id, SimComponents.Footprint, SimComponents.FootprintWidth, 1);
         World.SetValue(id, SimComponents.Footprint, SimComponents.FootprintHeight, 1);
+        AccountPopulation(id, team, popCost);
         return id;
+    }
+
+    /// <summary>把单位的人口占用记入自身 POP 组件并累加玩家账本。</summary>
+    private void AccountPopulation(long id, long team, long popCost)
+    {
+        if (popCost <= 0)
+        {
+            return;
+        }
+        World.Attach(id, SimComponents.Pop);
+        World.SetValue(id, SimComponents.Pop, SimComponents.PopCost, popCost);
+        PopulationSystem.Reserve(World, team, popCost);
     }
 
     private static long ToRangeCells(double tiles) =>
@@ -353,8 +382,13 @@ public sealed class GameSim
         long team,
         double speedTilesPerTick,
         long carryCapacity,
-        double gatherRatePerTick)
+        double gatherRatePerTick,
+        long popCost = 0)
     {
+        if (!PopulationSystem.CanSpawn(World, team, popCost))
+        {
+            return -1;
+        }
         EnsureInventoryInitialized();
         long id = World.Spawn();
         World.Attach(id, SimComponents.Position);
@@ -382,6 +416,7 @@ public sealed class GameSim
         World.SetValue(id, SimComponents.Gather, SimComponents.Progress, 0);
         World.SetValue(id, SimComponents.Footprint, SimComponents.FootprintWidth, 1);
         World.SetValue(id, SimComponents.Footprint, SimComponents.FootprintHeight, 1);
+        AccountPopulation(id, team, popCost);
         return id;
     }
 
@@ -393,9 +428,14 @@ public sealed class GameSim
         long damage,
         double rangeMinTiles,
         double rangeMaxTiles,
-        double speedTilesPerTick)
+        double speedTilesPerTick,
+        long popCost = 0)
     {
-        long id = SpawnUnit(cellX, cellY, team, maxHp, damage, rangeMinTiles, rangeMaxTiles, speedTilesPerTick);
+        long id = SpawnUnit(cellX, cellY, team, maxHp, damage, rangeMinTiles, rangeMaxTiles, speedTilesPerTick, CombatStance.Aggressive, popCost);
+        if (id < 0)
+        {
+            return -1;
+        }
         World.Attach(id, SimComponents.King);
         if (Match != null && team >= 0 && team < Match.PlayerCount)
         {
@@ -542,6 +582,15 @@ public sealed class GameSim
         }
         return count;
     }
+
+    /// <summary>累加某玩家的初始人口上限（房屋/城镇中心等上限来源在 AOE-5 接入时调用同一接口）。</summary>
+    public long AddPopulationCap(long player, long amount) => PopulationSystem.AddCap(World, player, amount);
+
+    public long PopulationUsed(long player) => PopulationSystem.Used(World, player);
+
+    public long PopulationCap(long player) => PopulationSystem.Cap(World, player);
+
+    public bool CanSpawnPopulation(long player, long cost) => PopulationSystem.CanSpawn(World, player, cost);
 
     public void Surrender(long team)
     {

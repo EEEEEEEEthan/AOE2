@@ -59,6 +59,7 @@ public static class ProjectileSystem
         }
         foreach (long id in dead)
         {
+            PopulationSystem.Release(world, id);
             world.Despawn(id);
         }
     }

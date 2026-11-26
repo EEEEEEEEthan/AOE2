@@ -15,6 +15,8 @@ public partial class SimulationBridge : Node
 
     public Godot.Collections.Array<string> EconomySelfTest() => ToGodotArray(AOE2Framework.EconomySelfTest.Run());
 
+    public Godot.Collections.Array<string> PopulationSelfTest() => ToGodotArray(AOE2Framework.PopulationSelfTest.Run());
+
     private static Godot.Collections.Array<string> ToGodotArray(System.Collections.Generic.List<string> failures)
     {
         var result = new Godot.Collections.Array<string>();

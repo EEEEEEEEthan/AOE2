@@ -135,4 +135,11 @@ public static class SimComponents
     public static readonly string[] QueueAuxXColumns = { "q0_aux_x", "q1_aux_x", "q2_aux_x" };
     public static readonly string[] QueueAuxYColumns = { "q0_aux_y", "q1_aux_y", "q2_aux_y" };
     public static readonly string[] QueueAuxColumns = { "q0_aux", "q1_aux", "q2_aux" };
+
+    public const string Population = "population";
+    public const string Pop = "pop";
+    public const string Used = "used";
+    public const string Cap = "cap";
+    public const string CapMax = "cap_max";
+    public const string PopCost = "pop_cost";
 }
