@@ -41,14 +41,14 @@ public static class MovementSystem
             Move = world.Access(SimComponents.Move);
             Velocity = world.Access(SimComponents.Velocity);
             Domain = world.Access(SimComponents.Domain);
-            PositionX = Position.Column(SimComponents.X);
-            PositionY = Position.Column(SimComponents.Y);
-            VelocityX = Velocity.Column(SimComponents.X);
-            VelocityY = Velocity.Column(SimComponents.Y);
+            PositionX = Position.ColumnForWrite(SimComponents.X);
+            PositionY = Position.ColumnForWrite(SimComponents.Y);
+            VelocityX = Velocity.ColumnForWrite(SimComponents.X);
+            VelocityY = Velocity.ColumnForWrite(SimComponents.Y);
             MoveTargetX = Move.Column(SimComponents.TargetX);
             MoveTargetY = Move.Column(SimComponents.TargetY);
             MoveSpeed = Move.Column(SimComponents.Speed);
-            MoveActive = Move.Column(SimComponents.Active);
+            MoveActive = Move.ColumnForWrite(SimComponents.Active);
             DomainId = Domain.Column(SimComponents.DomainId);
         }
     }

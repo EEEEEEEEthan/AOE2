@@ -339,7 +339,7 @@ public sealed class SnapshotFrame
     [System.ThreadStatic] private static MemoryStream? _encodeStream;
 
     /// <summary>快照构建入口一次性解析的组件与列句柄，实体循环内只做整型访问。</summary>
-    private readonly struct SnapshotLayout
+    internal readonly struct SnapshotLayout
     {
         public readonly ComponentAccess Resource;
         public readonly ComponentAccess Team;
@@ -777,7 +777,10 @@ public sealed class SnapshotFrame
     public static bool ShouldInclude(SimWorld world, long id, VisionGrid vision, long viewerTeam) =>
         ShouldInclude(id, vision, viewerTeam, new SnapshotLayout(world));
 
-    private static bool ShouldInclude(long id, VisionGrid vision, long viewerTeam, in SnapshotLayout layout)
+    /// <summary>单次调用场景建一套 layout；批量循环请先 <see cref="CreateLayout"/> 再复用重载。</summary>
+    internal static SnapshotLayout CreateLayout(SimWorld world) => new(world);
+
+    internal static bool ShouldInclude(long id, VisionGrid vision, long viewerTeam, in SnapshotLayout layout)
     {
         int tileX = (int)Fixed.ToInt(layout.Position.Get(id, layout.PositionX));
         int tileY = (int)Fixed.ToInt(layout.Position.Get(id, layout.PositionY));

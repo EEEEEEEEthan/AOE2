@@ -29,6 +29,11 @@ public static partial class KernelSelfTest
         int unsetColumn = position.Column(SimComponents.Meat);
         Expect(failures, unsetColumn < 0, "declared but unwritten column resolves to -1");
         Expect(failures, position.Get(id, unsetColumn) == 0, "unwritten column int read returns 0");
+
+        int freshColumn = position.ColumnForWrite("regression_fresh_column");
+        Expect(failures, freshColumn >= 0, "ColumnForWrite creates a missing column");
+        position.Set(id, freshColumn, 42);
+        Expect(failures, position.Get(id, freshColumn) == 42, "first write to a freshly created column round-trips");
 #if DEBUG
         bool getThrew = false;
         try
