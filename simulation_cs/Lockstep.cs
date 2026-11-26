@@ -1,14 +1,15 @@
-using System.Collections.Generic;
-
 namespace AoeSim;
 
+/// <summary>
+/// 回合时钟：只记录玩家数与每回合 tick 数，并让服务器按固定 tick 节奏推进回合号。
+/// 服务器自己收集各玩家输入（见 <see cref="SimulationServer"/>），不等待全部玩家提交；
+/// 缺输入的玩家按空输入前进，杜绝「文档说锁步、实现不等待」的双模型歧义。
+/// </summary>
 public sealed class Lockstep
 {
     public int PlayerCount { get; }
     public int TicksPerTurn { get; }
     public long Turn { get; private set; }
-
-    private readonly Dictionary<long, Dictionary<long, List<LockstepCommand>>> _turns = new();
 
     public Lockstep(int playerCount = 2, int ticksPerTurn = 6)
     {
@@ -16,57 +17,6 @@ public sealed class Lockstep
         TicksPerTurn = System.Math.Max(1, ticksPerTurn);
     }
 
-    public bool SubmitTurn(long turnIndex, long player, List<LockstepCommand> commands)
-    {
-        if (player < 0 || player >= PlayerCount || turnIndex < Turn)
-        {
-            return false;
-        }
-        if (!_turns.TryGetValue(turnIndex, out Dictionary<long, List<LockstepCommand>>? slots))
-        {
-            slots = new Dictionary<long, List<LockstepCommand>>();
-            _turns[turnIndex] = slots;
-        }
-        if (slots.ContainsKey(player))
-        {
-            return false;
-        }
-        slots[player] = new List<LockstepCommand>(commands);
-        return true;
-    }
-
-    public int ReadyPlayers(long turnIndex) =>
-        _turns.TryGetValue(turnIndex, out Dictionary<long, List<LockstepCommand>>? slots) ? slots.Count : 0;
-
-    public bool CanAdvance() => ReadyPlayers(Turn) == PlayerCount;
-
-    public List<LockstepCommand> TakeCommands()
-    {
-        var flattened = new List<LockstepCommand>();
-        if (!_turns.TryGetValue(Turn, out Dictionary<long, List<LockstepCommand>>? slots))
-        {
-            return flattened;
-        }
-        var players = new List<long>(slots.Keys);
-        players.Sort();
-        foreach (long player in players)
-        {
-            flattened.AddRange(slots[player]);
-        }
-        _turns.Remove(Turn);
-        Turn += 1;
-        return flattened;
-    }
-
-    public int PendingTurns() => _turns.Count;
-
-    /// <summary>
-    /// 服务器按固定 tick 节奏推进回合编号：服务器自己收集各玩家本回合输入，
-    /// 到回合边界后直接递增 Turn，不依赖客户端一侧的 SubmitTurn/CanAdvance 等待。
-    /// </summary>
-    public void AdvanceTurn()
-    {
-        _turns.Remove(Turn);
-        Turn += 1;
-    }
+    /// <summary>到回合边界直接递增回合号，不依赖客户端提交。</summary>
+    public void AdvanceTurn() => Turn += 1;
 }

@@ -16,6 +16,8 @@ public static class ServerSelfTest
         CheckCommandAuthority(failures);
         CheckConnectionBinding(failures);
         CheckLockstepTurns(failures);
+        CheckHighLatencyCommands(failures);
+        CheckLocalServerParity(failures);
         CheckMultiClient(failures);
         return failures;
     }
@@ -122,6 +124,98 @@ public static class ServerSelfTest
         };
         server.Enqueue(future, 0);
         Expect(failures, server.AcceptedCommands == accepted + 1, "future turn frame is queued");
+    }
+
+    /// <summary>
+    /// 单向延迟回归：客户端按快照回合加提前量提交，帧延迟到达服务器后仍落在未来回合，
+    /// 指令被接受并生效，不会因回合已过被静默丢弃。
+    /// </summary>
+    private static void CheckHighLatencyCommands(List<string> failures)
+    {
+        const int ticksPerSecond = 30;
+        const int oneWayMs = 300;
+        int travelTicks = oneWayMs * ticksPerSecond / 1000;
+        int ticksPerTurn = 6;
+        var sim = new GameSim(new NavGrid(24, 24), 910, 2, ticksPerTurn);
+        long unit = sim.SpawnUnit(3, 3, 0, 50, 0, 0.0, 0.0, 0.5);
+        var server = new SimulationServer(sim);
+        long startX = PositionX(sim, unit);
+        long startY = PositionY(sim, unit);
+
+        var pending = new Queue<(long DeliverTick, CommandFrame Frame)>();
+        bool sent = false;
+        long plannedTurn = -1;
+        long turnAtDelivery = -1;
+        for (int tick = 0; tick < 90; tick++)
+        {
+            while (pending.Count > 0 && pending.Peek().DeliverTick <= tick)
+            {
+                turnAtDelivery = server.Turn;
+                server.Enqueue(pending.Dequeue().Frame, 0);
+            }
+            if (!sent)
+            {
+                plannedTurn = InputTiming.PlanTurn(server.Turn, InputTiming.DefaultLookaheadTurns);
+                pending.Enqueue((tick + travelTicks, new CommandFrame
+                {
+                    Player = 0,
+                    Turn = plannedTurn,
+                    Commands = new[] { new LockstepCommand(0, LockstepCommand.KindMove, unit, 14, 14) },
+                }));
+                sent = true;
+            }
+            server.Step();
+        }
+
+        Expect(failures, server.AcceptedCommands == 1, "delayed command is accepted, not silently dropped");
+        Expect(failures, server.RejectedCommands == 0, "300ms delay adds no rejected command");
+        Expect(failures, plannedTurn > turnAtDelivery, "planned turn stays ahead of the server after 300ms");
+        Expect(failures,
+            plannedTurn <= turnAtDelivery + InputTiming.MaxLookaheadTurns,
+            "planned turn stays inside the server lookahead window");
+        Expect(failures,
+            PositionX(sim, unit) != startX || PositionY(sim, unit) != startY,
+            "delayed command takes effect within a bounded number of turns");
+    }
+
+    /// <summary>本机直推与经服务器回合边界应用走同一套推进语义，得到相同校验和。</summary>
+    private static void CheckLocalServerParity(List<string> failures)
+    {
+        Expect(failures, LocalParityChecksum(viaServer: false) == LocalParityChecksum(viaServer: true),
+            "local and server-driven advance produce the same checksum");
+    }
+
+    private static long LocalParityChecksum(bool viaServer)
+    {
+        var sim = new GameSim(new NavGrid(24, 24), 911, 2, 6);
+        long blue = sim.SpawnUnit(3, 3, 0, 50, 0, 0.0, 0.0, 0.2);
+        long red = sim.SpawnUnit(3, 16, 1, 50, 0, 0.0, 0.0, 0.2);
+        var commands = new[]
+        {
+            new LockstepCommand(0, LockstepCommand.KindMove, blue, 8, 10),
+            new LockstepCommand(1, LockstepCommand.KindMove, red, 8, 9),
+        };
+        if (viaServer)
+        {
+            var server = new SimulationServer(sim);
+            server.Enqueue(commands);
+            for (int tick = 0; tick < 60; tick++)
+            {
+                server.Step();
+            }
+        }
+        else
+        {
+            foreach (LockstepCommand command in commands)
+            {
+                sim.ApplyCommand(command);
+            }
+            for (int tick = 0; tick < 60; tick++)
+            {
+                sim.SimulateTick();
+            }
+        }
+        return sim.Checksum();
     }
 
     private static void CheckMultiClient(List<string> failures)
