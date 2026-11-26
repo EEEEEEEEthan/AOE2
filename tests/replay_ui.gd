@@ -14,7 +14,7 @@ func run() -> void:
 func _record_and_replay() -> void:
 	var bridge := GameBridge.new()
 	add_child(bridge)
-	bridge.StartGeneratedMatch(20261127, 2, 0, -1)
+	bridge.StartGeneratedMatch(20261127, 2, 0, -1, PackedInt32Array())
 	check_true(bridge.HasRecording, "generated match records by default")
 	var villager := _find_villager(bridge)
 	if not villager.is_empty():
@@ -72,7 +72,7 @@ func _scene_entries() -> void:
 
 	var producer := GameBridge.new()
 	add_child(producer)
-	producer.StartGeneratedMatch(20261127, 2, 0, -1)
+	producer.StartGeneratedMatch(20261127, 2, 0, -1, PackedInt32Array())
 	producer.FastForward(8)
 	var fixture: String = str(producer.SaveReplay("ci_scene_replay"))
 	check_true(not fixture.is_empty(), "scene replay fixture is written")

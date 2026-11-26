@@ -13,6 +13,7 @@ var config: Dictionary = {
 	"player_count": DEFAULT_PLAYER_COUNT,
 	"map_type": ARABIA_MAP_TYPE,
 	"map_name": ARABIA_MAP_NAME,
+	"map_path": "",
 	"ai_difficulty": 1,
 }
 
@@ -27,6 +28,7 @@ func reset_config() -> void:
 		"player_count": DEFAULT_PLAYER_COUNT,
 		"map_type": ARABIA_MAP_TYPE,
 		"map_name": ARABIA_MAP_NAME,
+		"map_path": "",
 		"ai_difficulty": 1,
 	}
 

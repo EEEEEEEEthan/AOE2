@@ -81,7 +81,7 @@ func _exit_tree() -> void:
 
 
 func _start_session() -> void:
-	bridge.StartGeneratedMatch(DEFAULT_SEED, DEFAULT_PLAYER_COUNT, ARABIA_MAP_TYPE, DEFAULT_AI_DIFFICULTY)
+	bridge.StartGeneratedMatch(DEFAULT_SEED, DEFAULT_PLAYER_COUNT, ARABIA_MAP_TYPE, DEFAULT_AI_DIFFICULTY, PackedInt32Array())
 
 
 func _process(delta: float) -> void:

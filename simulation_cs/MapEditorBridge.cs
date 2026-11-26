@@ -25,6 +25,8 @@ public partial class MapEditorBridge : Node
             result["vertex_heights"] = ToInts(map.Terrain.VertexHeights);
             result["blocked"] = ToBlockedFlags(map.Nav.Blocked);
             result["placements"] = ToGodotPlacements(map.Placements);
+            result["starts"] = ToGodotStarts(map.Starts);
+            result["resources"] = map.Resources.Count;
         }
         catch (Exception exception)
         {
@@ -181,7 +183,12 @@ public partial class MapEditorBridge : Node
                 nav.Blocked[index] = blocked[index] != 0 ? AoeSim.NavGrid.CostBlocked : (byte)0;
             }
         }
-        return new AoeSim.MapData(name, seed, terrain, nav, FromGodotPlacements(placements));
+        List<AoeSim.MapPlacement> placementList = FromGodotPlacements(placements);
+        AoeSim.MapScenario scenario =
+            AoeSim.MapScenarioBuilder.FromPlacements(placementList, terrain);
+        return new AoeSim.MapData(
+            name, seed, terrain, nav, placementList,
+            scenario.Resources, scenario.Starts, scenario.Animals);
     }
 
     private static List<AoeSim.MapPlacement> FromGodotPlacements(Godot.Collections.Array placements)
@@ -199,6 +206,8 @@ public partial class MapEditorBridge : Node
                 NodeType = IntField(dict, "node_type"),
                 Subtype = IntField(dict, "subtype"),
                 Amount = IntField(dict, "amount"),
+                BuildingType = IntField(dict, "building_type"),
+                UnitType = IntField(dict, "unit_type"),
             });
         }
         return result;
@@ -218,9 +227,87 @@ public partial class MapEditorBridge : Node
                 { "node_type", placement.NodeType },
                 { "subtype", placement.Subtype },
                 { "amount", placement.Amount },
+                { "building_type", placement.BuildingType },
+                { "unit_type", placement.UnitType },
             });
         }
         return result;
+    }
+
+    private static Godot.Collections.Array ToGodotStarts(IReadOnlyList<AoeSim.PlayerStart> starts)
+    {
+        var result = new Godot.Collections.Array();
+        foreach (AoeSim.PlayerStart start in starts)
+        {
+            result.Add(new Godot.Collections.Dictionary
+            {
+                { "team", start.Team },
+                { "x", start.X },
+                { "y", start.Y },
+            });
+        }
+        return result;
+    }
+
+    /// <summary>编辑器建筑调色板：按时代分类，供 GDScript 分页展示。</summary>
+    public Godot.Collections.Array<Godot.Collections.Dictionary> BuildingOptions()
+    {
+        var result = new Godot.Collections.Array<Godot.Collections.Dictionary>();
+        for (long type = AoeSim.BuildingTypes.TownCenter;
+             type <= AoeSim.BuildingTypes.MaxKnown;
+             type++)
+        {
+            result.Add(new Godot.Collections.Dictionary
+            {
+                { "id", type },
+                { "name", AoeSim.BuildingTypes.DisplayName(type) },
+                { "category", AoeSim.TechCatalog.AgeName(AoeSim.BuildingTypes.AgeOf(type)) },
+                { "width", AoeSim.BuildingTypes.SizeWidth(type) },
+                { "height", AoeSim.BuildingTypes.SizeHeight(type) },
+            });
+        }
+        return result;
+    }
+
+    /// <summary>编辑器单位调色板：村民单列，其余按兵种家族分类。</summary>
+    public Godot.Collections.Array<Godot.Collections.Dictionary> UnitOptions()
+    {
+        var result = new Godot.Collections.Array<Godot.Collections.Dictionary>
+        {
+            new()
+            {
+                { "id", AoeSim.UnitDefs.Villager },
+                { "name", AoeSim.UnitDefs.DisplayName(AoeSim.UnitDefs.Villager) },
+                { "category", "经济" },
+            },
+        };
+        for (long type = 0; type < AoeSim.UnitDefs.Count; type++)
+        {
+            result.Add(new Godot.Collections.Dictionary
+            {
+                { "id", type },
+                { "name", AoeSim.UnitDefs.DisplayName(type) },
+                { "category", UnitCategory(type) },
+            });
+        }
+        return result;
+    }
+
+    private static string UnitCategory(long unitType)
+    {
+        long family = AoeSim.UnitFamilies.FamilyOf(unitType);
+        return family switch
+        {
+            AoeSim.UnitFamilies.Infantry => "步兵",
+            AoeSim.UnitFamilies.Spear => "长枪兵",
+            AoeSim.UnitFamilies.Archer => "弓箭手",
+            AoeSim.UnitFamilies.Skirmisher => "散兵",
+            AoeSim.UnitFamilies.Scout => "侦察骑兵",
+            AoeSim.UnitFamilies.Cavalry => "骑兵",
+            AoeSim.UnitFamilies.Camel => "骆驼",
+            AoeSim.UnitFamilies.Unique => "独特单位",
+            _ => "攻城武器",
+        };
     }
 
     private static bool HasReachableNeighbor(

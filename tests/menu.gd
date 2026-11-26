@@ -15,6 +15,8 @@ func run() -> void:
 	check(menu is Control, "menu root is a control")
 	check(menu.get_node("%StandardGameButton") is Button, "menu offers standard game")
 	check(menu.get_node("%MapEditorButton") is Button, "menu offers map editor")
+	check(menu.get_node("%CustomMapButton") is Button, "menu offers custom map")
+	check(menu.get_node("%CustomMapDialog") is FileDialog, "menu offers a map file picker")
 	check(menu.get_node("%QuitButton") is Button, "menu offers quit")
 	for child in menu.get_children():
 		check(not child.has_method("StartLocalMatch"), "menu does not create a match bridge")

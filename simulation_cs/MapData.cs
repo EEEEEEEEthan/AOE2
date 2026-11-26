@@ -237,6 +237,13 @@ public sealed class MapData
                 starts.Add(new PlayerStart(start.Team, start.X, start.Y));
             }
         }
+        else if (dto.Resources == null && placements.Count > 0)
+        {
+            MapScenario scenario = MapScenarioBuilder.FromPlacements(placements, terrain);
+            resources = scenario.Resources;
+            starts = scenario.Starts;
+            animals = scenario.Animals;
+        }
         return new MapData(dto.Name, dto.Seed, terrain, nav, placements, resources, starts, animals);
     }
 
@@ -262,6 +269,8 @@ public sealed class MapData
             hash = SimWorld.HashInt(hash, placement.NodeType);
             hash = SimWorld.HashInt(hash, placement.Subtype);
             hash = SimWorld.HashInt(hash, placement.Amount);
+            hash = SimWorld.HashInt(hash, placement.BuildingType);
+            hash = SimWorld.HashInt(hash, placement.UnitType);
         }
         foreach (ResourcePoint point in Resources)
         {

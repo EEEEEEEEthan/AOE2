@@ -33,6 +33,8 @@ public partial class GameBridge : Node
 
     public string LastReplayError { get; private set; } = "";
 
+    public string LastMapError { get; private set; } = "";
+
     public int MyTeam => _multiplayer != null
         ? (int)_multiplayer.MySeat
         : (int)(_session?.Server.ViewTeam ?? 0);
@@ -104,6 +106,71 @@ public partial class GameBridge : Node
         _savedReplayPath = "";
         _session.Step();
         NoteRecordedTick(sim);
+    }
+
+    /// <summary>
+    /// 从编辑器保存的地图文件开局：地图自带起始位置、资源点、建筑与单位放置，
+    /// 玩家数由起始位置数量决定，玩家 0 为本地人类，其余交给电脑控制器。
+    /// 成功返回 true；文件损坏或没有会话时把原因写进 <see cref="LastMapError"/>。
+    /// </summary>
+    public bool StartFromMap(string path, int aiDifficulty = 1, int[]? civIds = null)
+    {
+        StopPlayback();
+        AoeSim.MapData map;
+        try
+        {
+            map = AoeSim.MapData.Load(ResolveMapPath(path));
+        }
+        catch (System.Exception error)
+        {
+            LastMapError = error.Message;
+            return false;
+        }
+        int playerCount = System.Math.Max(1, map.Starts.Count);
+        long[]? matchCivs = null;
+        if (civIds != null)
+        {
+            matchCivs = new long[civIds.Length];
+            for (int index = 0; index < civIds.Length; index++)
+            {
+                matchCivs[index] = civIds[index];
+            }
+        }
+        AoeSim.GameSim sim = AoeSim.MapSetup.BuildGeneratedMatch(
+            map, map.Seed, playerCount, matchCivs);
+        _grid = sim.Grid;
+        _terrain = sim.Terrain;
+        var session = new AoeSim.LocalSession(sim);
+        _session = session;
+        _accumulator = 0.0;
+        ResetBatchCache();
+        _recorder = new AoeSim.ReplayRecorder(
+            map, map.Seed, playerCount, sim.Lockstep.TicksPerTurn, sim.Match!.Config);
+        session.Server.Recorder = _recorder;
+        if (aiDifficulty >= 0)
+        {
+            var difficulty = (AoeSim.AiDifficulty)aiDifficulty;
+            for (long team = 1; team < playerCount; team++)
+            {
+                session.Server.AddComputerPlayer(new AoeSim.ComputerPlayer(
+                    sim, team, difficulty, map.Starts, map.Seed));
+            }
+        }
+        _savedReplayPath = "";
+        LastMapError = "";
+        _session.Step();
+        NoteRecordedTick(sim);
+        return true;
+    }
+
+    private static string ResolveMapPath(string path)
+    {
+        if (path.StartsWith("res://", System.StringComparison.Ordinal)
+            || path.StartsWith("user://", System.StringComparison.Ordinal))
+        {
+            return Godot.ProjectSettings.GlobalizePath(path);
+        }
+        return path;
     }
 
     /// <summary>预览/截图专用：把所有建筑类型按双方阵营摆成两排，验收建筑外观。</summary>

@@ -68,14 +68,19 @@ func _run_loading() -> void:
 	var config: Dictionary = MatchSetup.config
 	_bridge = GameBridge.new()
 	add_child(_bridge)
-	_bridge.StartGeneratedMatch(
-		int(config.get("seed", MatchSetup.DEFAULT_SEED)),
-		int(config.get("player_count", MatchSetup.DEFAULT_PLAYER_COUNT)),
-		int(config.get("map_type", MatchSetup.ARABIA_MAP_TYPE)),
-		int(config.get("ai_difficulty", 1)))
+	var map_path := String(config.get("map_path", ""))
+	if map_path.is_empty():
+		_bridge.StartGeneratedMatch(
+			int(config.get("seed", MatchSetup.DEFAULT_SEED)),
+			int(config.get("player_count", MatchSetup.DEFAULT_PLAYER_COUNT)),
+			int(config.get("map_type", MatchSetup.ARABIA_MAP_TYPE)),
+			int(config.get("ai_difficulty", 1)),
+			PackedInt32Array())
+	else:
+		_bridge.StartFromMap(map_path, int(config.get("ai_difficulty", 1)), PackedInt32Array())
 
 	if not _bridge.HasSession or _bridge.TerrainWidth <= 0 or _bridge.TerrainHeight <= 0:
-		_fail("生成地图失败：未能建立对局会话。")
+		_fail("生成地图失败：%s" % _map_error_text())
 		return
 
 	_set_progress(0.45, "生成地形…")
@@ -102,6 +107,11 @@ func _run_loading() -> void:
 
 func _on_terrain_progress(value: float) -> void:
 	_set_progress(lerpf(0.45, 0.9, clampf(value, 0.0, 1.0)), "生成地形…")
+
+
+func _map_error_text() -> String:
+	var error := String(_bridge.LastMapError)
+	return error if not error.is_empty() else "未能建立对局会话。"
 
 
 func _set_progress(value: float, text: String) -> void:
