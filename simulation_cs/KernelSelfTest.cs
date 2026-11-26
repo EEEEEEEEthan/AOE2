@@ -13,6 +13,7 @@ public static class KernelSelfTest
         CheckRng(failures);
         CheckEcs(failures);
         CheckPathfinding(failures);
+        CheckFlowFieldCache(failures);
         CheckCombat(failures);
         CheckUnitTypes(failures);
         CheckOccupancy(failures);
@@ -163,6 +164,32 @@ public static class KernelSelfTest
             Fixed.ToInt(sim.World.GetValue(id, SimComponents.Position, SimComponents.X)) == 13
             && Fixed.ToInt(sim.World.GetValue(id, SimComponents.Position, SimComponents.Y)) == 8,
             "unit routes around wall");
+    }
+
+    private static void CheckFlowFieldCache(List<string> failures)
+    {
+        var shared = new GameSim(new NavGrid(32, 32), 901, 1, 6);
+        const int goalX = 16;
+        const int goalY = 16;
+        for (int index = 0; index < 200; index++)
+        {
+            int spawnX = index % 32;
+            int spawnY = index / 32 + 1;
+            long id = shared.SpawnUnit(spawnX, spawnY, 0, 10, 0, 0.0, 0.0, 0.5);
+            shared.IssueMove(id, goalX, goalY);
+        }
+        shared.SimulateTick();
+        Expect(failures, shared.FieldsCreatedThisTick == 1, "same goal shares one flow field per tick");
+        Expect(failures, shared.FieldCacheCount == 1, "same goal keeps a single cache entry");
+
+        var bounded = new GameSim(new NavGrid(24, 24), 902, 1, 6, null, null, 4);
+        for (int index = 0; index < 12; index++)
+        {
+            bounded.FieldFor(2 + index, 12);
+        }
+        Expect(failures, bounded.FieldCacheCount == 4, "flow field cache respects capacity");
+        Expect(failures, bounded.FieldsCreatedTotal == 12, "distinct goals each created once");
+        Expect(failures, bounded.FieldFor(2, 12).Reachable(0, 0), "evicted goal rebuilds reachable field");
     }
 
     private static void CheckCombat(List<string> failures)
