@@ -34,6 +34,7 @@ public static partial class KernelSelfTest
         CheckLockstep(failures);
         CheckVision(failures);
         CheckTech(failures);
+        CheckUnitUpgrades(failures);
         CheckTerrain(failures);
         return failures;
     }
