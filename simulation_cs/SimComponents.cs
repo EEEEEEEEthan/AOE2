@@ -1,3 +1,9 @@
+#if DEBUG
+using System;
+using System.Collections.Generic;
+using System.Reflection;
+#endif
+
 namespace AoeSim;
 
 public static class SimComponents
@@ -185,4 +191,30 @@ public static class SimComponents
     public const string Cap = "cap";
     public const string CapMax = "cap_max";
     public const string PopCost = "pop_cost";
+
+#if DEBUG
+    /// <summary>
+    /// 本类声明的全部组件名与列名。列按需惰性创建，缺失列不能直接判为拼错，
+    /// 因此调试期只在名称从未声明时抛错，兼顾「未知列立即报错」与「未写入列读 0」。
+    /// </summary>
+    internal static readonly HashSet<string> KnownNames = CollectKnownNames();
+
+    private static HashSet<string> CollectKnownNames()
+    {
+        var names = new HashSet<string>(StringComparer.Ordinal);
+        foreach (FieldInfo field in typeof(SimComponents).GetFields(
+            BindingFlags.Public | BindingFlags.Static))
+        {
+            if (field.GetValue(null) is string name)
+            {
+                names.Add(name);
+            }
+            else if (field.GetValue(null) is string[] columns)
+            {
+                names.UnionWith(columns);
+            }
+        }
+        return names;
+    }
+#endif
 }

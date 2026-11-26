@@ -137,6 +137,18 @@ public sealed class SimWorld
 
     public ComponentStore Store(int componentId) => _stores[componentId];
 
+    /// <summary>
+    /// 解析组件名到可复用的整型句柄。系统入口解析一次，循环内统一走 <see cref="ComponentAccess"/>，
+    /// 组件名到 id 的查找不再进入每实体的内层循环。
+    /// </summary>
+    public ComponentAccess Access(string component)
+    {
+        int componentId = ComponentId(component, create: true);
+        return new ComponentAccess(this, componentId, _stores[componentId]);
+    }
+
+    public ComponentAccess Access(int componentId) => new(this, componentId, _stores[componentId]);
+
     public int ComponentId(string component) => ComponentId(component, create: false);
 
     public int ComponentId(string component, bool create)
@@ -171,16 +183,20 @@ public sealed class SimWorld
         return componentId;
     }
 
-    public void Attach(long id, string component)
+    public void Attach(long id, string component) => Attach(id, ComponentId(component, create: true));
+
+    public void Attach(long id, int componentId)
     {
-        ComponentStore store = Store(component);
+        ComponentStore store = _stores[componentId];
         store.Add(id);
         MarkSpatialStructuresDirty(id, store);
     }
 
-    public void Detach(long id, string component)
+    public void Detach(long id, string component) => Detach(id, ComponentId(component, create: true));
+
+    public void Detach(long id, int componentId)
     {
-        ComponentStore store = Store(component);
+        ComponentStore store = _stores[componentId];
         store.Remove(id);
         MarkSpatialStructuresDirty(id, store);
     }
@@ -248,6 +264,9 @@ public sealed class SimWorld
         return componentId >= 0 && _stores[componentId].Has(id);
     }
 
+    public bool HasComponent(long id, int componentId) =>
+        componentId >= 0 && _stores[componentId].Has(id);
+
     public List<string> ComponentNamesSorted()
     {
         if (_sortedComponentNames == null)
@@ -308,4 +327,40 @@ public sealed class SimWorld
         }
         return hash;
     }
+}
+
+/// <summary>
+/// 已解析的组件句柄：持有存储引用与整型组件 id，列 id 在系统入口一次性解析。
+/// 循环内只做整型访问，不再触发组件名/列名的字符串查找。
+/// </summary>
+public readonly struct ComponentAccess
+{
+    private readonly SimWorld _world;
+
+    internal ComponentAccess(SimWorld world, int componentId, ComponentStore store)
+    {
+        _world = world;
+        ComponentId = componentId;
+        Store = store;
+    }
+
+    public int ComponentId { get; }
+
+    public ComponentStore Store { get; }
+
+    /// <summary>解析列 id；列尚未创建时返回 -1，读取按 0 处理，保持旧语义。</summary>
+    public int Column(string column) => Store.ColumnId(column);
+
+    /// <summary>解析列 id，缺失时创建空列；供系统入口为将要写入的列建立句柄。</summary>
+    public int ColumnForWrite(string column) => Store.CreateColumn(column);
+
+    public long Get(long id, int columnId) => columnId < 0 ? 0 : Store.GetValue(id, columnId);
+
+    public void Set(long id, int columnId, long value) => _world.SetValue(id, ComponentId, columnId, value);
+
+    public bool Has(long id) => Store.Has(id);
+
+    public void Attach(long id) => _world.Attach(id, ComponentId);
+
+    public void Detach(long id) => _world.Detach(id, ComponentId);
 }

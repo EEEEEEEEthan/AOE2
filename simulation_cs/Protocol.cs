@@ -309,6 +309,121 @@ public sealed class SnapshotFrame
     [System.ThreadStatic] private static Dictionary<long, long>? _inventoryBuffer;
     [System.ThreadStatic] private static MemoryStream? _encodeStream;
 
+    /// <summary>快照构建入口一次性解析的组件与列句柄，实体循环内只做整型访问。</summary>
+    private readonly struct SnapshotLayout
+    {
+        public readonly ComponentAccess Resource;
+        public readonly ComponentAccess Team;
+        public readonly ComponentAccess Position;
+        public readonly ComponentAccess Health;
+        public readonly ComponentAccess Combat;
+        public readonly ComponentAccess ResourceNode;
+        public readonly ComponentAccess HuntingAnimal;
+        public readonly ComponentAccess Gather;
+        public readonly ComponentAccess Repair;
+        public readonly ComponentAccess Building;
+        public readonly ComponentAccess Garrison;
+        public readonly ComponentAccess PlayerProgress;
+        public readonly ComponentAccess Wonder;
+        public readonly ComponentAccess RelicSlot;
+        public readonly ComponentAccess DropSite;
+        public readonly ComponentAccess Monk;
+        public readonly ComponentAccess Relic;
+        public readonly ComponentAccess Trade;
+        public readonly ComponentAccess Transport;
+        public readonly int ResourceWood;
+        public readonly int ResourceFood;
+        public readonly int ResourceGold;
+        public readonly int ResourceStone;
+        public readonly int TeamId;
+        public readonly int PositionX;
+        public readonly int PositionY;
+        public readonly int HealthHp;
+        public readonly int HealthMaxHp;
+        public readonly int CombatUnitType;
+        public readonly int NodeType;
+        public readonly int NodeSubtype;
+        public readonly int NodeRemaining;
+        public readonly int Species;
+        public readonly int GatherState;
+        public readonly int CarryType;
+        public readonly int CarryAmount;
+        public readonly int RepairState;
+        public readonly int RepairTarget;
+        public readonly int BuildingType;
+        public readonly int SizeWidth;
+        public readonly int SizeHeight;
+        public readonly int BuildingState;
+        public readonly int BuildingProgress;
+        public readonly int BuildingMaxProgress;
+        public readonly int GateState;
+        public readonly int GarrisonCount;
+        public readonly int GarrisonCapacity;
+        public readonly int ProgressAge;
+        public readonly int ProgressResearch;
+        public readonly int ProgressResearchKind;
+        public readonly int ProgressResearchTarget;
+        public readonly int ProgressResearchProgress;
+        public readonly int ProgressResearchMaxProgress;
+
+        public SnapshotLayout(SimWorld world)
+        {
+            Resource = world.Access(SimComponents.Resource);
+            Team = world.Access(SimComponents.Team);
+            Position = world.Access(SimComponents.Position);
+            Health = world.Access(SimComponents.Health);
+            Combat = world.Access(SimComponents.Combat);
+            ResourceNode = world.Access(SimComponents.ResourceNode);
+            HuntingAnimal = world.Access(SimComponents.HuntingAnimal);
+            Gather = world.Access(SimComponents.Gather);
+            Repair = world.Access(SimComponents.Repair);
+            Building = world.Access(SimComponents.Building);
+            Garrison = world.Access(SimComponents.Garrison);
+            PlayerProgress = world.Access(SimComponents.PlayerProgress);
+            Wonder = world.Access(SimComponents.Wonder);
+            RelicSlot = world.Access(SimComponents.RelicSlot);
+            DropSite = world.Access(SimComponents.DropSite);
+            Monk = world.Access(SimComponents.Monk);
+            Relic = world.Access(SimComponents.Relic);
+            Trade = world.Access(SimComponents.Trade);
+            Transport = world.Access(SimComponents.Transport);
+            ResourceWood = Resource.Column(SimComponents.Wood);
+            ResourceFood = Resource.Column(SimComponents.Food);
+            ResourceGold = Resource.Column(SimComponents.Gold);
+            ResourceStone = Resource.Column(SimComponents.Stone);
+            TeamId = Team.Column(SimComponents.TeamId);
+            PositionX = Position.Column(SimComponents.X);
+            PositionY = Position.Column(SimComponents.Y);
+            HealthHp = Health.Column(SimComponents.Hp);
+            HealthMaxHp = Health.Column(SimComponents.MaxHp);
+            CombatUnitType = Combat.Column(SimComponents.UnitType);
+            NodeType = ResourceNode.Column(SimComponents.NodeType);
+            NodeSubtype = ResourceNode.Column(SimComponents.Subtype);
+            NodeRemaining = ResourceNode.Column(SimComponents.Remaining);
+            Species = HuntingAnimal.Column(SimComponents.Species);
+            GatherState = Gather.Column(SimComponents.GatherState);
+            CarryType = Gather.Column(SimComponents.CarryType);
+            CarryAmount = Gather.Column(SimComponents.CarryAmount);
+            RepairState = Repair.Column(SimComponents.State);
+            RepairTarget = Repair.Column(SimComponents.TargetBase);
+            BuildingType = Building.Column(SimComponents.BuildingType);
+            SizeWidth = Building.Column(SimComponents.SizeWidth);
+            SizeHeight = Building.Column(SimComponents.SizeHeight);
+            BuildingState = Building.Column(SimComponents.State);
+            BuildingProgress = Building.Column(SimComponents.Progress);
+            BuildingMaxProgress = Building.Column(SimComponents.MaxProgress);
+            GateState = Building.Column(SimComponents.GateState);
+            GarrisonCount = Garrison.Column(SimComponents.Count);
+            GarrisonCapacity = Garrison.Column(SimComponents.Capacity);
+            ProgressAge = PlayerProgress.Column(SimComponents.Age);
+            ProgressResearch = PlayerProgress.Column(SimComponents.Research);
+            ProgressResearchKind = PlayerProgress.Column(SimComponents.ResearchKind);
+            ProgressResearchTarget = PlayerProgress.Column(SimComponents.ResearchTarget);
+            ProgressResearchProgress = PlayerProgress.Column(SimComponents.ResearchProgress);
+            ProgressResearchMaxProgress = PlayerProgress.Column(SimComponents.ResearchMaxProgress);
+        }
+    }
+
     public static SnapshotFrame Build(
         SimWorld world,
         long turn,
@@ -316,54 +431,55 @@ public sealed class SnapshotFrame
         VisionGrid? vision = null,
         long viewerTeam = -1)
     {
+        var layout = new SnapshotLayout(world);
         List<EntitySnapshot> entities = _entityBuffer ??= new List<EntitySnapshot>();
         entities.Clear();
         Dictionary<long, long> inventories = _inventoryBuffer ??= new Dictionary<long, long>();
         inventories.Clear();
         foreach (long id in world.Entities())
         {
-            if (world.HasComponent(id, SimComponents.Resource) && world.HasComponent(id, SimComponents.Team))
+            if (layout.Resource.Has(id) && layout.Team.Has(id))
             {
-                inventories[world.GetValue(id, SimComponents.Team, SimComponents.TeamId)] = id;
+                inventories[layout.Team.Get(id, layout.TeamId)] = id;
             }
-            if (!world.HasComponent(id, SimComponents.Position))
-            {
-                continue;
-            }
-            if (vision != null && viewerTeam >= 0 && !ShouldInclude(world, id, vision, viewerTeam))
+            if (!layout.Position.Has(id))
             {
                 continue;
             }
-            long kind = ClassifyEntity(world, id);
-            long team = world.GetValue(id, SimComponents.Team, SimComponents.TeamId);
-            long hp = world.GetValue(id, SimComponents.Health, SimComponents.Hp);
-            long maxHp = world.HasComponent(id, SimComponents.Health)
-                ? world.GetValue(id, SimComponents.Health, SimComponents.MaxHp)
+            if (vision != null && viewerTeam >= 0 && !ShouldInclude(id, vision, viewerTeam, layout))
+            {
+                continue;
+            }
+            long kind = ClassifyEntity(id, layout);
+            long team = layout.Team.Get(id, layout.TeamId);
+            long hp = layout.Health.Get(id, layout.HealthHp);
+            long maxHp = layout.Health.Has(id)
+                ? layout.Health.Get(id, layout.HealthMaxHp)
                 : hp;
-            long unitType = world.HasComponent(id, SimComponents.Combat)
-                ? world.GetValue(id, SimComponents.Combat, SimComponents.UnitType)
+            long unitType = layout.Combat.Has(id)
+                ? layout.Combat.Get(id, layout.CombatUnitType)
                 : -1;
             long nodeType = 0;
             long nodeSubtype = 0;
             long nodeRemaining = 0;
-            if (world.HasComponent(id, SimComponents.ResourceNode))
+            if (layout.ResourceNode.Has(id))
             {
-                nodeType = world.GetValue(id, SimComponents.ResourceNode, SimComponents.NodeType);
-                nodeSubtype = world.GetValue(id, SimComponents.ResourceNode, SimComponents.Subtype);
-                nodeRemaining = world.GetValue(id, SimComponents.ResourceNode, SimComponents.Remaining);
+                nodeType = layout.ResourceNode.Get(id, layout.NodeType);
+                nodeSubtype = layout.ResourceNode.Get(id, layout.NodeSubtype);
+                nodeRemaining = layout.ResourceNode.Get(id, layout.NodeRemaining);
             }
-            else if (world.HasComponent(id, SimComponents.HuntingAnimal))
+            else if (layout.HuntingAnimal.Has(id))
             {
-                nodeSubtype = world.GetValue(id, SimComponents.HuntingAnimal, SimComponents.Species);
+                nodeSubtype = layout.HuntingAnimal.Get(id, layout.Species);
             }
             long gatherState = 0;
             long carryType = 0;
             long carryAmount = 0;
             if (kind == EntityKind.Villager)
             {
-                gatherState = world.GetValue(id, SimComponents.Gather, SimComponents.GatherState);
-                carryType = world.GetValue(id, SimComponents.Gather, SimComponents.CarryType);
-                carryAmount = world.GetValue(id, SimComponents.Gather, SimComponents.CarryAmount);
+                gatherState = layout.Gather.Get(id, layout.GatherState);
+                carryType = layout.Gather.Get(id, layout.CarryType);
+                carryAmount = layout.Gather.Get(id, layout.CarryAmount);
             }
             long buildingType = 0;
             long width = 0;
@@ -376,33 +492,33 @@ public sealed class SnapshotFrame
             long repairState = 0;
             long repairTarget = -1;
             long gateState = BuildingSystem.GateClosed;
-            if (kind == EntityKind.Villager && world.HasComponent(id, SimComponents.Repair))
+            if (kind == EntityKind.Villager && layout.Repair.Has(id))
             {
-                repairState = world.GetValue(id, SimComponents.Repair, SimComponents.State);
-                repairTarget = world.GetValue(id, SimComponents.Repair, SimComponents.TargetBase);
+                repairState = layout.Repair.Get(id, layout.RepairState);
+                repairTarget = layout.Repair.Get(id, layout.RepairTarget);
             }
             if (kind == EntityKind.Building)
             {
-                buildingType = world.GetValue(id, SimComponents.Building, SimComponents.BuildingType);
-                width = world.GetValue(id, SimComponents.Building, SimComponents.SizeWidth);
-                height = world.GetValue(id, SimComponents.Building, SimComponents.SizeHeight);
-                buildingState = world.GetValue(id, SimComponents.Building, SimComponents.State);
-                buildingProgress = world.GetValue(id, SimComponents.Building, SimComponents.Progress);
-                buildingMaxProgress = world.GetValue(id, SimComponents.Building, SimComponents.MaxProgress);
+                buildingType = layout.Building.Get(id, layout.BuildingType);
+                width = layout.Building.Get(id, layout.SizeWidth);
+                height = layout.Building.Get(id, layout.SizeHeight);
+                buildingState = layout.Building.Get(id, layout.BuildingState);
+                buildingProgress = layout.Building.Get(id, layout.BuildingProgress);
+                buildingMaxProgress = layout.Building.Get(id, layout.BuildingMaxProgress);
                 if (BuildingTypes.IsGate(buildingType))
                 {
-                    gateState = world.GetValue(id, SimComponents.Building, SimComponents.GateState);
+                    gateState = layout.Building.Get(id, layout.GateState);
                 }
-                if (world.HasComponent(id, SimComponents.Garrison))
+                if (layout.Garrison.Has(id))
                 {
-                    garrisonCount = world.GetValue(id, SimComponents.Garrison, SimComponents.Count);
-                    garrisonCapacity = world.GetValue(id, SimComponents.Garrison, SimComponents.Capacity);
+                    garrisonCount = layout.Garrison.Get(id, layout.GarrisonCount);
+                    garrisonCapacity = layout.Garrison.Get(id, layout.GarrisonCapacity);
                 }
             }
             entities.Add(new EntitySnapshot(
                 id,
-                world.GetValue(id, SimComponents.Position, SimComponents.X),
-                world.GetValue(id, SimComponents.Position, SimComponents.Y),
+                layout.Position.Get(id, layout.PositionX),
+                layout.Position.Get(id, layout.PositionY),
                 team,
                 kind,
                 hp,
@@ -446,22 +562,22 @@ public sealed class SnapshotFrame
                 PlayerState player = match.Player(team);
                 long progressEntity = PlayerProgress.FindEntity(world, team);
                 long age = progressEntity >= 0
-                    ? world.GetValue(progressEntity, SimComponents.PlayerProgress, SimComponents.Age)
+                    ? layout.PlayerProgress.Get(progressEntity, layout.ProgressAge)
                     : TechCatalog.AgeDark;
                 long research = progressEntity >= 0
-                    ? world.GetValue(progressEntity, SimComponents.PlayerProgress, SimComponents.Research)
+                    ? layout.PlayerProgress.Get(progressEntity, layout.ProgressResearch)
                     : 0;
                 long researchKind = progressEntity >= 0
-                    ? world.GetValue(progressEntity, SimComponents.PlayerProgress, SimComponents.ResearchKind)
+                    ? layout.PlayerProgress.Get(progressEntity, layout.ProgressResearchKind)
                     : ResearchSystem.KindNone;
                 long researchTarget = progressEntity >= 0
-                    ? world.GetValue(progressEntity, SimComponents.PlayerProgress, SimComponents.ResearchTarget)
+                    ? layout.PlayerProgress.Get(progressEntity, layout.ProgressResearchTarget)
                     : 0;
                 long researchProgress = progressEntity >= 0
-                    ? world.GetValue(progressEntity, SimComponents.PlayerProgress, SimComponents.ResearchProgress)
+                    ? layout.PlayerProgress.Get(progressEntity, layout.ProgressResearchProgress)
                     : 0;
                 long researchMaxProgress = progressEntity >= 0
-                    ? world.GetValue(progressEntity, SimComponents.PlayerProgress, SimComponents.ResearchMaxProgress)
+                    ? layout.PlayerProgress.Get(progressEntity, layout.ProgressResearchMaxProgress)
                     : 0;
                 long wood = 0;
                 long food = 0;
@@ -469,10 +585,10 @@ public sealed class SnapshotFrame
                 long stone = 0;
                 if (inventories.TryGetValue(team, out long inventory))
                 {
-                    wood = world.GetValue(inventory, SimComponents.Resource, SimComponents.Wood);
-                    food = world.GetValue(inventory, SimComponents.Resource, SimComponents.Food);
-                    gold = world.GetValue(inventory, SimComponents.Resource, SimComponents.Gold);
-                    stone = world.GetValue(inventory, SimComponents.Resource, SimComponents.Stone);
+                    wood = layout.Resource.Get(inventory, layout.ResourceWood);
+                    food = layout.Resource.Get(inventory, layout.ResourceFood);
+                    gold = layout.Resource.Get(inventory, layout.ResourceGold);
+                    stone = layout.Resource.Get(inventory, layout.ResourceStone);
                 }
                 players[team] = new PlayerSnapshot(
                     team,
@@ -502,50 +618,46 @@ public sealed class SnapshotFrame
         return frame;
     }
 
-    private static long ClassifyEntity(SimWorld world, long id)
+    private static long ClassifyEntity(long id, in SnapshotLayout layout)
     {
         // 农田同时持有 Building 与 ResourceNode：先判建筑，否则会被当成普通资源点丢掉建筑字段。
-        if (world.HasComponent(id, SimComponents.Building))
+        if (layout.Building.Has(id))
         {
             return EntityKind.Building;
         }
-        if (world.HasComponent(id, SimComponents.ResourceNode))
+        if (layout.ResourceNode.Has(id))
         {
             return EntityKind.ResourceNode;
         }
-        if (world.HasComponent(id, SimComponents.HuntingAnimal))
+        if (layout.HuntingAnimal.Has(id))
         {
             return EntityKind.HuntingAnimal;
         }
-        if (world.HasComponent(id, SimComponents.DropSite))
+        if (layout.DropSite.Has(id))
         {
             return EntityKind.DropSite;
         }
-        if (world.HasComponent(id, SimComponents.Gather))
+        if (layout.Gather.Has(id))
         {
             return EntityKind.Villager;
         }
-        if (world.HasComponent(id, SimComponents.Monk))
+        if (layout.Monk.Has(id))
         {
             return EntityKind.Monk;
         }
-        if (world.HasComponent(id, SimComponents.Relic))
+        if (layout.Relic.Has(id))
         {
             return EntityKind.Relic;
         }
-        if (world.HasComponent(id, SimComponents.RelicSlot))
+        if (layout.RelicSlot.Has(id))
         {
             return EntityKind.RelicSlot;
         }
-        if (world.HasComponent(id, SimComponents.Trade))
+        if (layout.Trade.Has(id))
         {
             return EntityKind.TradeCart;
         }
-        if (world.HasComponent(id, SimComponents.Transport))
-        {
-            return EntityKind.Unit;
-        }
-        if (world.HasComponent(id, SimComponents.Combat))
+        if (layout.Transport.Has(id) || layout.Combat.Has(id))
         {
             return EntityKind.Unit;
         }
@@ -553,14 +665,15 @@ public sealed class SnapshotFrame
     }
 
     /// <summary>按观察者玩家裁剪快照：己方恒可见，中立与静态建筑按已探索，敌方单位仅当前可见。</summary>
-    public static bool ShouldInclude(SimWorld world, long id, VisionGrid vision, long viewerTeam)
+    public static bool ShouldInclude(SimWorld world, long id, VisionGrid vision, long viewerTeam) =>
+        ShouldInclude(id, vision, viewerTeam, new SnapshotLayout(world));
+
+    private static bool ShouldInclude(long id, VisionGrid vision, long viewerTeam, in SnapshotLayout layout)
     {
-        long x = Fixed.ToInt(world.GetValue(id, SimComponents.Position, SimComponents.X));
-        long y = Fixed.ToInt(world.GetValue(id, SimComponents.Position, SimComponents.Y));
-        int tileX = (int)x;
-        int tileY = (int)y;
-        bool hasTeam = world.HasComponent(id, SimComponents.Team);
-        if (hasTeam && world.GetValue(id, SimComponents.Team, SimComponents.TeamId) == viewerTeam)
+        int tileX = (int)Fixed.ToInt(layout.Position.Get(id, layout.PositionX));
+        int tileY = (int)Fixed.ToInt(layout.Position.Get(id, layout.PositionY));
+        bool hasTeam = layout.Team.Has(id);
+        if (hasTeam && layout.Team.Get(id, layout.TeamId) == viewerTeam)
         {
             return true;
         }
@@ -568,9 +681,9 @@ public sealed class SnapshotFrame
         {
             return vision.IsExplored(tileX, tileY);
         }
-        bool structure = world.HasComponent(id, SimComponents.Building)
-            || world.HasComponent(id, SimComponents.Wonder)
-            || world.HasComponent(id, SimComponents.RelicSlot);
+        bool structure = layout.Building.Has(id)
+            || layout.Wonder.Has(id)
+            || layout.RelicSlot.Has(id);
         if (structure)
         {
             return vision.IsExplored(tileX, tileY);
