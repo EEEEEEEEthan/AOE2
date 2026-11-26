@@ -22,9 +22,18 @@ public partial class GameBridge : Node
         _dedicated = null;
     }
 
+    public void StartLocalMatch()
+    {
+        StartSession(AoeSim.DemoScenario.BuildEmpty());
+    }
+
     public void StartLocalDemo()
     {
-        AoeSim.GameSim sim = AoeSim.DemoScenario.Build();
+        StartSession(AoeSim.DemoScenario.Build());
+    }
+
+    private void StartSession(AoeSim.GameSim sim)
+    {
         _grid = sim.Grid;
         _session = new AoeSim.LocalSession(sim);
         _accumulator = 0.0;

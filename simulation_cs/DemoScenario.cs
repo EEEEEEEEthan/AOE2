@@ -33,9 +33,14 @@ public static class DemoScenario
         return grid;
     }
 
+    public static GameSim BuildEmpty(long seed = Seed)
+    {
+        return new GameSim(BuildGrid(), seed, 2, 6, MatchConfig.Standard);
+    }
+
     public static GameSim Build(long seed = Seed)
     {
-        var sim = new GameSim(BuildGrid(), seed, 2, 6, MatchConfig.Standard);
+        var sim = BuildEmpty(seed);
         SpawnForces(sim);
         IssueOrders(sim);
         SpawnEconomy(sim);
