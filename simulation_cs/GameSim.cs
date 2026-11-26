@@ -32,7 +32,6 @@ public sealed partial class GameSim
     private readonly FlowFieldCache _fieldCache;
     private readonly PlayerEntityIndex _inventoryIndex = new();
     private readonly PlayerEntityIndex _progressIndex = new();
-    private readonly long[] _civIds;
     private bool _spatialReady;
 
     /// <summary>当前流场缓存中的条目数，供性能测试与监控断言。</summary>
@@ -66,14 +65,9 @@ public sealed partial class GameSim
         Spatial = new SpatialHash(4);
         Occupancy = new OccupancyMap(grid.Width, grid.Height);
         Lockstep = new Lockstep(playerCount, ticksPerTurn);
-        _civIds = new long[playerCount];
         for (int player = 0; player < playerCount; player++)
         {
             Vision.Add(new VisionGrid(grid.Width, grid.Height));
-            long civ = civIds != null && player < civIds.Length
-                ? civIds[player]
-                : CivilizationCatalog.Generic;
-            _civIds[player] = CivilizationCatalog.IsValid(civ) ? civ : CivilizationCatalog.Generic;
         }
         if (matchConfig != null)
         {
@@ -83,12 +77,27 @@ public sealed partial class GameSim
         {
             for (int player = 0; player < Lockstep.PlayerCount; player++)
             {
-                Progress(player);
+                long civ = player < civIds.Length ? civIds[player] : CivilizationCatalog.Generic;
+                Progress(player).Civ = CivilizationCatalog.IsValid(civ)
+                    ? civ
+                    : CivilizationCatalog.Generic;
             }
         }
     }
 
-    /// <summary>某玩家本局所选文明；越界返回通用文明。</summary>
-    public long Civ(long team) =>
-        team >= 0 && team < _civIds.Length ? _civIds[team] : CivilizationCatalog.Generic;
+    /// <summary>某玩家本局所选文明，以进度实体为唯一来源；越界或未初始化返回通用文明。</summary>
+    public long Civ(long team)
+    {
+        if (team < 0 || team >= Lockstep.PlayerCount)
+        {
+            return CivilizationCatalog.Generic;
+        }
+        long entity = PlayerProgress.FindEntity(World, team);
+        if (entity < 0)
+        {
+            return CivilizationCatalog.Generic;
+        }
+        long civ = World.GetValue(entity, SimComponents.PlayerProgress, SimComponents.Civ);
+        return CivilizationCatalog.IsValid(civ) ? civ : CivilizationCatalog.Generic;
+    }
 }
