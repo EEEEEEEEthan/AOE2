@@ -16,12 +16,21 @@ public static class MapSetup
     public const long VillagerCarryCapacity = 20;
     public const double VillagerGatherRate = 0.5;
 
-    public static GameSim BuildGeneratedMatch(MapType type, long seed, int playerCount) =>
-        BuildGeneratedMatch(MapGenerator.Generate(type, seed, playerCount), seed, playerCount);
+    public static GameSim BuildGeneratedMatch(
+        MapType type, long seed, int playerCount, long[]? civIds = null) =>
+        BuildGeneratedMatch(MapGenerator.Generate(type, seed, playerCount), seed, playerCount, civIds);
 
-    public static GameSim BuildGeneratedMatch(MapData map, long seed, int playerCount)
+    public static GameSim BuildGeneratedMatch(
+        MapData map, long seed, int playerCount, long[]? civIds = null) =>
+        BuildGeneratedMatch(map, seed, playerCount, 6, MatchConfig.Standard, civIds);
+
+    public static GameSim BuildGeneratedMatch(
+        MapData map, long seed, int playerCount, int ticksPerTurn, MatchConfig config,
+        long[]? civIds = null)
     {
-        var sim = new GameSim(map.Nav, seed, playerCount, 6, MatchConfig.Standard, map.Terrain);
+        var sim = new GameSim(
+            map.Nav, seed, playerCount, ticksPerTurn, config, map.Terrain,
+            GameSim.DefaultFieldCacheCapacity, civIds);
         Apply(sim, map);
         return sim;
     }

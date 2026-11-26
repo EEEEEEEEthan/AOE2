@@ -4,13 +4,14 @@ config_version=5
 
 config/name="AOE2 Framework"
 config/description="Deterministic lockstep RTS framework: ECS + Q16.16 fixed point + flow-field pathfinding + 3D isometric presentation."
-run/main_scene="res://presentation/main.tscn"
+run/main_scene="res://presentation/main_menu.tscn"
 config/features=PackedStringArray("4.8")
 config/icon="res://icon.svg"
 
 [autoload]
 
 TestEntry="*res://tests/tools/_test_entry.gd"
+MatchSetup="*res://presentation/match_setup.gd"
 
 [engine_host]
 

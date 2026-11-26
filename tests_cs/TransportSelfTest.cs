@@ -18,6 +18,8 @@ public static class TransportSelfTest
         CheckLoadSailUnload(failures);
         CheckRejections(failures);
         CheckSinkDropsPassengers(failures);
+        CheckDockTrainsTransport(failures);
+        CheckSnapshotCrew(failures);
         CheckDeterminism(failures);
         return failures;
     }
@@ -170,6 +172,99 @@ public static class TransportSelfTest
         Expect(failures, !sim.World.IsAlive(ship), "transport is sunk by warship fire");
         Expect(failures, !sim.World.IsAlive(first) && !sim.World.IsAlive(second),
             "passengers are lost with the sunk transport");
+    }
+
+    private static void CheckDockTrainsTransport(List<string> failures)
+    {
+        GameSim sim = NewShoreSim(Seed + 4);
+        sim.AddResource(0, GameSim.ResourceWood, 500);
+        sim.AddPopulationCap(0, 10);
+        long dock = sim.SpawnDock(5, 3, 0);
+        Expect(failures, dock >= 0, "dock spawned for transport training");
+
+        long woodBefore = sim.Resource(0, GameSim.ResourceWood);
+        bool accepted = sim.ApplyCommand(new LockstepCommand(
+            player: 0,
+            kind: LockstepCommand.KindTrain,
+            entity: dock,
+            aux: UnitDefs.TransportShip));
+        Expect(failures, accepted, "dock accepts transport train command");
+        Expect(failures, sim.Resource(0, GameSim.ResourceWood) == woodBefore - 100,
+            "transport training deducts wood on enqueue");
+        Expect(failures,
+            sim.World.GetValue(dock, SimComponents.Production, SimComponents.ProdCurrent)
+                == UnitDefs.TransportShip,
+            "transport becomes the current production item");
+
+        for (int tick = 0; tick < UnitCatalog.Ticks(UnitDefs.TransportShip); tick++)
+        {
+            sim.SimulateTick();
+        }
+        long launched = -1;
+        foreach (long id in sim.World.Entities())
+        {
+            if (sim.World.HasComponent(id, SimComponents.Transport))
+            {
+                launched = id;
+            }
+        }
+        Expect(failures, launched >= 0, "dock launches a transport ship");
+        if (launched >= 0)
+        {
+            int x = (int)Fixed.ToInt(
+                sim.World.GetValue(launched, SimComponents.Position, SimComponents.X));
+            int y = (int)Fixed.ToInt(
+                sim.World.GetValue(launched, SimComponents.Position, SimComponents.Y));
+            Expect(failures, sim.Terrain.IsWater(x, y), "launched transport spawns on water");
+        }
+
+        long barracks = sim.SpawnCompletedBuilding(10, 1, 0, BuildingTypes.Barracks);
+        long woodAfterReject = sim.Resource(0, GameSim.ResourceWood);
+        sim.ApplyCommand(new LockstepCommand(
+            player: 0,
+            kind: LockstepCommand.KindTrain,
+            entity: barracks,
+            aux: UnitDefs.TransportShip));
+        Expect(failures, sim.Resource(0, GameSim.ResourceWood) == woodAfterReject,
+            "barracks cannot train transport ship");
+    }
+
+    private static void CheckSnapshotCrew(List<string> failures)
+    {
+        GameSim sim = NewShoreSim(Seed + 5);
+        long ship = sim.SpawnTransportShip(8, 4, 0);
+        long unit = sim.SpawnUnit(7, 4, 0, UnitDefs.Swordsman);
+        SnapshotFrame before = SnapshotFrame.Build(sim.World, sim.Lockstep.Turn);
+        var delta = new SnapshotDelta();
+        SnapshotFrame key = SnapshotFrame.Decode(delta.Build(before).Encode());
+        bool keyHasCapacity = false;
+        foreach (EntitySnapshot entity in key.Entities)
+        {
+            if (entity.Id == ship)
+            {
+                keyHasCapacity = entity.TransportCapacity == TransportSystem.DefaultCapacity;
+            }
+        }
+        Expect(failures, keyHasCapacity, "keyframe roundtrip carries transport capacity");
+        sim.IssueTransportLoad(unit, ship);
+        SnapshotFrame fullWithCrew = SnapshotFrame.Build(sim.World, sim.Lockstep.Turn);
+        SnapshotFrame changed = delta.Build(fullWithCrew);
+        SnapshotFrame merged = SnapshotFrame.Decode(changed.Encode(), key).Merge(key);
+        bool found = false;
+        foreach (EntitySnapshot entity in merged.Entities)
+        {
+            if (entity.Id != ship)
+            {
+                continue;
+            }
+            found = true;
+            Expect(failures, entity.Kind == EntityKind.TransportShip,
+                "snapshot classifies transport as its own kind");
+            Expect(failures, entity.TransportCount == 1, "delta snapshot carries transport crew count");
+            Expect(failures, entity.TransportCapacity == TransportSystem.DefaultCapacity,
+                "snapshot carries transport capacity");
+        }
+        Expect(failures, found, "transport present in merged snapshot");
     }
 
     private static void CheckDeterminism(List<string> failures)

@@ -19,8 +19,32 @@ public static class CivilizationSelfTest
         CheckUniqueUnits(failures);
         CheckStatBonus(failures);
         CheckTechClipping(failures);
+        CheckEntryPoints(failures);
         CheckChecksum(failures);
         return failures;
+    }
+
+    private static void CheckEntryPoints(List<string> failures)
+    {
+        MapData map = MapGenerator.Generate(MapType.Arabia, 615, 2);
+        GameSim custom = MapSetup.BuildGeneratedMatch(
+            map, 615, 2, new[] { CivilizationCatalog.Longbow, CivilizationCatalog.Generic });
+        Expect(failures, custom.Civ(0) == CivilizationCatalog.Longbow, "entry applies player civ");
+        Expect(failures, custom.Civ(1) == CivilizationCatalog.Generic, "entry keeps per-player civ");
+        Expect(failures,
+            custom.Progress(0).Civ == CivilizationCatalog.Longbow,
+            "entry civ persisted to progress");
+
+        GameSim invalid = MapSetup.BuildGeneratedMatch(
+            map, 615, 2, new[] { CivilizationCatalog.Count, CivilizationCatalog.Longbow });
+        Expect(failures, invalid.Civ(0) == CivilizationCatalog.Generic, "invalid civ falls back generic");
+        Expect(failures, invalid.Civ(1) == CivilizationCatalog.Longbow, "valid civ survives fallback");
+
+        GameSim defaults = MapSetup.BuildGeneratedMatch(map, 615, 2);
+        Expect(failures, defaults.Civ(0) == CivilizationCatalog.Generic, "default civ is generic");
+
+        custom.Progress(0).Civ = CivilizationCatalog.Generic;
+        Expect(failures, custom.Civ(0) == CivilizationCatalog.Generic, "civ reads progress as source");
     }
 
     private static GameSim Build(long seed, long[] civs) =>
@@ -93,7 +117,7 @@ public static class CivilizationSelfTest
             sim.Progress(0).Age = TechCatalog.AgeFeudal;
             sim.AddResource(0, GameSim.ResourceFood, 5000);
             sim.AddResource(0, GameSim.ResourceGold, 5000);
-            SpawnCompleteBuilding(sim, BuildingTypes.Market, 8, 8, 0);
+            SpawnCompleteBuilding(sim, BuildingTypes.Blacksmith, 8, 8, 0);
         }
         Expect(failures, generic.Research(0, TechCatalog.TechScaleMail),
             "generic scale mail research starts");

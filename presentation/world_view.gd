@@ -60,7 +60,13 @@ const BUILDING_MODEL_PATHS := {
 	12: "res://assets/vox/palisade_wall.vox",
 	13: "res://assets/vox/gate.vox",
 	14: "res://assets/vox/fortified_wall.vox",
+	21: "res://assets/vox/barracks.vox",
 }
+
+# 快照降频到 10~15Hz 后，单位按相邻快照间隔插值移动；间隔夹在 30Hz~4Hz 之间，
+# 避免首帧或卡顿时出现瞬移/永远追不上。
+const MIN_INTERP_SECONDS := 1.0 / 30.0
+const MAX_INTERP_SECONDS := 0.25
 
 const FOG_UNEXPLORED_COLOR := Color(0.0, 0.0, 0.0, 1.0)
 const FOG_EXPLORED_COLOR := Color(0.32, 0.34, 0.38, 0.55)
@@ -78,17 +84,57 @@ var _fog_height := 0
 var _terrain_width := 0
 var _terrain_height := 0
 var _terrain_levels: PackedInt32Array = PackedInt32Array()
+var _pending_vertex_heights: PackedInt32Array = PackedInt32Array()
+var _pending_cell_colors: PackedColorArray = PackedColorArray()
+var _pending_cell_side_colors: PackedColorArray = PackedColorArray()
+var _pending_cell_drops: PackedInt32Array = PackedInt32Array()
+var _bridge: GameBridge
+var _selected_ids: Array = []
+var _entity_positions: Dictionary = {}
+var _render_positions: Dictionary = {}
+var _move_targets: Dictionary = {}
+var _move_starts: Dictionary = {}
+var _move_elapsed: Dictionary = {}
+var _move_duration: Dictionary = {}
+var _unit_slots: Dictionary = {}
+var _last_snapshot_ms := 0
+var _selection_mesh: MultiMeshInstance3D
+var _placement_mesh: MeshInstance3D
+var _placement_material: StandardMaterial3D
 
 
 func build_terrain(bridge: GameBridge) -> void:
+	if not _prepare_terrain(bridge):
+		return
+	_build_terrain_mesh()
+
+
+## 分帧构建地形：先准备格子数据并让出一帧让加载界面刷新，再生成整张网格。
+## on_progress 收到 0..1 的进度，供加载场景驱动进度条。
+func build_terrain_staged(bridge: GameBridge, on_progress: Callable = Callable()) -> void:
+	if not _prepare_terrain(bridge):
+		return
+	_report_progress(on_progress, 0.5)
+	await get_tree().process_frame
+	_build_terrain_mesh()
+	_report_progress(on_progress, 1.0)
+	await get_tree().process_frame
+
+
+func is_terrain_ready() -> bool:
+	return _terrain_width > 0 and _terrain_height > 0 and _terrain_levels.size() > 0
+
+
+func _prepare_terrain(bridge: GameBridge) -> bool:
+	_bridge = bridge
 	_terrain_width = bridge.TerrainWidth
 	_terrain_height = bridge.TerrainHeight
 	if _terrain_width == 0 or _terrain_height == 0:
-		return
+		return false
 	var types := bridge.TerrainTypes()
 	var vertex_heights := PackedInt32Array(bridge.TerrainVertexHeights())
 	if vertex_heights.size() != (_terrain_width + 1) * (_terrain_height + 1):
-		return
+		return false
 	var stride := _terrain_width + 1
 	var cells := _terrain_width * _terrain_height
 	var cell_colors := PackedColorArray()
@@ -111,9 +157,21 @@ func build_terrain(bridge: GameBridge) -> void:
 			cell_colors[index] = _terrain_color(types[index], true)
 			cell_side_colors[index] = _terrain_color(types[index], false)
 			cell_drops[index] = drop
+	_pending_vertex_heights = vertex_heights
+	_pending_cell_colors = cell_colors
+	_pending_cell_side_colors = cell_side_colors
+	_pending_cell_drops = cell_drops
+	return true
+
+
+func _build_terrain_mesh() -> void:
 	var mesh: ArrayMesh = VOXEL_MESHER.heightfield_mesh(
-		vertex_heights, _terrain_width, _terrain_height, TERRAIN_LAYER,
-		cell_colors, cell_side_colors, cell_drops)
+		_pending_vertex_heights, _terrain_width, _terrain_height, TERRAIN_LAYER,
+		_pending_cell_colors, _pending_cell_side_colors, _pending_cell_drops)
+	_pending_vertex_heights = PackedInt32Array()
+	_pending_cell_colors = PackedColorArray()
+	_pending_cell_side_colors = PackedColorArray()
+	_pending_cell_drops = PackedInt32Array()
 	var terrain := MeshInstance3D.new()
 	terrain.name = "VoxelTerrain"
 	terrain.mesh = mesh
@@ -121,6 +179,39 @@ func build_terrain(bridge: GameBridge) -> void:
 	terrain.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
 	add_child(terrain)
 	_build_fog(_terrain_width, _terrain_height)
+
+
+func _report_progress(on_progress: Callable, value: float) -> void:
+	if on_progress.is_valid():
+		on_progress.call(value)
+
+
+## 接管加载场景预先建好的地形节点与状态，避免对局场景重新计算整张网格。
+func adopt(source: WorldView) -> void:
+	_bridge = source._bridge
+	_terrain_width = source._terrain_width
+	_terrain_height = source._terrain_height
+	_terrain_levels = source._terrain_levels
+	_fog_width = source._fog_width
+	_fog_height = source._fog_height
+	_fog_states = source._fog_states
+	_voxel_material = source._voxel_material
+	_entity_positions = source._entity_positions
+	_render_positions = source._render_positions
+	_move_targets = source._move_targets
+	_move_starts = source._move_starts
+	_move_elapsed = source._move_elapsed
+	_move_duration = source._move_duration
+	_unit_slots = source._unit_slots
+	_last_snapshot_ms = source._last_snapshot_ms
+	for child in source.get_children():
+		source.remove_child(child)
+		add_child(child)
+	_fog = null
+	for child in get_children():
+		if child.name == "Fog":
+			_fog = child as MultiMeshInstance3D
+	source.queue_free()
 
 
 func refresh(bridge: GameBridge) -> void:
@@ -145,7 +236,19 @@ func _refresh_entities(batch: Dictionary) -> void:
 	var building_progresses: PackedFloat32Array = batch["building_progress"]
 	var building_max_progresses: PackedFloat32Array = batch["building_max_progress"]
 	var gate_states: PackedInt32Array = batch["gate_state"]
+	var now := Time.get_ticks_msec()
+	var interval := MIN_INTERP_SECONDS
+	if _last_snapshot_ms > 0:
+		interval = clampf(float(now - _last_snapshot_ms) / 1000.0, MIN_INTERP_SECONDS, MAX_INTERP_SECONDS)
+	_last_snapshot_ms = now
+	var prod_units: PackedInt64Array = batch["prod_unit"]
+	var prod_ticks_lefts: PackedInt64Array = batch["prod_ticks_left"]
+	var prod_ticks_totals: PackedInt64Array = batch["prod_ticks_total"]
+	var prod_queues: PackedInt64Array = batch["prod_queue"]
+	var prod_repeats: PackedInt64Array = batch["prod_repeat"]
 	var alive: Dictionary = {}
+	_entity_positions.clear()
+	_unit_slots.clear()
 	for bucket: Dictionary in _unit_meshes.values():
 		bucket["transforms"].clear()
 	for index in int(batch["count"]):
@@ -172,15 +275,44 @@ func _refresh_entities(batch: Dictionary) -> void:
 				"building_progress": building_progresses[index],
 				"building_max_progress": building_max_progresses[index],
 				"gate_state": gate_states[index],
+				"prod_unit": prod_units[index],
+				"prod_ticks_left": prod_ticks_lefts[index],
+				"prod_ticks_total": prod_ticks_totals[index],
+				"prod_queue": prod_queues[index],
+				"prod_repeat": prod_repeats[index],
 			})
+			var size_w: int = maxi(1, widths[index])
+			var size_h: int = maxi(1, heights[index])
+			var building_position := Vector3(
+				positions_x[index] - 0.5 + size_w * 0.5,
+				_ground_level_rect(positions_x[index], positions_y[index], size_w, size_h),
+				positions_y[index] - 0.5 + size_h * 0.5)
+			_entity_positions[id] = building_position
+			_render_positions[id] = building_position
+			_move_targets.erase(id)
+			_move_starts.erase(id)
+			_move_elapsed.erase(id)
+			_move_duration.erase(id)
 		elif _is_visible_unit(kind, node_remainings[index]):
-			_append_unit(kind, teams[index], node_types[index], positions_x[index], positions_y[index])
+			var id: int = ids[index]
+			alive[id] = true
+			_append_unit(
+				id, kind, teams[index], node_types[index],
+				positions_x[index], positions_y[index], interval)
 	for id in _units.keys():
 		if not alive.has(id):
 			var dead: Node3D = _units[id]
 			dead.queue_free()
 			_units.erase(id)
+	for id in _render_positions.keys():
+		if not alive.has(id):
+			_render_positions.erase(id)
+			_move_targets.erase(id)
+			_move_starts.erase(id)
+			_move_elapsed.erase(id)
+			_move_duration.erase(id)
 	_commit_units()
+	_refresh_selection_rings()
 
 
 func _is_visible_unit(kind: int, node_remaining: int) -> bool:
@@ -189,12 +321,26 @@ func _is_visible_unit(kind: int, node_remaining: int) -> bool:
 	return true
 
 
-func _append_unit(kind: int, team: int, node_type: int, tile_x: float, tile_y: float) -> void:
+func _append_unit(
+	id: int, kind: int, team: int, node_type: int, tile_x: float, tile_y: float,
+	interval: float) -> void:
 	var path: String = MODEL_PATHS.get(kind, MODEL_PATHS[KIND_UNIT])
 	var bucket: Dictionary = _unit_bucket(path, _color_for(kind, team, node_type))
-	var origin: Vector3 = Vector3(
-		tile_x, _ground_level(tile_x, tile_y), tile_y) + (bucket["offset"] as Vector3)
-	bucket["transforms"].append(Transform3D(Basis(), origin))
+	var target := Vector3(tile_x, _ground_level(tile_x, tile_y), tile_y)
+	var current: Vector3 = _render_positions.get(id, target)
+	_move_starts[id] = current
+	_move_targets[id] = target
+	_move_elapsed[id] = 0.0
+	_move_duration[id] = interval
+	_render_positions[id] = current
+	_entity_positions[id] = current
+	var transforms: Array = bucket["transforms"]
+	transforms.append(Transform3D(Basis(), current + (bucket["offset"] as Vector3)))
+	_unit_slots[id] = {
+		"multimesh": bucket["multimesh"],
+		"index": transforms.size() - 1,
+		"offset": bucket["offset"],
+	}
 
 
 func _unit_bucket(path: String, color: Color) -> Dictionary:
@@ -228,6 +374,48 @@ func _commit_units() -> void:
 		multimesh.instance_count = transforms.size()
 		for index in transforms.size():
 			multimesh.set_instance_transform(index, transforms[index])
+
+
+func _process(delta: float) -> void:
+	advance_interpolation(delta)
+
+
+## 按真实帧时间推进单位位置：相邻两次快照之间线性插值，快照降频也不会跳格。
+## 只改渲染状态，不触碰模拟；单位死亡/刷新时以当前显示位置为新的起点。
+func advance_interpolation(elapsed: float) -> void:
+	if elapsed <= 0.0 or _unit_slots.is_empty():
+		return
+	var moved_selected := false
+	for id in _unit_slots.keys():
+		if not _render_positions.has(id) or not _move_targets.has(id):
+			continue
+		var current: Vector3 = _render_positions[id]
+		var duration: float = _move_duration.get(id, 0.0)
+		var progress := 1.0
+		var arrived := duration <= 0.0
+		if duration > 0.0:
+			var total: float = _move_elapsed.get(id, 0.0) + elapsed
+			_move_elapsed[id] = total
+			progress = clampf(total / duration, 0.0, 1.0)
+			arrived = total >= duration
+		var start: Vector3 = _move_starts.get(id, current)
+		var position := start.lerp(_move_targets[id], progress)
+		_render_positions[id] = position
+		_entity_positions[id] = position
+		var slot: Dictionary = _unit_slots[id]
+		var multimesh: MultiMesh = slot["multimesh"]
+		var index: int = slot["index"]
+		if index < multimesh.instance_count:
+			multimesh.set_instance_transform(
+				index, Transform3D(Basis(), position + (slot["offset"] as Vector3)))
+		if position != current and id in _selected_ids:
+			moved_selected = true
+		if arrived:
+			# 到位后不再逐帧重复写同一变换，直到下一次快照刷新。
+			_move_duration[id] = 0.0
+			_move_targets.erase(id)
+	if moved_selected:
+		_refresh_selection_rings()
 
 
 func _create_building() -> Node3D:
@@ -271,6 +459,7 @@ func _show_building_model(building: Node3D, entity: Dictionary, path: String) ->
 		entity["x"] - 0.5 + size_w * 0.5,
 		_ground_level_rect(entity["x"], entity["y"], size_w, size_h),
 		entity["y"] - 0.5 + size_h * 0.5)
+	_update_production_label(building, entity, Vector3.ZERO)
 
 
 func _show_building_block(building: Node3D, entity: Dictionary, state: int) -> void:
@@ -294,6 +483,64 @@ func _show_building_block(building: Node3D, entity: Dictionary, state: int) -> v
 		entity["x"] - 0.5,
 		_ground_level_rect(entity["x"], entity["y"], size_w, size_h),
 		entity["y"] - 0.5)
+	_update_production_label(building, entity, Vector3(size_w * 0.5, 0.0, size_h * 0.5))
+
+
+const PROD_NONE := -1000000
+
+
+func _update_production_label(
+		building: Node3D, entity: Dictionary, center: Vector3) -> void:
+	var current: int = entity.get("prod_unit", PROD_NONE)
+	var queue: int = entity.get("prod_queue", 0)
+	var repeat: int = entity.get("prod_repeat", 0)
+	var label := building.get_node_or_null("ProdLabel") as Label3D
+	if current <= PROD_NONE and queue <= 0 and repeat == 0:
+		if label != null:
+			label.queue_free()
+		return
+	if label == null:
+		label = Label3D.new()
+		label.name = "ProdLabel"
+		label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+		label.no_depth_test = true
+		label.font_size = 64
+		label.outline_size = 14
+		label.modulate = Color(1.0, 0.95, 0.75)
+		building.add_child(label)
+	var lines: PackedStringArray = []
+	if current > PROD_NONE:
+		var ticks_left: int = entity.get("prod_ticks_left", 0)
+		var ticks_total: int = maxi(1, int(entity.get("prod_ticks_total", 1)))
+		lines.append("训练中 %s %d/%d" % [_unit_name(current), ticks_left, ticks_total])
+	if queue > 0:
+		lines.append("队列 %d" % queue)
+	if repeat != 0:
+		lines.append("连续生产")
+	label.text = "\n".join(lines)
+	label.position = Vector3(center.x, 1.9, center.z)
+
+
+func _unit_name(unit_type: int) -> String:
+	match unit_type:
+		-1:
+			return "村民"
+		0:
+			return "剑士"
+		1:
+			return "长枪兵"
+		2:
+			return "弓兵"
+		3:
+			return "骑士"
+		4:
+			return "长弓兵"
+		20:
+			return "冲车"
+		21:
+			return "投石机"
+		_:
+			return "单位"
 
 
 func _building_layers(entity: Dictionary, state: int) -> int:
@@ -418,7 +665,10 @@ func _refresh_fog(bridge: GameBridge) -> void:
 		return
 	var states: PackedByteArray = bridge.VisionStates()
 	if states.size() < _fog_width * _fog_height:
+		# 没有视野数据（例如回放的观战视角）：直接隐藏迷雾，展示完整地图。
+		_fog.visible = false
 		return
+	_fog.visible = true
 	if _fog_states.size() != states.size():
 		_fog_states.resize(states.size())
 		_fog_states.fill(255)
@@ -435,3 +685,88 @@ func _refresh_fog(bridge: GameBridge) -> void:
 				mesh.set_instance_color(index, FOG_EXPLORED_COLOR)
 			_:
 				mesh.set_instance_color(index, FOG_UNEXPLORED_COLOR)
+
+func set_selection(ids: Array) -> void:
+	_selected_ids = ids.duplicate()
+	_refresh_selection_rings()
+
+
+func ground_level_at(tile_x: float, tile_y: float) -> float:
+	return _ground_level(tile_x, tile_y)
+
+
+func _ensure_selection_mesh() -> void:
+	if _selection_mesh != null:
+		return
+	var torus := TorusMesh.new()
+	torus.inner_radius = 0.26
+	torus.outer_radius = 0.4
+	torus.rings = 20
+	torus.ring_segments = 8
+	var mesh := MultiMesh.new()
+	mesh.transform_format = MultiMesh.TRANSFORM_3D
+	mesh.mesh = torus
+	_selection_mesh = MultiMeshInstance3D.new()
+	_selection_mesh.name = "SelectionRings"
+	_selection_mesh.multimesh = mesh
+	_selection_mesh.material_override = _flat_material(Color(0.35, 1.0, 0.4, 0.85))
+	_selection_mesh.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	add_child(_selection_mesh)
+
+
+func _refresh_selection_rings() -> void:
+	_ensure_selection_mesh()
+	var transforms: Array[Transform3D] = []
+	for id in _selected_ids:
+		if not _entity_positions.has(id):
+			continue
+		var position: Vector3 = _entity_positions[id]
+		transforms.append(Transform3D(Basis(), Vector3(position.x, position.y + 0.03, position.z)))
+	var mesh := _selection_mesh.multimesh
+	mesh.instance_count = transforms.size()
+	_selection_mesh.set_visible(not transforms.is_empty())
+	for index in transforms.size():
+		mesh.set_instance_transform(index, transforms[index])
+
+
+func show_placement(building_type: int, cell_x: int, cell_y: int, is_valid: bool) -> void:
+	if cell_x < 0 or cell_y < 0:
+		hide_placement()
+		return
+	_ensure_placement_mesh()
+	var size_width := maxi(1, _bridge.BuildingWidth(building_type))
+	var size_height := maxi(1, _bridge.BuildingHeight(building_type))
+	var ground := _ground_level_rect(float(cell_x), float(cell_y), size_width, size_height)
+	_placement_mesh.position = Vector3(
+		cell_x + size_width * 0.5, ground + 0.5, cell_y + size_height * 0.5)
+	_placement_mesh.scale = Vector3(size_width, 1.0, size_height)
+	_placement_material.albedo_color = Color(0.35, 1.0, 0.4, 0.35) if is_valid else Color(1.0, 0.3, 0.25, 0.35)
+	_placement_mesh.show()
+
+
+func hide_placement() -> void:
+	if _placement_mesh != null:
+		_placement_mesh.hide()
+
+
+func _ensure_placement_mesh() -> void:
+	if _placement_mesh != null:
+		return
+	var box := BoxMesh.new()
+	box.size = Vector3.ONE
+	_placement_material = _flat_material(Color(0.35, 1.0, 0.4, 0.35))
+	_placement_mesh = MeshInstance3D.new()
+	_placement_mesh.name = "PlacementPreview"
+	_placement_mesh.mesh = box
+	_placement_mesh.material_override = _placement_material
+	_placement_mesh.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	add_child(_placement_mesh)
+
+
+func _flat_material(color: Color) -> StandardMaterial3D:
+	var material := StandardMaterial3D.new()
+	material.albedo_color = color
+	material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	material.cull_mode = BaseMaterial3D.CULL_DISABLED
+	return material

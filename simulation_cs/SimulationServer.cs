@@ -2,6 +2,12 @@ using System.Collections.Generic;
 
 namespace AoeSim;
 
+/// <summary>录像录制挂钩：服务器在指令通过校验并进入回合队列后回调，越权/被拒指令不会写入。</summary>
+public interface ICommandRecorder
+{
+    void Record(long turn, LockstepCommand command);
+}
+
 /// <summary>
 /// 权威服务器：每 tick 推进模拟，按 <see cref="CommandFrame.Turn"/> 收集各玩家输入，在回合边界统一应用。
 /// 玩家身份由连接层绑定，<see cref="CommandFrame.Player"/> 与指令自报的 Player 都不被信任；
@@ -13,6 +19,7 @@ public sealed class SimulationServer
     private const int TurnLookahead = 8;
 
     private readonly Dictionary<long, List<LockstepCommand>[]> _turns = new();
+    private readonly List<ComputerPlayer> _computerPlayers = new();
     private readonly object _gate = new();
     private long _rejectedCommands;
     private long _acceptedCommands;
@@ -20,6 +27,9 @@ public sealed class SimulationServer
 
     public GameSim Sim { get; }
     public long ViewTeam { get; set; }
+
+    /// <summary>可选录像录制器：只接收通过归属/回合校验的指令。</summary>
+    public ICommandRecorder? Recorder { get; set; }
 
     public long Turn
     {
@@ -61,6 +71,38 @@ public sealed class SimulationServer
         Sim = sim;
     }
 
+    /// <summary>挂载电脑玩家；同队已存在则忽略，按队伍升序在回合边界依次决策。</summary>
+    public void AddComputerPlayer(ComputerPlayer player)
+    {
+        lock (_gate)
+        {
+            if (player.Team < 0 || player.Team >= Sim.Lockstep.PlayerCount)
+            {
+                return;
+            }
+            foreach (ComputerPlayer existing in _computerPlayers)
+            {
+                if (existing.Team == player.Team)
+                {
+                    return;
+                }
+            }
+            _computerPlayers.Add(player);
+            _computerPlayers.Sort((left, right) => left.Team.CompareTo(right.Team));
+        }
+    }
+
+    public int ComputerPlayerCount
+    {
+        get
+        {
+            lock (_gate)
+            {
+                return _computerPlayers.Count;
+            }
+        }
+    }
+
     /// <summary>本地/可信调用：以帧里声明的 Player 作为来源玩家。</summary>
     public void Enqueue(CommandFrame frame) => Enqueue(frame, frame.Player);
 
@@ -92,6 +134,7 @@ public sealed class SimulationServer
                 {
                     slots[sourcePlayer].Add(command);
                     _acceptedCommands += 1;
+                    Recorder?.Record(target, command);
                 }
                 else
                 {
@@ -118,7 +161,21 @@ public sealed class SimulationServer
                 }
                 SlotsFor(target)[command.Player].Add(command);
                 _acceptedCommands += 1;
+                Recorder?.Record(target, command);
             }
+        }
+    }
+
+    /// <summary>回放专用：把录像里已通过校验的指令直接放进指定回合，不再重复校验。</summary>
+    public void EnqueueReplay(long turn, LockstepCommand command)
+    {
+        lock (_gate)
+        {
+            if (command.Player < 0 || command.Player >= Sim.Lockstep.PlayerCount)
+            {
+                return;
+            }
+            SlotsFor(turn)[command.Player].Add(command);
         }
     }
 
@@ -129,6 +186,7 @@ public sealed class SimulationServer
         {
             if (_turnTicks == 0)
             {
+                RunComputerPlayers(Sim.Lockstep.Turn);
                 ApplyTurnCommands(Sim.Lockstep.Turn);
             }
             Sim.SimulateTick();
@@ -160,6 +218,27 @@ public sealed class SimulationServer
         }
     }
 
+    /// <summary>同一 tick 的全量快照（不裁剪视野），供多观察者共享构建后按队伍过滤。</summary>
+    public SnapshotFrame SnapshotFull()
+    {
+        lock (_gate)
+        {
+            return SnapshotFrame.Build(Sim.World, Sim.Lockstep.Turn, Sim.Match);
+        }
+    }
+
+    /// <summary>复用全量快照，仅按观察方裁剪实体并附上其视野位图。</summary>
+    public SnapshotFrame SnapshotFor(SnapshotFrame full, long viewerTeam)
+    {
+        lock (_gate)
+        {
+            VisionGrid? vision = Sim.VisionFor(viewerTeam);
+            return vision == null
+                ? full
+                : SnapshotFrame.Filter(Sim.World, full, vision, viewerTeam);
+        }
+    }
+
     private SnapshotFrame BuildSnapshot(long viewerTeam) =>
         SnapshotFrame.Build(Sim.World, Sim.Lockstep.Turn, Sim.Match, Sim.VisionFor(viewerTeam), viewerTeam);
 
@@ -168,6 +247,26 @@ public sealed class SimulationServer
         lock (_gate)
         {
             return Sim.World.Checksum();
+        }
+    }
+
+    /// <summary>回合开始时让各电脑玩家决策，指令仍走归属校验与录像录制路径。</summary>
+    private void RunComputerPlayers(long turn)
+    {
+        if (_computerPlayers.Count == 0 || (Sim.Match != null && Sim.Match.Ended))
+        {
+            return;
+        }
+        foreach (ComputerPlayer player in _computerPlayers)
+        {
+            List<LockstepCommand> commands = player.Think(turn);
+            if (commands.Count == 0)
+            {
+                continue;
+            }
+            Enqueue(
+                new CommandFrame { Player = player.Team, Turn = turn, Commands = commands.ToArray() },
+                player.Team);
         }
     }
 

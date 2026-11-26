@@ -29,6 +29,7 @@ public static class BuildingSelfTest
         CheckRepairRejects(failures);
         CheckRepairDeterminism(failures);
         CheckWallTypes(failures);
+        CheckMilitaryTechBuildings(failures);
         CheckGateTogglePathing(failures);
         CheckGateDestroyGap(failures);
         CheckGateSnapshotAndDeterminism(failures);
@@ -542,6 +543,79 @@ public static class BuildingSelfTest
             sim.Resource(0, GameSim.ResourceWood) == 100 - BuildingTypes.Cost(BuildingTypes.PalisadeWall).Wood,
             "palisade deducts wood");
         Expect(failures, sim.Grid.IsBuildingBlocked(3, 3), "palisade blocks pathing");
+    }
+
+    private static void CheckMilitaryTechBuildings(List<string> failures)
+    {
+        long[] types =
+        {
+            BuildingTypes.ArcheryRange,
+            BuildingTypes.Stable,
+            BuildingTypes.Blacksmith,
+            BuildingTypes.Monastery,
+            BuildingTypes.University,
+            BuildingTypes.Castle,
+        };
+        int[] originsX = { 0, 5, 10, 15, 20, 26 };
+        foreach (long type in types)
+        {
+            Expect(failures, BuildingTypes.IsKnown(type), $"new building {type} is known");
+            Expect(failures, BuildingTypes.DisplayName(type).Length > 0, $"new building {type} has a name");
+            Expect(failures,
+                BuildingTypes.SizeWidth(type) > 0 && BuildingTypes.SizeHeight(type) > 0,
+                $"new building {type} has a footprint");
+            Expect(failures, BuildingTypes.MaxHp(type) > 0, $"new building {type} has hp");
+            Expect(failures, BuildingTypes.BuildTicks(type) > 0, $"new building {type} has build ticks");
+        }
+
+        var grid = new NavGrid(32, 24);
+        var sim = new GameSim(grid, 701);
+        for (long kind = 0; kind < 4; kind++)
+        {
+            sim.AddResource(0, kind, 2000);
+        }
+        long castle = -1;
+        for (int index = 0; index < types.Length; index++)
+        {
+            long placement = sim.IssuePlaceBuilding(types[index], originsX[index], 2, 0);
+            Expect(failures, placement >= 0, $"new building {types[index]} placeable");
+            Expect(failures,
+                grid.IsBuildingBlocked(originsX[index], 2),
+                $"new building {types[index]} blocks pathing");
+            if (types[index] == BuildingTypes.Castle)
+            {
+                castle = placement;
+            }
+        }
+        Expect(failures, castle >= 0, "castle placed");
+        BuildingSystem.Complete(sim.World, castle);
+        Expect(failures,
+            sim.World.GetValue(castle, SimComponents.Building, SimComponents.State)
+                == BuildingSystem.StateComplete,
+            "castle completes");
+        Expect(failures,
+            sim.World.HasComponent(castle, SimComponents.Garrison)
+                && sim.World.GetValue(castle, SimComponents.Garrison, SimComponents.Capacity) == 20,
+            "castle carries a 20-slot garrison");
+        Expect(failures,
+            sim.World.HasComponent(castle, SimComponents.Combat)
+                && sim.World.GetValue(castle, SimComponents.Combat, SimComponents.RangeMax) == 8
+                && sim.World.GetValue(castle, SimComponents.Combat, SimComponents.Damage) == 11,
+            "castle carries its own attack");
+
+        var buildSim = new GameSim(new NavGrid(16, 16), 702);
+        buildSim.AddResource(0, GameSim.ResourceWood, 500);
+        long range = buildSim.IssuePlaceBuilding(BuildingTypes.ArcheryRange, 4, 4, 0);
+        long builder = buildSim.SpawnVillager(9, 5, 0, 0.5, 20, 0.5);
+        buildSim.IssueConstruct(builder, range);
+        for (int tick = 0; tick < 300; tick++)
+        {
+            buildSim.SimulateTick();
+        }
+        Expect(failures,
+            buildSim.World.GetValue(range, SimComponents.Building, SimComponents.State)
+                == BuildingSystem.StateComplete,
+            "archery range can be built by a villager");
     }
 
     private static void CheckGateTogglePathing(List<string> failures)

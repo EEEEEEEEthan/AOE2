@@ -137,6 +137,9 @@ public sealed class ComponentStore
 
     public int ColumnId(string column) => ColumnId(column, create: false);
 
+    /// <summary>解析列 id，缺失时创建空列；用于系统入口为将要写入的列建立句柄。</summary>
+    public int CreateColumn(string column) => ColumnId(column, create: true);
+
     public List<string> ColumnsSorted()
     {
         EnsureSortedColumns();
@@ -174,6 +177,12 @@ public sealed class ComponentStore
         }
         if (!create)
         {
+#if DEBUG
+            if (!SimComponents.KnownNames.Contains(column))
+            {
+                throw new InvalidOperationException($"读取了未定义的列名 '{column}'。");
+            }
+#endif
             return -1;
         }
         columnId = _columns.Count;

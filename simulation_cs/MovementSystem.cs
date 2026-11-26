@@ -18,6 +18,41 @@ public static class MovementSystem
         { -1, -1 },
     };
 
+    /// <summary>系统入口一次性解析的组件与列句柄，内层循环只做整型访问。</summary>
+    private readonly struct MovementLayout
+    {
+        public readonly ComponentAccess Position;
+        public readonly ComponentAccess Move;
+        public readonly ComponentAccess Velocity;
+        public readonly ComponentAccess Domain;
+        public readonly int PositionX;
+        public readonly int PositionY;
+        public readonly int VelocityX;
+        public readonly int VelocityY;
+        public readonly int MoveTargetX;
+        public readonly int MoveTargetY;
+        public readonly int MoveSpeed;
+        public readonly int MoveActive;
+        public readonly int DomainId;
+
+        public MovementLayout(SimWorld world)
+        {
+            Position = world.Access(SimComponents.Position);
+            Move = world.Access(SimComponents.Move);
+            Velocity = world.Access(SimComponents.Velocity);
+            Domain = world.Access(SimComponents.Domain);
+            PositionX = Position.ColumnForWrite(SimComponents.X);
+            PositionY = Position.ColumnForWrite(SimComponents.Y);
+            VelocityX = Velocity.ColumnForWrite(SimComponents.X);
+            VelocityY = Velocity.ColumnForWrite(SimComponents.Y);
+            MoveTargetX = Move.Column(SimComponents.TargetX);
+            MoveTargetY = Move.Column(SimComponents.TargetY);
+            MoveSpeed = Move.Column(SimComponents.Speed);
+            MoveActive = Move.ColumnForWrite(SimComponents.Active);
+            DomainId = Domain.Column(SimComponents.DomainId);
+        }
+    }
+
     /// <summary>
     /// 单位通过 <paramref name="fieldProvider"/> 共享按目标格缓存的有界流场，各自按所在格取方向；
     /// 不为单个单位或分摊落点新建流场。
@@ -29,54 +64,54 @@ public static class MovementSystem
         Func<int, int, long, FlowField> fieldProvider,
         TerrainGrid? terrain = null)
     {
-        ComponentStore moveStore = world.Store(SimComponents.Move);
-        if (moveStore.Count == 0)
+        var layout = new MovementLayout(world);
+        if (layout.Move.Store.Count == 0)
         {
             return;
         }
-        occupancy.Rebuild(world);
-        foreach (long id in moveStore.ActiveIds())
+        occupancy.Sync(world);
+        foreach (long id in layout.Move.Store.ActiveIds())
         {
-            if (moveStore.GetValue(id, SimComponents.Active) == 0)
+            if (layout.Move.Get(id, layout.MoveActive) == 0)
             {
                 continue;
             }
-            StepEntity(world, id, grid, occupancy, fieldProvider, terrain);
+            StepEntity(layout, id, grid, occupancy, fieldProvider, terrain);
         }
     }
 
     private static void StepEntity(
-        SimWorld world,
+        in MovementLayout layout,
         long id,
         NavGrid grid,
         OccupancyMap occupancy,
         Func<int, int, long, FlowField> fieldProvider,
         TerrainGrid? terrain)
     {
-        long x = world.GetValue(id, SimComponents.Position, SimComponents.X);
-        long y = world.GetValue(id, SimComponents.Position, SimComponents.Y);
-        int targetX = (int)world.GetValue(id, SimComponents.Move, SimComponents.TargetX);
-        int targetY = (int)world.GetValue(id, SimComponents.Move, SimComponents.TargetY);
-        long speed = world.GetValue(id, SimComponents.Move, SimComponents.Speed);
+        long x = layout.Position.Get(id, layout.PositionX);
+        long y = layout.Position.Get(id, layout.PositionY);
+        int targetX = (int)layout.Move.Get(id, layout.MoveTargetX);
+        int targetY = (int)layout.Move.Get(id, layout.MoveTargetY);
+        long speed = layout.Move.Get(id, layout.MoveSpeed);
         int cellX = (int)Fixed.ToInt(x);
         int cellY = (int)Fixed.ToInt(y);
         if (cellX == targetX && cellY == targetY)
         {
-            SnapToCenter(world, id, targetX, targetY);
-            Stop(world, id);
+            SnapToCenter(layout, id, targetX, targetY);
+            Stop(layout, id);
             return;
         }
-        long domain = Traversal.DomainOf(world, id);
+        long domain = layout.Domain.Has(id) ? layout.Domain.Get(id, layout.DomainId) : MovementDomain.Land;
         FlowField? field = fieldProvider(targetX, targetY, domain);
         if (field == null || !field.Reachable(cellX, cellY))
         {
-            Stop(world, id);
+            Stop(layout, id);
             return;
         }
         if (!ChooseNextCell(id, grid, occupancy, field, cellX, cellY, terrain, domain, out int nextX, out int nextY))
         {
-            world.SetValue(id, SimComponents.Velocity, SimComponents.X, 0);
-            world.SetValue(id, SimComponents.Velocity, SimComponents.Y, 0);
+            layout.Velocity.Set(id, layout.VelocityX, 0);
+            layout.Velocity.Set(id, layout.VelocityY, 0);
             return;
         }
         occupancy.Stamp(id, nextX, nextY);
@@ -99,13 +134,13 @@ public static class MovementSystem
         }
         long newX = Fixed.Add(x, stepX);
         long newY = Fixed.Add(y, stepY);
-        world.SetValue(id, SimComponents.Velocity, SimComponents.X, stepX);
-        world.SetValue(id, SimComponents.Velocity, SimComponents.Y, stepY);
-        world.SetValue(id, SimComponents.Position, SimComponents.X, newX);
-        world.SetValue(id, SimComponents.Position, SimComponents.Y, newY);
+        layout.Velocity.Set(id, layout.VelocityX, stepX);
+        layout.Velocity.Set(id, layout.VelocityY, stepY);
+        layout.Position.Set(id, layout.PositionX, newX);
+        layout.Position.Set(id, layout.PositionY, newY);
         if (nextX == targetX && nextY == targetY && newX == centerX && newY == centerY)
         {
-            Stop(world, id);
+            Stop(layout, id);
         }
     }
 
@@ -187,16 +222,17 @@ public static class MovementSystem
         return delta > 0 ? axisSpeed : -axisSpeed;
     }
 
-    private static void SnapToCenter(SimWorld world, long id, int targetX, int targetY)
+    private static void SnapToCenter(in MovementLayout layout, long id, int targetX, int targetY)
     {
-        world.SetValue(id, SimComponents.Position, SimComponents.X, Fixed.Add(Fixed.FromInt(targetX), Fixed.Half));
-        world.SetValue(id, SimComponents.Position, SimComponents.Y, Fixed.Add(Fixed.FromInt(targetY), Fixed.Half));
+        layout.Position.Set(id, layout.PositionX, Fixed.Add(Fixed.FromInt(targetX), Fixed.Half));
+        layout.Position.Set(id, layout.PositionY, Fixed.Add(Fixed.FromInt(targetY), Fixed.Half));
     }
 
-    private static void Stop(SimWorld world, long id)
+    private static void Stop(in MovementLayout layout, long id)
     {
-        world.SetValue(id, SimComponents.Move, SimComponents.Active, 0);
-        world.SetValue(id, SimComponents.Velocity, SimComponents.X, 0);
-        world.SetValue(id, SimComponents.Velocity, SimComponents.Y, 0);
+        layout.Move.Set(id, layout.MoveActive, 0);
+        layout.Velocity.Set(id, layout.VelocityX, 0);
+        layout.Velocity.Set(id, layout.VelocityY, 0);
     }
 }
+

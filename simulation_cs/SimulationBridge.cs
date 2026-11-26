@@ -25,6 +25,11 @@ public partial class SimulationBridge : Node
 
     public Godot.Collections.Array<string> BuildingSelfTest() => ToGodotArray(AOE2Framework.BuildingSelfTest.Run());
 
+    public Godot.Collections.Array<string> ProductionSelfTest() => ToGodotArray(AOE2Framework.ProductionSelfTest.Run());
+
+    public Godot.Collections.Array<string> ComputerPlayerSelfTest() =>
+        ToGodotArray(AOE2Framework.ComputerPlayerSelfTest.Run());
+
     public Godot.Collections.Array<string> MapSelfTest() => ToGodotArray(AOE2Framework.MapSelfTest.Run());
 
     public Godot.Collections.Array<string> WaterSelfTest() => ToGodotArray(AOE2Framework.WaterSelfTest.Run());
@@ -33,6 +38,12 @@ public partial class SimulationBridge : Node
 
     public Godot.Collections.Array<string> CivilizationSelfTest() =>
         ToGodotArray(AOE2Framework.CivilizationSelfTest.Run());
+
+    public Godot.Collections.Array<string> TechTreeSelfTest() =>
+        ToGodotArray(AOE2Framework.TechTreeSelfTest.Run());
+
+    public Godot.Collections.Array<string> ReplaySelfTest() =>
+        ToGodotArray(AOE2Framework.ReplaySelfTest.Run());
 
     private static Godot.Collections.Array<string> ToGodotArray(System.Collections.Generic.List<string> failures)
     {
@@ -166,6 +177,7 @@ public partial class SimulationBridge : Node
         long clientTick = session.Client.Tick;
         int clientEntities = session.Client.EntityCount;
         AoeSim.VisionGrid? vision = session.Server.Sim.VisionFor(session.Server.ViewTeam);
+        AoeSim.SnapshotFrame.SnapshotLayout layout = AoeSim.SnapshotFrame.CreateLayout(session.Server.Sim.World);
         int expectedEntities = 0;
         foreach (long id in session.Server.Sim.World.Entities())
         {
@@ -173,7 +185,7 @@ public partial class SimulationBridge : Node
             {
                 continue;
             }
-            if (vision == null || AoeSim.SnapshotFrame.ShouldInclude(session.Server.Sim.World, id, vision, session.Server.ViewTeam))
+            if (vision == null || AoeSim.SnapshotFrame.ShouldInclude(id, vision, session.Server.ViewTeam, layout))
             {
                 expectedEntities += 1;
             }

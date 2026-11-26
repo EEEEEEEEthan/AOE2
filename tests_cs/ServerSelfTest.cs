@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Threading;
 using AoeSim;
 
@@ -21,7 +22,181 @@ public static class ServerSelfTest
         CheckHighLatencyCommands(failures);
         CheckLocalServerParity(failures);
         CheckMultiClient(failures);
+        CheckDeltaSnapshots(failures);
+        CheckSnapshotDownrate(failures);
+        CheckSharedSnapshotBuild(failures);
         return failures;
+    }
+
+    /// <summary>
+    /// 千单位场景：关键帧后只下发变化实体与字段，客户端合并结果必须与全量快照逐实体一致，
+    /// 且总字节数显著低于每 tick 全量编码。
+    /// </summary>
+    private static void CheckDeltaSnapshots(List<string> failures)
+    {
+        var sim = new GameSim(new NavGrid(48, 48), 4242, 2, 2);
+        var ids = new List<long>();
+        for (int index = 0; index < 1000; index++)
+        {
+            long id = sim.SpawnUnit(2 + index % 44, 2 + index / 44 % 44, 0, 50, 0, 0.0, 0.0, 0.0);
+            if (id < 0)
+            {
+                failures.Add("delta snapshot: spawn failed");
+                return;
+            }
+            ids.Add(id);
+        }
+
+        var delta = new SnapshotDelta();
+        SnapshotFrame? merged = null;
+        SnapshotFrame? keyframe = null;
+        long fullBytes = 0;
+        long deltaBytes = 0;
+        bool mismatch = false;
+        for (int tick = 0; tick < 20; tick++)
+        {
+            SnapshotFrame full = SnapshotFrame.Build(sim.World, sim.Lockstep.Turn);
+            SnapshotFrame outgoing = delta.Build(full);
+            fullBytes += full.Encode().Length;
+            byte[] encoded = outgoing.Encode();
+            deltaBytes += encoded.Length;
+            SnapshotFrame decoded = SnapshotFrame.Decode(encoded, merged);
+            merged = decoded.Delta && merged != null ? decoded.Merge(merged) : decoded;
+            if (keyframe == null)
+            {
+                keyframe = outgoing;
+            }
+            mismatch |= !SameEntities(full, merged);
+            for (int index = 0; index < ids.Count; index++)
+            {
+                long x = sim.World.GetValue(ids[index], SimComponents.Position, SimComponents.X);
+                sim.World.SetValue(ids[index], SimComponents.Position, SimComponents.X, x + Fixed.FromInt(1));
+            }
+        }
+        Expect(failures, keyframe != null && !keyframe.Delta, "delta snapshot: first frame is a keyframe");
+        Expect(failures, !mismatch, "delta snapshot: merged client state matches full snapshot every tick");
+        Expect(failures, deltaBytes * 2 < fullBytes,
+            $"delta snapshot: bandwidth {deltaBytes} should be far below full {fullBytes}");
+        double deltaPerFrame = deltaBytes / 20.0;
+        double fullPerFrame = fullBytes / 20.0;
+        System.Console.WriteLine(
+            $"[REPORT] bandwidth per client: full {fullPerFrame:F0} B/frame; delta {deltaPerFrame:F0} B/frame; "
+            + $"30Hz {deltaPerFrame * 30 / 1024:F1} KB/s; 15Hz {deltaPerFrame * 15 / 1024:F1} KB/s");
+    }
+
+    private static bool SameEntities(SnapshotFrame full, SnapshotFrame merged)
+    {
+        if (full.Entities.Length != merged.Entities.Length)
+        {
+            return false;
+        }
+        var map = new System.Collections.Generic.Dictionary<long, EntitySnapshot>(merged.Entities.Length);
+        foreach (EntitySnapshot entity in merged.Entities)
+        {
+            map[entity.Id] = entity;
+        }
+        foreach (EntitySnapshot entity in full.Entities)
+        {
+            if (!map.TryGetValue(entity.Id, out EntitySnapshot candidate) || !candidate.SameAs(entity))
+            {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /// <summary>
+    /// 快照降频：模拟 120Hz 下每 3 tick 才发一次快照，客户端仍持续收到快照并推进 tick，
+    /// 但收到的帧数明显少于模拟 tick 数。
+    /// </summary>
+    private static void CheckSnapshotDownrate(List<string> failures)
+    {
+        var sim = new GameSim(new NavGrid(16, 16), 930, 2, 6);
+        sim.SpawnUnit(3, 3, 0, 50, 0, 0.0, 0.0, 0.5);
+        sim.SpawnUnit(12, 12, 1, 50, 0, 0.0, 0.0, 0.5);
+        var server = new DedicatedServer(0, sim, 120, 3);
+        var client = new RemoteClient();
+        server.Start();
+        try
+        {
+            client.Connect("127.0.0.1", server.Port);
+            long deadline = System.Environment.TickCount64 + 5000;
+            while ((client.State.Latest == null || client.State.Latest.Tick < 90)
+                && System.Environment.TickCount64 < deadline)
+            {
+                client.Poll();
+                Thread.Sleep(2);
+            }
+            SnapshotFrame? latest = client.State.Latest;
+            Expect(failures, server.SnapshotIntervalTicks == 3, "snapshot interval is configurable");
+            Expect(failures, latest != null && latest.Tick >= 90,
+                "downrated snapshots still advance the simulation");
+            if (latest != null)
+            {
+                Expect(failures, client.SnapshotFrames >= 4, "downrated snapshots keep arriving");
+                Expect(failures, client.SnapshotFrames <= latest.Tick / 2 + 2,
+                    $"snapshot frames {client.SnapshotFrames} should be well below ticks {latest.Tick}");
+            }
+        }
+        catch (System.Exception error)
+        {
+            failures.Add($"snapshot downrate threw: {error.GetType().Name}: {error.Message}");
+        }
+        finally
+        {
+            client.Disconnect();
+            server.Stop();
+        }
+    }
+
+    /// <summary>
+    /// 多观察者共享构建：同 tick 全量快照只建一次，按队伍裁剪结果必须与逐观察者直接构建一致；
+    /// 同时输出两种做法的单 tick CPU 数据。
+    /// </summary>
+    private static void CheckSharedSnapshotBuild(List<string> failures)
+    {
+        var sim = new GameSim(new NavGrid(48, 48), 931, 2, 2);
+        for (int index = 0; index < 600; index++)
+        {
+            sim.SpawnUnit(2 + index % 44, 2 + index / 44 % 44, index % 2, 50, 0, 0.0, 0.0, 0.0);
+        }
+        var server = new SimulationServer(sim);
+        server.Step();
+
+        SnapshotFrame full = server.SnapshotFull();
+        for (long team = 0; team < 2; team++)
+        {
+            SnapshotFrame shared = server.SnapshotFor(full, team);
+            SnapshotFrame direct = server.Snapshot(team);
+            Expect(failures, SameEntities(direct, shared),
+                $"shared snapshot matches direct build for team {team}");
+            Expect(failures, SameBytes(direct.VisionStates, shared.VisionStates),
+                $"shared snapshot keeps team {team} vision bitmap");
+        }
+
+        const int iterations = 30;
+        var watch = Stopwatch.StartNew();
+        for (int index = 0; index < iterations; index++)
+        {
+            SnapshotFrame sharedFull = server.SnapshotFull();
+            server.SnapshotFor(sharedFull, 0);
+            server.SnapshotFor(sharedFull, 1);
+        }
+        watch.Stop();
+        double sharedMicros = watch.Elapsed.TotalMilliseconds * 1000.0 / iterations;
+        watch.Restart();
+        for (int index = 0; index < iterations; index++)
+        {
+            server.Snapshot(0);
+            server.Snapshot(1);
+        }
+        watch.Stop();
+        double directMicros = watch.Elapsed.TotalMilliseconds * 1000.0 / iterations;
+        System.Console.WriteLine(
+            $"[REPORT] 2 observers snapshot build per tick: shared {sharedMicros:F0} us; "
+            + $"direct {directMicros:F0} us; saving {directMicros - sharedMicros:F0} us");
+        Expect(failures, sharedMicros < directMicros * 2.0,
+            "shared snapshot build stays within a sane CPU bound");
     }
 
     private static void CheckCommandAuthority(List<string> failures)

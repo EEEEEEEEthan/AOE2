@@ -16,11 +16,14 @@ public static partial class KernelSelfTest
         CheckFixed(failures);
         CheckRng(failures);
         CheckEcs(failures);
+        CheckColumnBinding(failures);
         CheckPathfinding(failures);
         CheckFlowFieldCache(failures);
         CheckCombat(failures);
         CheckUnitTypes(failures);
+        CheckSiege(failures);
         CheckOccupancy(failures);
+        CheckIncrementalSpatial(failures);
         CheckGridRange(failures);
         CheckProjectile(failures);
         CheckAttack(failures);
@@ -32,6 +35,7 @@ public static partial class KernelSelfTest
         CheckLockstep(failures);
         CheckVision(failures);
         CheckTech(failures);
+        CheckUnitUpgrades(failures);
         CheckTerrain(failures);
         return failures;
     }

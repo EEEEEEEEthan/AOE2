@@ -6,13 +6,21 @@ public sealed class SpatialHash
 {
     public long CellSize { get; }
     private readonly Dictionary<long, List<long>> _buckets = new();
+    private readonly Dictionary<long, long> _entityBucket = new();
+
+    /// <summary>最近一次 <see cref="Sync"/> 实际处理的脏实体数，供增量维护的回归测试断言。</summary>
+    public int LastSyncedEntities { get; private set; }
 
     public SpatialHash(int cellTiles = 4)
     {
         CellSize = cellTiles * Fixed.Scale;
     }
 
-    public void Clear() => _buckets.Clear();
+    public void Clear()
+    {
+        _buckets.Clear();
+        _entityBucket.Clear();
+    }
 
     public void Insert(long id, long xFixed, long yFixed)
     {
@@ -23,18 +31,44 @@ public sealed class SpatialHash
             _buckets[key] = bucket;
         }
         bucket.Add(id);
+        _entityBucket[id] = key;
     }
 
-    public void Rebuild(SimWorld world)
+    /// <summary>增量同步：只对位置变化的实体做删旧桶/插新桶，静止实体不参与。</summary>
+    public void Sync(SimWorld world)
     {
-        Clear();
-        ComponentStore positionStore = world.Store(SimComponents.Position);
-        foreach (long id in positionStore.ActiveIds())
+        long[] dirty = world.SpatialDirtySorted();
+        LastSyncedEntities = 0;
+        for (int index = 0; index < dirty.Length; index++)
         {
+            long id = dirty[index];
+            Remove(id);
+            if (!world.IsAlive(id) || !world.HasComponent(id, SimComponents.Position))
+            {
+                continue;
+            }
             Insert(
                 id,
                 world.GetValue(id, SimComponents.Position, SimComponents.X),
                 world.GetValue(id, SimComponents.Position, SimComponents.Y));
+            LastSyncedEntities += 1;
+        }
+    }
+
+    private void Remove(long id)
+    {
+        if (!_entityBucket.TryGetValue(id, out long key))
+        {
+            return;
+        }
+        _entityBucket.Remove(id);
+        if (_buckets.TryGetValue(key, out List<long>? bucket))
+        {
+            bucket.Remove(id);
+            if (bucket.Count == 0)
+            {
+                _buckets.Remove(key);
+            }
         }
     }
 

@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 
 namespace AoeSim;
@@ -23,6 +23,16 @@ public sealed class SimWorld
     private bool _cacheDirty = true;
     private readonly Dictionary<string, Dictionary<long, long>> _playerEntities = new(StringComparer.Ordinal);
     private readonly Dictionary<long, (string Component, long Team)> _playerEntityOwner = new();
+    private ComponentStore? _positionStore;
+    private ComponentStore? _footprintStore;
+
+    /// <summary>
+    /// 位置或 footprint 变化的实体会同时记入占位层与空间哈希各自的脏集合：两者在不同的时点同步
+    /// （占位层在移动结算前、空间哈希在移动结算后），各自处理完再清空，避免一方的清除让另一方漏掉变更。
+    /// 静止实体不会进入集合，因此不产生每 tick 的全量重建开销。
+    /// </summary>
+    private readonly HashSet<long> _occupancyDirty = new();
+    private readonly HashSet<long> _spatialDirty = new();
 
     public SimWorld(long seed = 1)
     {
@@ -50,6 +60,8 @@ public sealed class SimWorld
         }
         _alive[(int)id] = false;
         _cacheDirty = true;
+        _occupancyDirty.Add(id);
+        _spatialDirty.Add(id);
         for (int index = 0; index < _stores.Count; index++)
         {
             _stores[index].Remove(id);
@@ -125,6 +137,18 @@ public sealed class SimWorld
 
     public ComponentStore Store(int componentId) => _stores[componentId];
 
+    /// <summary>
+    /// 解析组件名到可复用的整型句柄。系统入口解析一次，循环内统一走 <see cref="ComponentAccess"/>，
+    /// 组件名到 id 的查找不再进入每实体的内层循环。
+    /// </summary>
+    public ComponentAccess Access(string component)
+    {
+        int componentId = ComponentId(component, create: true);
+        return new ComponentAccess(this, componentId, _stores[componentId]);
+    }
+
+    public ComponentAccess Access(int componentId) => new(this, componentId, _stores[componentId]);
+
     public int ComponentId(string component) => ComponentId(component, create: false);
 
     public int ComponentId(string component, bool create)
@@ -143,22 +167,90 @@ public sealed class SimWorld
             return -1;
         }
         componentId = _stores.Count;
-        _stores.Add(new ComponentStore());
+        var store = new ComponentStore();
+        _stores.Add(store);
         _storeIds.Add(component, componentId);
         _storeCache.Set(component, componentId);
         _sortedComponentNames = null;
+        if (component == SimComponents.Position)
+        {
+            _positionStore = store;
+        }
+        else if (component == SimComponents.Footprint)
+        {
+            _footprintStore = store;
+        }
         return componentId;
     }
 
-    public void Attach(long id, string component) => Store(component).Add(id);
+    public void Attach(long id, string component) => Attach(id, ComponentId(component, create: true));
 
-    public void Detach(long id, string component) => Store(component).Remove(id);
+    public void Attach(long id, int componentId)
+    {
+        ComponentStore store = _stores[componentId];
+        store.Add(id);
+        MarkSpatialStructuresDirty(id, store);
+    }
 
-    public void SetValue(long id, string component, string column, long value) =>
-        Store(component).SetValue(id, column, value);
+    public void Detach(long id, string component) => Detach(id, ComponentId(component, create: true));
 
-    public void SetValue(long id, int componentId, int columnId, long value) =>
-        Store(componentId).SetValue(id, columnId, value);
+    public void Detach(long id, int componentId)
+    {
+        ComponentStore store = _stores[componentId];
+        store.Remove(id);
+        MarkSpatialStructuresDirty(id, store);
+    }
+
+    public void SetValue(long id, string component, string column, long value)
+    {
+        ComponentStore store = Store(component);
+        store.SetValue(id, column, value);
+        MarkSpatialStructuresDirty(id, store);
+    }
+
+    public void SetValue(long id, int componentId, int columnId, long value)
+    {
+        ComponentStore store = Store(componentId);
+        store.SetValue(id, columnId, value);
+        MarkSpatialStructuresDirty(id, store);
+    }
+
+    private void MarkSpatialStructuresDirty(long id, ComponentStore store)
+    {
+        if (ReferenceEquals(store, _positionStore) || ReferenceEquals(store, _footprintStore))
+        {
+            _occupancyDirty.Add(id);
+            _spatialDirty.Add(id);
+        }
+    }
+
+    /// <summary>占位层待同步实体，升序保证增量落章顺序与全量重建一致。</summary>
+    public long[] OccupancyDirtySorted()
+    {
+        long[] ids = SortedSnapshot(_occupancyDirty);
+        _occupancyDirty.Clear();
+        return ids;
+    }
+
+    /// <summary>空间哈希待同步实体，升序保证确定性。</summary>
+    public long[] SpatialDirtySorted()
+    {
+        long[] ids = SortedSnapshot(_spatialDirty);
+        _spatialDirty.Clear();
+        return ids;
+    }
+
+    private static long[] SortedSnapshot(HashSet<long> source)
+    {
+        if (source.Count == 0)
+        {
+            return Array.Empty<long>();
+        }
+        var ids = new long[source.Count];
+        source.CopyTo(ids);
+        Array.Sort(ids);
+        return ids;
+    }
 
     public long GetValue(long id, string component, string column) =>
         Store(component).GetValue(id, column);
@@ -171,6 +263,9 @@ public sealed class SimWorld
         int componentId = ComponentId(component, create: false);
         return componentId >= 0 && _stores[componentId].Has(id);
     }
+
+    public bool HasComponent(long id, int componentId) =>
+        componentId >= 0 && _stores[componentId].Has(id);
 
     public List<string> ComponentNamesSorted()
     {
@@ -232,4 +327,48 @@ public sealed class SimWorld
         }
         return hash;
     }
+}
+
+/// <summary>
+/// 已解析的组件句柄：持有存储引用与整型组件 id，列 id 在系统入口一次性解析。
+/// 循环内只做整型访问，不再触发组件名/列名的字符串查找。
+/// </summary>
+public readonly struct ComponentAccess
+{
+    private readonly SimWorld _world;
+
+    internal ComponentAccess(SimWorld world, int componentId, ComponentStore store)
+    {
+        _world = world;
+        ComponentId = componentId;
+        Store = store;
+    }
+
+    public int ComponentId { get; }
+
+    public ComponentStore Store { get; }
+
+    /// <summary>解析列 id；列尚未创建时返回 -1，读取按 0 处理，保持旧语义。</summary>
+    public int Column(string column) => Store.ColumnId(column);
+
+    /// <summary>解析列 id，缺失时创建空列；供系统入口为将要写入的列建立句柄。</summary>
+    public int ColumnForWrite(string column) => Store.CreateColumn(column);
+
+    public long Get(long id, int columnId) => columnId < 0 ? 0 : Store.GetValue(id, columnId);
+
+    public void Set(long id, int columnId, long value)
+    {
+        if (columnId < 0)
+        {
+            System.Diagnostics.Debug.Fail("ComponentAccess.Set 收到未创建的列 id，写入已忽略；请改用 ColumnForWrite 获取写列句柄。");
+            return;
+        }
+        _world.SetValue(id, ComponentId, columnId, value);
+    }
+
+    public bool Has(long id) => Store.Has(id);
+
+    public void Attach(long id) => _world.Attach(id, ComponentId);
+
+    public void Detach(long id) => _world.Detach(id, ComponentId);
 }

@@ -16,6 +16,11 @@ corner_radius_top_right = 8
 corner_radius_bottom_right = 8
 corner_radius_bottom_left = 8
 
+[sub_resource type="StyleBoxFlat" id="StyleBoxFlat_hud_bar"]
+bg_color = Color(0.06, 0.08, 0.11, 0.98)
+border_width_top = 2
+border_color = Color(0.22, 0.27, 0.35, 1)
+
 [sub_resource type="StyleBoxFlat" id="StyleBoxFlat_button_normal"]
 content_margin_left = 16.0
 content_margin_top = 8.0
@@ -109,6 +114,7 @@ Button/styles/normal = SubResource("StyleBoxFlat_button_normal")
 Button/styles/pressed = SubResource("StyleBoxFlat_button_pressed")
 Label/colors/font_color = Color(0.88, 0.9, 0.94, 1)
 Label/font_sizes/font_size = 16
+Panel/styles/panel = SubResource("StyleBoxFlat_hud_bar")
 PanelContainer/styles/panel = SubResource("StyleBoxFlat_panel")
 HBoxContainer/constants/separation = 12
 VBoxContainer/constants/separation = 16

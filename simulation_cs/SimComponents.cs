@@ -1,3 +1,9 @@
+#if DEBUG
+using System;
+using System.Collections.Generic;
+using System.Reflection;
+#endif
+
 namespace AoeSim;
 
 public static class SimComponents
@@ -185,4 +191,39 @@ public static class SimComponents
     public const string Cap = "cap";
     public const string CapMax = "cap_max";
     public const string PopCost = "pop_cost";
+
+    public const string Production = "production";
+    public const string ProdCurrent = "prod_current";
+    public const string ProdTicksLeft = "prod_ticks_left";
+    public const string ProdTicksTotal = "prod_ticks_total";
+    public const string ProdQueueCount = "prod_queue_count";
+    public const string ProdRepeat = "prod_repeat";
+    public const string ProdRepeatType = "prod_repeat_type";
+    public static readonly string[] ProdQueueColumns = { "prod_q0", "prod_q1", "prod_q2", "prod_q3", "prod_q4" };
+
+#if DEBUG
+    /// <summary>
+    /// 本类声明的全部组件名与列名。列按需惰性创建，缺失列不能直接判为拼错，
+    /// 因此调试期只在名称从未声明时抛错，兼顾「未知列立即报错」与「未写入列读 0」。
+    /// </summary>
+    internal static readonly HashSet<string> KnownNames = CollectKnownNames();
+
+    private static HashSet<string> CollectKnownNames()
+    {
+        var names = new HashSet<string>(StringComparer.Ordinal);
+        foreach (FieldInfo field in typeof(SimComponents).GetFields(
+            BindingFlags.Public | BindingFlags.Static))
+        {
+            if (field.GetValue(null) is string name)
+            {
+                names.Add(name);
+            }
+            else if (field.GetValue(null) is string[] columns)
+            {
+                names.UnionWith(columns);
+            }
+        }
+        return names;
+    }
+#endif
 }

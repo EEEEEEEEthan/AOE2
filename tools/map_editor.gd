@@ -349,6 +349,10 @@ func _on_tool_selected(_index: int) -> void:
 	_set_status("当前工具：%s" % TOOL_LABELS[%ToolOption.selected])
 
 
+func _on_main_menu_pressed() -> void:
+	get_tree().change_scene_to_file("res://presentation/main_menu.tscn")
+
+
 func _on_undo_pressed() -> void:
 	_model.undo()
 	_mark_dirty()
