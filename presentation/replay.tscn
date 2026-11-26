@@ -1,0 +1,152 @@
+[gd_scene load_steps=4 format=3]
+
+[ext_resource type="Script" path="res://presentation/replay.gd" id="1_replay"]
+[ext_resource type="Script" path="res://presentation/iso_camera.gd" id="2_camera"]
+
+[sub_resource type="Environment" id="Env_replay"]
+background_mode = 1
+background_color = Color(0.09, 0.11, 0.15, 1)
+ambient_light_source = 2
+ambient_light_color = Color(0.62, 0.66, 0.74, 1)
+ambient_light_energy = 0.7
+
+[node name="Replay" type="Node3D"]
+script = ExtResource("1_replay")
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="."]
+environment = SubResource("Env_replay")
+
+[node name="DirectionalLight3D" type="DirectionalLight3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 0.5, -0.866, 0, 0.866, 0.5, 0, 20, 0)
+light_energy = 1.1
+
+[node name="Camera" type="Camera3D" parent="."]
+unique_name_in_owner = true
+script = ExtResource("2_camera")
+
+[node name="Hud" type="CanvasLayer" parent="."]
+
+[node name="ListPanel" type="PanelContainer" parent="Hud"]
+offset_left = 16.0
+offset_top = 16.0
+offset_right = 376.0
+offset_bottom = 520.0
+
+[node name="Margin" type="MarginContainer" parent="Hud/ListPanel"]
+layout_mode = 2
+theme_override_constants/margin_left = 10
+theme_override_constants/margin_top = 8
+theme_override_constants/margin_right = 10
+theme_override_constants/margin_bottom = 8
+
+[node name="Content" type="VBoxContainer" parent="Hud/ListPanel/Margin"]
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="Title" type="Label" parent="Hud/ListPanel/Margin/Content"]
+layout_mode = 2
+text = "录像列表"
+
+[node name="ItemList" type="ItemList" parent="Hud/ListPanel/Margin/Content"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(320, 320)
+layout_mode = 2
+size_flags_vertical = 3
+
+[node name="Buttons" type="HBoxContainer" parent="Hud/ListPanel/Margin/Content"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="RefreshButton" type="Button" parent="Hud/ListPanel/Margin/Content/Buttons"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "刷新"
+
+[node name="DeleteButton" type="Button" parent="Hud/ListPanel/Margin/Content/Buttons"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "删除"
+
+[node name="StatusLabel" type="Label" parent="Hud/ListPanel/Margin/Content"]
+unique_name_in_owner = true
+layout_mode = 2
+text = ""
+autowrap_mode = 2
+
+[node name="BackButton" type="Button" parent="Hud/ListPanel/Margin/Content"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "返回主菜单"
+
+[node name="BottomBar" type="PanelContainer" parent="Hud"]
+anchor_left = 0.0
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 16.0
+offset_top = -150.0
+offset_right = -16.0
+offset_bottom = -16.0
+grow_horizontal = 2
+grow_vertical = 0
+
+[node name="Margin" type="MarginContainer" parent="Hud/BottomBar"]
+layout_mode = 2
+theme_override_constants/margin_left = 12
+theme_override_constants/margin_top = 8
+theme_override_constants/margin_right = 12
+theme_override_constants/margin_bottom = 8
+
+[node name="Content" type="VBoxContainer" parent="Hud/BottomBar/Margin"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="Row" type="HBoxContainer" parent="Hud/BottomBar/Margin/Content"]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="PlayButton" type="Button" parent="Hud/BottomBar/Margin/Content/Row"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(96, 0)
+layout_mode = 2
+text = "播放"
+
+[node name="SpeedLabel" type="Label" parent="Hud/BottomBar/Margin/Content/Row"]
+layout_mode = 2
+text = "倍速"
+
+[node name="SpeedOption" type="OptionButton" parent="Hud/BottomBar/Margin/Content/Row"]
+unique_name_in_owner = true
+layout_mode = 2
+item_count = 4
+selected = 1
+popup/item_0/text = "0.5×"
+popup/item_0/id = 0
+popup/item_1/text = "1×"
+popup/item_1/id = 1
+popup/item_2/text = "2×"
+popup/item_2/id = 2
+popup/item_3/text = "4×"
+popup/item_3/id = 3
+
+[node name="TickLabel" type="Label" parent="Hud/BottomBar/Margin/Content/Row"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "0 / 0 tick"
+
+[node name="ChecksumLabel" type="Label" parent="Hud/BottomBar/Margin/Content/Row"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "无回放"
+
+[node name="Progress" type="HSlider" parent="Hud/BottomBar/Margin/Content"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 24)
+layout_mode = 2
+max_value = 1.0
+step = 1.0
+
+[node name="ErrorDialog" type="AcceptDialog" parent="Hud"]
+unique_name_in_owner = true
+title = "录像错误"
+dialog_text = ""

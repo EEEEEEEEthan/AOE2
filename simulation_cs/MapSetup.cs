@@ -19,9 +19,13 @@ public static class MapSetup
     public static GameSim BuildGeneratedMatch(MapType type, long seed, int playerCount) =>
         BuildGeneratedMatch(MapGenerator.Generate(type, seed, playerCount), seed, playerCount);
 
-    public static GameSim BuildGeneratedMatch(MapData map, long seed, int playerCount)
+    public static GameSim BuildGeneratedMatch(MapData map, long seed, int playerCount) =>
+        BuildGeneratedMatch(map, seed, playerCount, 6, MatchConfig.Standard);
+
+    public static GameSim BuildGeneratedMatch(
+        MapData map, long seed, int playerCount, int ticksPerTurn, MatchConfig config)
     {
-        var sim = new GameSim(map.Nav, seed, playerCount, 6, MatchConfig.Standard, map.Terrain);
+        var sim = new GameSim(map.Nav, seed, playerCount, ticksPerTurn, config, map.Terrain);
         Apply(sim, map);
         return sim;
     }

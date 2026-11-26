@@ -37,6 +37,9 @@ public partial class SimulationBridge : Node
     public Godot.Collections.Array<string> TechTreeSelfTest() =>
         ToGodotArray(AOE2Framework.TechTreeSelfTest.Run());
 
+    public Godot.Collections.Array<string> ReplaySelfTest() =>
+        ToGodotArray(AOE2Framework.ReplaySelfTest.Run());
+
     private static Godot.Collections.Array<string> ToGodotArray(System.Collections.Generic.List<string> failures)
     {
         var result = new Godot.Collections.Array<string>();
