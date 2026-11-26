@@ -42,14 +42,19 @@ public readonly struct PlayerSnapshot
     public readonly long Winner;
     public readonly long Score;
     public readonly long Participants;
+    public readonly long Age;
+    public readonly long Research;
 
-    public PlayerSnapshot(long team, long defeated, long winner, long score, long participants)
+    public PlayerSnapshot(
+        long team, long defeated, long winner, long score, long participants, long age, long research)
     {
         Team = team;
         Defeated = defeated;
         Winner = winner;
         Score = score;
         Participants = participants;
+        Age = age;
+        Research = research;
     }
 }
 
@@ -108,12 +113,21 @@ public sealed class SnapshotFrame
             for (long team = 0; team < match.PlayerCount; team++)
             {
                 PlayerState player = match.Player(team);
+                long progressEntity = PlayerProgress.FindEntity(world, team);
+                long age = progressEntity >= 0
+                    ? world.GetValue(progressEntity, SimComponents.PlayerProgress, SimComponents.Age)
+                    : TechCatalog.AgeDark;
+                long research = progressEntity >= 0
+                    ? world.GetValue(progressEntity, SimComponents.PlayerProgress, SimComponents.Research)
+                    : 0;
                 players[team] = new PlayerSnapshot(
                     team,
                     player.Defeated ? 1 : 0,
                     player.Winner ? 1 : 0,
                     player.Score,
-                    player.Participants);
+                    player.Participants,
+                    age,
+                    research);
             }
             frame.Players = players;
         }
@@ -198,6 +212,8 @@ public sealed class SnapshotFrame
                 writer.Write(player.Winner);
                 writer.Write(player.Score);
                 writer.Write(player.Participants);
+                writer.Write(player.Age);
+                writer.Write(player.Research);
             }
             writer.Write(Entities.Length);
             foreach (EntitySnapshot entity in Entities)
@@ -235,6 +251,8 @@ public sealed class SnapshotFrame
         for (int index = 0; index < playerCount; index++)
         {
             players[index] = new PlayerSnapshot(
+                reader.ReadInt64(),
+                reader.ReadInt64(),
                 reader.ReadInt64(),
                 reader.ReadInt64(),
                 reader.ReadInt64(),

@@ -18,6 +18,7 @@ public static class SimComponents
     public const string DropSite = "drop_site";
     public const string Match = "match";
     public const string PlayerState = "player_state";
+    public const string PlayerProgress = "player_progress";
     public const string King = "king";
     public const string Building = "building";
     public const string Wonder = "wonder";
@@ -88,6 +89,9 @@ public static class SimComponents
     public const string Surrendered = "surrendered";
     public const string Complete = "complete";
     public const string HolderTeam = "holder_team";
+
+    public const string Age = "age";
+    public const string Research = "research";
 
     public const string State = "state";
     public const string ConvertProgress = "convert_progress";

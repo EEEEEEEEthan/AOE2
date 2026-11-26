@@ -90,6 +90,8 @@ public partial class GameBridge : Node
                 { "winner", player.Winner },
                 { "score", player.Score },
                 { "participants", player.Participants },
+                { "age", player.Age },
+                { "research", player.Research },
             });
         }
         return result;
