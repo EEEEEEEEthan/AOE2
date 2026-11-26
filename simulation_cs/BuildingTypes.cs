@@ -13,6 +13,18 @@ public static class BuildingTypes
 
     public static bool IsKnown(long type) => type >= TownCenter && type <= Market;
 
+    /// <summary>建筑所属时代：升城堡/帝国时统计上一时代的已完成建筑数量。</summary>
+    public static long AgeOf(long type) => type switch
+    {
+        TownCenter => TechCatalog.AgeDark,
+        House => TechCatalog.AgeDark,
+        Barracks => TechCatalog.AgeFeudal,
+        Wall => TechCatalog.AgeDark,
+        Tower => TechCatalog.AgeCastle,
+        Market => TechCatalog.AgeFeudal,
+        _ => TechCatalog.AgeDark,
+    };
+
     public static int SizeWidth(long type) => type switch
     {
         TownCenter => 4,

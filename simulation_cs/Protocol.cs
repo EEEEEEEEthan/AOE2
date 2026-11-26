@@ -19,7 +19,7 @@ public static class EntityKind
 /// <summary>网络协议版本：静态地图帧携带，握手时校验两端一致。</summary>
 public static class NetProtocol
 {
-    public const int Version = 2;
+    public const int Version = 3;
 }
 
 /// <summary>
@@ -168,6 +168,10 @@ public readonly struct PlayerSnapshot
     public readonly long Participants;
     public readonly long Age;
     public readonly long Research;
+    public readonly long ResearchKind;
+    public readonly long ResearchTarget;
+    public readonly long ResearchProgress;
+    public readonly long ResearchMaxProgress;
     public readonly long Wood;
     public readonly long Food;
     public readonly long Gold;
@@ -181,6 +185,10 @@ public readonly struct PlayerSnapshot
         long participants,
         long age,
         long research,
+        long researchKind,
+        long researchTarget,
+        long researchProgress,
+        long researchMaxProgress,
         long wood,
         long food,
         long gold,
@@ -193,6 +201,10 @@ public readonly struct PlayerSnapshot
         Participants = participants;
         Age = age;
         Research = research;
+        ResearchKind = researchKind;
+        ResearchTarget = researchTarget;
+        ResearchProgress = researchProgress;
+        ResearchMaxProgress = researchMaxProgress;
         Wood = wood;
         Food = food;
         Gold = gold;
@@ -320,6 +332,18 @@ public sealed class SnapshotFrame
                 long research = progressEntity >= 0
                     ? world.GetValue(progressEntity, SimComponents.PlayerProgress, SimComponents.Research)
                     : 0;
+                long researchKind = progressEntity >= 0
+                    ? world.GetValue(progressEntity, SimComponents.PlayerProgress, SimComponents.ResearchKind)
+                    : ResearchSystem.KindNone;
+                long researchTarget = progressEntity >= 0
+                    ? world.GetValue(progressEntity, SimComponents.PlayerProgress, SimComponents.ResearchTarget)
+                    : 0;
+                long researchProgress = progressEntity >= 0
+                    ? world.GetValue(progressEntity, SimComponents.PlayerProgress, SimComponents.ResearchProgress)
+                    : 0;
+                long researchMaxProgress = progressEntity >= 0
+                    ? world.GetValue(progressEntity, SimComponents.PlayerProgress, SimComponents.ResearchMaxProgress)
+                    : 0;
                 long wood = 0;
                 long food = 0;
                 long gold = 0;
@@ -339,6 +363,10 @@ public sealed class SnapshotFrame
                     player.Participants,
                     age,
                     research,
+                    researchKind,
+                    researchTarget,
+                    researchProgress,
+                    researchMaxProgress,
                     wood,
                     food,
                     gold,
@@ -444,6 +472,10 @@ public sealed class SnapshotFrame
                 writer.Write(player.Participants);
                 writer.Write(player.Age);
                 writer.Write(player.Research);
+                writer.Write(player.ResearchKind);
+                writer.Write(player.ResearchTarget);
+                writer.Write(player.ResearchProgress);
+                writer.Write(player.ResearchMaxProgress);
                 writer.Write(player.Wood);
                 writer.Write(player.Food);
                 writer.Write(player.Gold);
@@ -558,6 +590,10 @@ public sealed class SnapshotFrame
         for (int index = 0; index < playerCount; index++)
         {
             players[index] = new PlayerSnapshot(
+                reader.ReadInt64(),
+                reader.ReadInt64(),
+                reader.ReadInt64(),
+                reader.ReadInt64(),
                 reader.ReadInt64(),
                 reader.ReadInt64(),
                 reader.ReadInt64(),
