@@ -6,7 +6,7 @@
 
 | 模块 | 目录 | 职责 |
 | --- | --- | --- |
-| C# 模拟内核 | `simulation_cs/` | 定点、随机、ECS、寻路/流场/移动、战斗、采集、锁步、`GameSim`，引擎无关 |
+| C# 模拟内核 | `simulation_cs/` | 定点、随机、ECS、寻路/流场/移动、战斗、采集、对局胜负、锁步、`GameSim`，引擎无关 |
 | 协议与网络 | `simulation_cs/Protocol.cs`、`DedicatedServer.cs` | 快照/指令帧编解码、TCP dedicated server |
 | 服务器权威 | `SimulationServer` / `LocalSession` / `SimulationClient` | 权威模拟出快照，瘦客户端只消费快照 |
 | 表现 | `presentation/` | 3D 等距相机、单位与地形渲染、经 `GameBridge` 消费快照 |
@@ -29,6 +29,15 @@
 - **表现层**：`presentation/` 通过 `GameBridge` 读快照渲染，不再引用任何模拟类。
 - **确定性**：整数/定点、`String` 内容排序、FNV 校验和、实体升序迭代全部保留；`tests/determinism.gd` 用固化黄金校验和守住回归，`tests/kernel.gd` 覆盖各模块语义。
 
+## 对局与胜负
+
+`MatchState` / `PlayerState` 与其它状态一样存放在 ECS 世界里，随校验和与快照一起推进，表现层只经快照读取：
+
+- 阶段：`Setup → Running → Ended`，结束时锁定 `winner`、触发条件与结束 tick。
+- 可配置规则（`MatchConfig.Rules` 位掩码）：征服、弑君、奇观、圣物、分数，每 tick 末尾由 `MatchSystem` 确定性结算。
+- 失败判定：玩家所有单位与建筑被摧毁、国王被杀、或主动投降；全部玩家出局判平局。
+- 表现层在快照里拿到对局状态后显示结算面板（胜方、触发条件、结束 tick、双方分数与存活数），并提供投降/退出入口。
+
 ## 运行与测试
 
 ```text
@@ -48,3 +57,4 @@ dotnet build AOE2Framework.sln           # 单独编译 C# 内核
 - [x] 阶段四：锁步指令回合与跨端校验和一致
 - [x] 阶段五：3D 等距视角演示
 - [x] 迁移：切 Godot .NET 版、模拟内核移植 C#、服务器权威拆分（dedicated server + 协议 + 快照渲染 + 本地局本机服务器）
+- [x] 对局流程：`MatchState`/`PlayerState`、可配置胜负条件、每 tick 确定性结算与结算界面

@@ -12,6 +12,12 @@ public static class SimComponents
     public const string Resource = "resource";
     public const string ResourceNode = "resource_node";
     public const string DropSite = "drop_site";
+    public const string Match = "match";
+    public const string PlayerState = "player_state";
+    public const string King = "king";
+    public const string Building = "building";
+    public const string Wonder = "wonder";
+    public const string Relic = "relic";
 
     public const string X = "x";
     public const string Y = "y";
@@ -43,4 +49,23 @@ public static class SimComponents
     public const string CarryAmount = "carry_amount";
     public const string CarryCapacity = "carry_capacity";
     public const string Progress = "progress";
+
+    public const string Phase = "phase";
+    public const string WinnerTeam = "winner_team";
+    public const string VictoryReason = "victory_reason";
+    public const string EndTick = "end_tick";
+    public const string RuleMask = "rule_mask";
+    public const string WonderHoldTicks = "wonder_hold_ticks";
+    public const string RelicHoldTicks = "relic_hold_ticks";
+    public const string ScoreTickLimit = "score_tick_limit";
+    public const string Defeated = "defeated";
+    public const string Winner = "winner";
+    public const string Score = "score";
+    public const string Participants = "participants";
+    public const string WonderHold = "wonder_hold";
+    public const string RelicHold = "relic_hold";
+    public const string HadKing = "had_king";
+    public const string Surrendered = "surrendered";
+    public const string Complete = "complete";
+    public const string HolderTeam = "holder_team";
 }

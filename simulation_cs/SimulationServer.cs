@@ -38,7 +38,7 @@ public sealed class SimulationServer
         return Sim.World.Checksum();
     }
 
-    public SnapshotFrame Snapshot() => SnapshotFrame.Build(Sim.World, Turn);
+    public SnapshotFrame Snapshot() => SnapshotFrame.Build(Sim.World, Turn, Sim.Match);
 
     public long Checksum() => Sim.World.Checksum();
 }

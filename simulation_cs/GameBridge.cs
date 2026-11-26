@@ -58,6 +58,65 @@ public partial class GameBridge : Node
 
     public long ClientTick() => _session?.Client.Tick ?? -1;
 
+    public long MatchPhase() => _session?.Client.Latest?.Phase ?? -1;
+
+    public long MatchWinnerTeam() => _session?.Client.Latest?.WinnerTeam ?? -1;
+
+    public long MatchReason() => _session?.Client.Latest?.Reason ?? AoeSim.VictoryReason.None;
+
+    public long MatchEndTick() => _session?.Client.Latest?.EndTick ?? -1;
+
+    public bool MatchEnded() => MatchPhase() == AoeSim.MatchState.PhaseEnded;
+
+    public Godot.Collections.Array<Godot.Collections.Dictionary> PlayerStates()
+    {
+        var result = new Godot.Collections.Array<Godot.Collections.Dictionary>();
+        AoeSim.SnapshotFrame? frame = _session?.Client.Latest;
+        if (frame == null)
+        {
+            return result;
+        }
+        foreach (AoeSim.PlayerSnapshot player in frame.Players)
+        {
+            result.Add(new Godot.Collections.Dictionary
+            {
+                { "team", player.Team },
+                { "defeated", player.Defeated },
+                { "winner", player.Winner },
+                { "score", player.Score },
+                { "participants", player.Participants },
+            });
+        }
+        return result;
+    }
+
+    public void Surrender()
+    {
+        if (_session == null)
+        {
+            return;
+        }
+        var frame = new AoeSim.CommandFrame
+        {
+            Player = 0,
+            Turn = _session.Server.Turn,
+            Commands = new[] { new AoeSim.LockstepCommand(0, AoeSim.LockstepCommand.KindSurrender) },
+        };
+        _session.Submit(frame);
+    }
+
+    public void FastForward(int maxTicks)
+    {
+        if (_session == null)
+        {
+            return;
+        }
+        for (int tick = 0; tick < maxTicks && !MatchEnded(); tick++)
+        {
+            _session.Step();
+        }
+    }
+
     public long ServerChecksum() => _session?.Server.Checksum() ?? -1;
 
     public int GridWidth => _grid?.Width ?? 0;

@@ -18,6 +18,8 @@ public partial class SimulationBridge : Node
 
     public Godot.Collections.Array<string> KernelSelfTest() => AOE2Framework.KernelSelfTest.Run();
 
+    public Godot.Collections.Array<string> MatchSelfTest() => AOE2Framework.MatchSelfTest.Run();
+
     public bool ProtocolSelfCheck()
     {
         var command = new AoeSim.LockstepCommand(1, AoeSim.LockstepCommand.KindGather, 12, 3, 4, 30, 31);
@@ -38,9 +40,11 @@ public partial class SimulationBridge : Node
             return false;
         }
         AoeSim.GameSim sim = AoeSim.DemoScenario.Build();
-        AoeSim.SnapshotFrame snapshot = AoeSim.SnapshotFrame.Build(sim.World, sim.Lockstep.Turn);
+        AoeSim.SnapshotFrame snapshot = AoeSim.SnapshotFrame.Build(sim.World, sim.Lockstep.Turn, sim.Match);
         AoeSim.SnapshotFrame decodedSnapshot = AoeSim.SnapshotFrame.Decode(snapshot.Encode());
         return decodedSnapshot.Tick == snapshot.Tick
+            && decodedSnapshot.Phase == snapshot.Phase
+            && decodedSnapshot.Players.Length == snapshot.Players.Length
             && decodedSnapshot.Entities.Length == snapshot.Entities.Length
             && decodedSnapshot.Entities.Length > 0;
     }

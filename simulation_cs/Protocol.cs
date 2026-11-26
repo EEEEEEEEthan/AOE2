@@ -32,13 +32,36 @@ public readonly struct EntitySnapshot
     }
 }
 
+public readonly struct PlayerSnapshot
+{
+    public readonly long Team;
+    public readonly long Defeated;
+    public readonly long Winner;
+    public readonly long Score;
+    public readonly long Participants;
+
+    public PlayerSnapshot(long team, long defeated, long winner, long score, long participants)
+    {
+        Team = team;
+        Defeated = defeated;
+        Winner = winner;
+        Score = score;
+        Participants = participants;
+    }
+}
+
 public sealed class SnapshotFrame
 {
     public long Tick;
     public long Turn;
+    public long Phase = -1;
+    public long WinnerTeam = -1;
+    public long Reason = AoeSim.VictoryReason.None;
+    public long EndTick = -1;
+    public PlayerSnapshot[] Players = System.Array.Empty<PlayerSnapshot>();
     public EntitySnapshot[] Entities = System.Array.Empty<EntitySnapshot>();
 
-    public static SnapshotFrame Build(SimWorld world, long turn)
+    public static SnapshotFrame Build(SimWorld world, long turn, MatchState? match = null)
     {
         var entities = new List<EntitySnapshot>();
         foreach (long id in world.Entities())
@@ -58,7 +81,27 @@ public sealed class SnapshotFrame
                 kind,
                 hp));
         }
-        return new SnapshotFrame { Tick = world.Tick, Turn = turn, Entities = entities.ToArray() };
+        var frame = new SnapshotFrame { Tick = world.Tick, Turn = turn, Entities = entities.ToArray() };
+        if (match != null)
+        {
+            frame.Phase = match.Phase;
+            frame.WinnerTeam = match.WinnerTeam;
+            frame.Reason = match.Reason;
+            frame.EndTick = match.EndTick;
+            var players = new PlayerSnapshot[match.PlayerCount];
+            for (long team = 0; team < match.PlayerCount; team++)
+            {
+                PlayerState player = match.Player(team);
+                players[team] = new PlayerSnapshot(
+                    team,
+                    player.Defeated ? 1 : 0,
+                    player.Winner ? 1 : 0,
+                    player.Score,
+                    player.Participants);
+            }
+            frame.Players = players;
+        }
+        return frame;
     }
 
     private static long ClassifyEntity(SimWorld world, long id)
@@ -89,6 +132,19 @@ public sealed class SnapshotFrame
         {
             writer.Write(Tick);
             writer.Write(Turn);
+            writer.Write(Phase);
+            writer.Write(WinnerTeam);
+            writer.Write(Reason);
+            writer.Write(EndTick);
+            writer.Write(Players.Length);
+            foreach (PlayerSnapshot player in Players)
+            {
+                writer.Write(player.Team);
+                writer.Write(player.Defeated);
+                writer.Write(player.Winner);
+                writer.Write(player.Score);
+                writer.Write(player.Participants);
+            }
             writer.Write(Entities.Length);
             foreach (EntitySnapshot entity in Entities)
             {
@@ -107,7 +163,27 @@ public sealed class SnapshotFrame
     {
         using var stream = new MemoryStream(data);
         using var reader = new BinaryReader(stream, System.Text.Encoding.UTF8, leaveOpen: true);
-        var frame = new SnapshotFrame { Tick = reader.ReadInt64(), Turn = reader.ReadInt64() };
+        var frame = new SnapshotFrame
+        {
+            Tick = reader.ReadInt64(),
+            Turn = reader.ReadInt64(),
+            Phase = reader.ReadInt64(),
+            WinnerTeam = reader.ReadInt64(),
+            Reason = reader.ReadInt64(),
+            EndTick = reader.ReadInt64(),
+        };
+        int playerCount = reader.ReadInt32();
+        var players = new PlayerSnapshot[playerCount];
+        for (int index = 0; index < playerCount; index++)
+        {
+            players[index] = new PlayerSnapshot(
+                reader.ReadInt64(),
+                reader.ReadInt64(),
+                reader.ReadInt64(),
+                reader.ReadInt64(),
+                reader.ReadInt64());
+        }
+        frame.Players = players;
         int count = reader.ReadInt32();
         var entities = new EntitySnapshot[count];
         for (int index = 0; index < count; index++)
