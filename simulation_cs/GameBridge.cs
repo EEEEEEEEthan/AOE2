@@ -76,8 +76,8 @@ public partial class GameBridge : Node
     public void StartBuildingShowcase()
     {
         StopPlayback();
-        var grid = new AoeSim.NavGrid(28, 12);
-        var terrain = AoeSim.TerrainGrid.Flat(28, 12);
+        var grid = new AoeSim.NavGrid(60, 16);
+        var terrain = AoeSim.TerrainGrid.Flat(60, 16);
         var sim = new AoeSim.GameSim(grid, 7, 2, 6, AoeSim.MatchConfig.Standard, terrain);
         _grid = grid;
         _terrain = terrain;
@@ -86,6 +86,12 @@ public partial class GameBridge : Node
             AoeSim.BuildingTypes.TownCenter,
             AoeSim.BuildingTypes.House,
             AoeSim.BuildingTypes.Barracks,
+            AoeSim.BuildingTypes.ArcheryRange,
+            AoeSim.BuildingTypes.Stable,
+            AoeSim.BuildingTypes.Blacksmith,
+            AoeSim.BuildingTypes.Monastery,
+            AoeSim.BuildingTypes.University,
+            AoeSim.BuildingTypes.Castle,
             AoeSim.BuildingTypes.Wall,
             AoeSim.BuildingTypes.Tower,
             AoeSim.BuildingTypes.Market,
@@ -94,12 +100,18 @@ public partial class GameBridge : Node
             AoeSim.BuildingTypes.Gate,
             AoeSim.BuildingTypes.PalisadeWall,
         };
-        int[] originsX = { 0, 5, 8, 12, 14, 16, 20, 23, 24, 25 };
+        int[] originsX = new int[types.Length];
+        int cursorX = 0;
+        for (int index = 0; index < types.Length; index++)
+        {
+            originsX[index] = cursorX;
+            cursorX += AoeSim.BuildingTypes.SizeWidth(types[index]) + 1;
+        }
         for (int team = 0; team < 2; team++)
         {
-            int originY = team == 0 ? 2 : 8;
-            sim.AddResource(team, AoeSim.GameSim.ResourceWood, 1000);
-            sim.AddResource(team, AoeSim.GameSim.ResourceStone, 1000);
+            int originY = team == 0 ? 2 : 10;
+            sim.AddResource(team, AoeSim.GameSim.ResourceWood, 5000);
+            sim.AddResource(team, AoeSim.GameSim.ResourceStone, 3000);
             for (int index = 0; index < types.Length; index++)
             {
                 long id = sim.IssuePlaceBuilding(types[index], originsX[index], originY, team);
@@ -140,10 +152,15 @@ public partial class GameBridge : Node
         sim.AddPopulationCap(0, 40);
         long barracks = sim.SpawnCompletedBuilding(
             12, 12, 0, AoeSim.BuildingTypes.Barracks);
+        long archeryRange = sim.SpawnCompletedBuilding(
+            16, 12, 0, AoeSim.BuildingTypes.ArcheryRange);
+        long stable = sim.SpawnCompletedBuilding(
+            20, 12, 0, AoeSim.BuildingTypes.Stable);
         sim.IssueSetRally(barracks, 18, 16, -1);
         sim.Train(barracks, AoeSim.UnitDefs.Spearman);
-        sim.Train(barracks, AoeSim.UnitDefs.Archer);
-        sim.Train(barracks, AoeSim.UnitDefs.Knight);
+        sim.Train(barracks, AoeSim.UnitDefs.Swordsman);
+        sim.Train(archeryRange, AoeSim.UnitDefs.Archer);
+        sim.Train(stable, AoeSim.UnitDefs.Knight);
         sim.SetRepeatProduction(barracks, true);
         for (int tick = 0; tick < 8; tick++)
         {
@@ -697,7 +714,7 @@ public partial class GameBridge : Node
     public Godot.Collections.Array<Godot.Collections.Dictionary> BuildingOptions()
     {
         var result = new Godot.Collections.Array<Godot.Collections.Dictionary>();
-        for (long type = AoeSim.BuildingTypes.TownCenter; type <= AoeSim.BuildingTypes.FortifiedWall; type++)
+        for (long type = AoeSim.BuildingTypes.TownCenter; type <= AoeSim.BuildingTypes.Castle; type++)
         {
             AoeSim.ResourceCost cost = AoeSim.BuildingTypes.Cost(type);
             result.Add(new Godot.Collections.Dictionary

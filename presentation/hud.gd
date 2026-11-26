@@ -24,9 +24,15 @@ const KIND_BUILDING := 8
 const BUILDING_STATE_FOUNDATION := 0
 const BUILDING_STATE_COMPLETE := 1
 const VILLAGER_UNIT := -1
+const SWORDSMAN_UNIT := 0
+const SPEARMAN_UNIT := 1
+const ARCHER_UNIT := 2
+const KNIGHT_UNIT := 3
 const TOWN_CENTER := 1
 const BARRACKS := 3
 const MARKET := 6
+const ARCHERY_RANGE := 15
+const STABLE := 16
 const RESOURCE_WOOD := 0
 const RESOURCE_FOOD := 1
 const RESOURCE_GOLD := 2
@@ -142,7 +148,14 @@ func _update_train_buttons(player: Dictionary, selection: Array, my_team: int) -
 func _train_allowed(building_type: int, unit_type: int) -> bool:
 	if unit_type == VILLAGER_UNIT:
 		return building_type == TOWN_CENTER
-	return building_type == BARRACKS
+	match building_type:
+		BARRACKS:
+			return unit_type == SWORDSMAN_UNIT or unit_type == SPEARMAN_UNIT
+		ARCHERY_RANGE:
+			return unit_type == ARCHER_UNIT
+		STABLE:
+			return unit_type == KNIGHT_UNIT
+	return false
 
 
 func _update_research_buttons(player: Dictionary) -> void:

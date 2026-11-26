@@ -46,7 +46,11 @@ public static class ProductionSystem
     }
 
     private static bool IsProductionBuilding(long type) =>
-        type == BuildingTypes.TownCenter || type == BuildingTypes.Barracks;
+        type == BuildingTypes.TownCenter
+        || type == BuildingTypes.Barracks
+        || type == BuildingTypes.ArcheryRange
+        || type == BuildingTypes.Stable
+        || type == BuildingTypes.Castle;
 
     /// <summary>入队：校验建筑完工、兵种可造、队列未满、资源足够，立刻扣费后排队或直接开工。</summary>
     public static bool Train(GameSim sim, long building, long unitType)

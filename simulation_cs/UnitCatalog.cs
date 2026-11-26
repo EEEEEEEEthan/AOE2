@@ -20,11 +20,20 @@ public static class UnitCatalog
         {
             return buildingType == BuildingTypes.TownCenter;
         }
-        if (buildingType != BuildingTypes.Barracks)
+        long civ = sim.Civ(team);
+        if (!UnitDefs.IsUnitAvailable(civ, unitType))
         {
             return false;
         }
-        return UnitDefs.IsUnitAvailable(sim.Civ(team), unitType);
+        return buildingType switch
+        {
+            BuildingTypes.Barracks =>
+                unitType == UnitDefs.Swordsman || unitType == UnitDefs.Spearman,
+            BuildingTypes.ArcheryRange => unitType == UnitDefs.Archer,
+            BuildingTypes.Stable => unitType == UnitDefs.Knight,
+            BuildingTypes.Castle => unitType == CivilizationCatalog.UniqueUnit(civ),
+            _ => false,
+        };
     }
 
     public static long Ticks(long unitType) => unitType switch
