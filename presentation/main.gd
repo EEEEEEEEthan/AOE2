@@ -34,8 +34,31 @@ func _ready() -> void:
 		%TechTreeButton.hide()
 		bridge.StartDedicatedServer(_server_port())
 		return
+	if MatchSetup.has_prepared():
+		_adopt_prepared_match()
+		return
 	_start_session()
 	%WorldView.build_terrain(bridge)
+	_finish_setup()
+
+
+## 加载场景已生成对局与地形，这里直接接管，避免再次同步建图黑屏。
+func _adopt_prepared_match() -> void:
+	var prepared_bridge := MatchSetup.take_bridge() as GameBridge
+	var prepared_world := MatchSetup.take_world() as WorldView
+	if prepared_bridge == null or prepared_world == null:
+		_start_session()
+		%WorldView.build_terrain(bridge)
+		_finish_setup()
+		return
+	bridge.queue_free()
+	bridge = prepared_bridge
+	add_child(bridge)
+	%WorldView.adopt(prepared_world)
+	_finish_setup()
+
+
+func _finish_setup() -> void:
 	%WorldView.refresh(bridge)
 	%BattleController.setup(bridge)
 	_last_tick = bridge.ClientTick()

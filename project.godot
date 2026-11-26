@@ -11,6 +11,7 @@ config/icon="res://icon.svg"
 [autoload]
 
 TestEntry="*res://tests/tools/_test_entry.gd"
+MatchSetup="*res://presentation/match_setup.gd"
 
 [engine_host]
 
