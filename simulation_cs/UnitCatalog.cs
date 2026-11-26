@@ -13,12 +13,17 @@ public static class UnitCatalog
     public const long Spearman = UnitDefs.Spearman;
     public const long Archer = UnitDefs.Archer;
     public const long Knight = UnitDefs.Knight;
+    public const long TransportShip = UnitDefs.TransportShip;
 
     public static bool IsProducible(GameSim sim, long team, long buildingType, long unitType)
     {
         if (unitType == UnitDefs.Villager)
         {
             return buildingType == BuildingTypes.TownCenter;
+        }
+        if (unitType == UnitDefs.TransportShip)
+        {
+            return buildingType == BuildingTypes.Dock;
         }
         if (buildingType != BuildingTypes.Barracks)
         {
@@ -30,6 +35,7 @@ public static class UnitCatalog
     public static long Ticks(long unitType) => unitType switch
     {
         UnitDefs.Villager => 25,
+        UnitDefs.TransportShip => 40,
         UnitDefs.Swordsman => 21,
         UnitDefs.Spearman => 22,
         UnitDefs.Archer => 35,

@@ -614,6 +614,37 @@ public partial class GameBridge : Node
         });
     }
 
+    /// <summary>把选中的陆地单位装上运输船，一单位一条命令。</summary>
+    public void LoadTransport(long[] unitIds, long ship)
+    {
+        var commands = new AoeSim.LockstepCommand[unitIds.Length];
+        for (int index = 0; index < unitIds.Length; index++)
+        {
+            commands[index] = new AoeSim.LockstepCommand(
+                MyTeam, AoeSim.LockstepCommand.KindTransportLoad, unitIds[index], 0, 0, ship);
+        }
+        SubmitCommands(commands);
+    }
+
+    public void UnloadTransport(long ship)
+    {
+        SubmitCommands(new[]
+        {
+            new AoeSim.LockstepCommand(
+                MyTeam, AoeSim.LockstepCommand.KindTransportUnload, ship),
+        });
+    }
+
+    public bool CanTransportUnload(long ship)
+    {
+        if (_session == null || _grid == null || _terrain == null)
+        {
+            return false;
+        }
+        return AoeSim.TransportSystem.CanUnload(
+            _session.Server.Sim.World, _grid, _terrain, ship);
+    }
+
     public bool HasCompletedMarket() =>
         _session != null && AoeSim.MarketSystem.HasCompletedMarket(_session.Server.Sim.World, MyTeam);
 
@@ -732,7 +763,7 @@ public partial class GameBridge : Node
     public Godot.Collections.Array<Godot.Collections.Dictionary> UnitOptions()
     {
         var result = new Godot.Collections.Array<Godot.Collections.Dictionary>();
-        long[] types = { AoeSim.UnitDefs.Villager, AoeSim.UnitDefs.Swordsman, AoeSim.UnitDefs.Spearman, AoeSim.UnitDefs.Archer, AoeSim.UnitDefs.Knight };
+        long[] types = { AoeSim.UnitDefs.Villager, AoeSim.UnitDefs.Swordsman, AoeSim.UnitDefs.Spearman, AoeSim.UnitDefs.Archer, AoeSim.UnitDefs.Knight, AoeSim.UnitDefs.TransportShip };
         foreach (long type in types)
         {
             AoeSim.ResourceCost cost = AoeSim.UnitDefs.Cost(type);
@@ -941,6 +972,8 @@ public partial class GameBridge : Node
                 { "prod_ticks_total", entity.ProdTicksTotal },
                 { "prod_queue", entity.ProdQueueCount },
                 { "prod_repeat", entity.ProdRepeat },
+                { "transport_count", entity.TransportCount },
+                { "transport_capacity", entity.TransportCapacity },
             });
         }
         return result;
@@ -996,6 +1029,8 @@ public partial class GameBridge : Node
         var prodTicksTotals = new long[count];
         var prodQueues = new long[count];
         var prodRepeats = new long[count];
+        var transportCounts = new int[count];
+        var transportCapacities = new int[count];
         for (int index = 0; index < count; index++)
         {
             AoeSim.EntitySnapshot entity = entities[index];
@@ -1026,6 +1061,8 @@ public partial class GameBridge : Node
             prodTicksTotals[index] = entity.ProdTicksTotal;
             prodQueues[index] = entity.ProdQueueCount;
             prodRepeats[index] = entity.ProdRepeat;
+            transportCounts[index] = (int)entity.TransportCount;
+            transportCapacities[index] = (int)entity.TransportCapacity;
         }
         _batch = new Godot.Collections.Dictionary
         {
@@ -1058,6 +1095,8 @@ public partial class GameBridge : Node
             { "prod_ticks_total", prodTicksTotals },
             { "prod_queue", prodQueues },
             { "prod_repeat", prodRepeats },
+            { "transport_count", transportCounts },
+            { "transport_capacity", transportCapacities },
         };
         _batchTick = frame.Tick;
         return _batch;

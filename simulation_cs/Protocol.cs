@@ -16,12 +16,13 @@ public static class EntityKind
     public const long Building = 8;
     public const long TradeCart = 9;
     public const long HuntingAnimal = 10;
+    public const long TransportShip = 11;
 }
 
 /// <summary>网络协议版本：静态地图帧携带，握手时校验两端一致。</summary>
 public static class NetProtocol
 {
-    public const int Version = 9;
+    public const int Version = 10;
 }
 
 /// <summary>
@@ -134,6 +135,8 @@ public readonly struct EntitySnapshot
     public readonly long ProdTicksTotal;
     public readonly long ProdQueueCount;
     public readonly long ProdRepeat;
+    public readonly long TransportCount;
+    public readonly long TransportCapacity;
 
     public EntitySnapshot(
         long id,
@@ -165,7 +168,9 @@ public readonly struct EntitySnapshot
         long prodTicksLeft,
         long prodTicksTotal,
         long prodQueueCount,
-        long prodRepeat)
+        long prodRepeat,
+        long transportCount,
+        long transportCapacity)
     {
         Id = id;
         X = x;
@@ -197,6 +202,8 @@ public readonly struct EntitySnapshot
         ProdTicksTotal = prodTicksTotal;
         ProdQueueCount = prodQueueCount;
         ProdRepeat = prodRepeat;
+        TransportCount = transportCount;
+        TransportCapacity = transportCapacity;
     }
 
     /// <summary>逐字段比较：增量编码以它为「本实体是否需要下发」的判据。</summary>
@@ -230,7 +237,9 @@ public readonly struct EntitySnapshot
         && ProdTicksLeft == other.ProdTicksLeft
         && ProdTicksTotal == other.ProdTicksTotal
         && ProdQueueCount == other.ProdQueueCount
-        && ProdRepeat == other.ProdRepeat;
+        && ProdRepeat == other.ProdRepeat
+        && TransportCount == other.TransportCount
+        && TransportCapacity == other.TransportCapacity;
 }
 
 public readonly struct PlayerSnapshot
@@ -385,6 +394,8 @@ public sealed class SnapshotFrame
         public readonly int ProdTicksTotal;
         public readonly int ProdQueueCount;
         public readonly int ProdRepeat;
+        public readonly int TransportCount;
+        public readonly int TransportCapacity;
         public readonly int ProgressAge;
         public readonly int ProgressResearch;
         public readonly int ProgressResearchKind;
@@ -447,6 +458,8 @@ public sealed class SnapshotFrame
             ProdTicksTotal = Production.Column(SimComponents.ProdTicksTotal);
             ProdQueueCount = Production.Column(SimComponents.ProdQueueCount);
             ProdRepeat = Production.Column(SimComponents.ProdRepeat);
+            TransportCount = Transport.Column(SimComponents.Count);
+            TransportCapacity = Transport.Column(SimComponents.Capacity);
             ProgressAge = PlayerProgress.Column(SimComponents.Age);
             ProgressResearch = PlayerProgress.Column(SimComponents.Research);
             ProgressResearchKind = PlayerProgress.Column(SimComponents.ResearchKind);
@@ -529,6 +542,8 @@ public sealed class SnapshotFrame
             long prodTicksTotal = 0;
             long prodQueueCount = 0;
             long prodRepeat = 0;
+            long transportCount = 0;
+            long transportCapacity = 0;
             if (kind == EntityKind.Villager && layout.Repair.Has(id))
             {
                 repairState = layout.Repair.Get(id, layout.RepairState);
@@ -560,6 +575,11 @@ public sealed class SnapshotFrame
                     prodRepeat = layout.Production.Get(id, layout.ProdRepeat);
                 }
             }
+            if (layout.Transport.Has(id))
+            {
+                transportCount = layout.Transport.Get(id, layout.TransportCount);
+                transportCapacity = layout.Transport.Get(id, layout.TransportCapacity);
+            }
             entities.Add(new EntitySnapshot(
                 id,
                 layout.Position.Get(id, layout.PositionX),
@@ -590,7 +610,9 @@ public sealed class SnapshotFrame
                 prodTicksLeft,
                 prodTicksTotal,
                 prodQueueCount,
-                prodRepeat));
+                prodRepeat,
+                transportCount,
+                transportCapacity));
         }
         var frame = new SnapshotFrame { Tick = world.Tick, Turn = turn, Entities = entities.ToArray() };
         if (vision != null)
@@ -740,7 +762,11 @@ public sealed class SnapshotFrame
         {
             return EntityKind.TradeCart;
         }
-        if (layout.Transport.Has(id) || layout.Combat.Has(id))
+        if (layout.Transport.Has(id))
+        {
+            return EntityKind.TransportShip;
+        }
+        if (layout.Combat.Has(id))
         {
             return EntityKind.Unit;
         }
@@ -878,6 +904,8 @@ public sealed class SnapshotFrame
         if ((mask & (1u << 26)) != 0) writer.Write(entity.ProdTicksTotal);
         if ((mask & (1u << 27)) != 0) writer.Write(entity.ProdQueueCount);
         if ((mask & (1u << 28)) != 0) writer.Write(entity.ProdRepeat);
+        if ((mask & (1u << 29)) != 0) writer.Write(entity.TransportCount);
+        if ((mask & (1u << 30)) != 0) writer.Write(entity.TransportCapacity);
     }
 
     private static EntitySnapshot ReadEntity(BinaryReader reader, long id, in EntitySnapshot baseline)
@@ -912,6 +940,8 @@ public sealed class SnapshotFrame
         long prodTicksTotal = baseline.ProdTicksTotal;
         long prodQueueCount = baseline.ProdQueueCount;
         long prodRepeat = baseline.ProdRepeat;
+        long transportCount = baseline.TransportCount;
+        long transportCapacity = baseline.TransportCapacity;
         if ((mask & 1u) != 0) x = reader.ReadInt64();
         if ((mask & (1u << 1)) != 0) y = reader.ReadInt64();
         if ((mask & (1u << 2)) != 0) team = reader.ReadInt64();
@@ -941,12 +971,15 @@ public sealed class SnapshotFrame
         if ((mask & (1u << 26)) != 0) prodTicksTotal = reader.ReadInt64();
         if ((mask & (1u << 27)) != 0) prodQueueCount = reader.ReadInt64();
         if ((mask & (1u << 28)) != 0) prodRepeat = reader.ReadInt64();
+        if ((mask & (1u << 29)) != 0) transportCount = reader.ReadInt64();
+        if ((mask & (1u << 30)) != 0) transportCapacity = reader.ReadInt64();
         return new EntitySnapshot(
             id, x, y, team, kind, hp, nodeType, nodeSubtype, nodeRemaining,
             gatherState, carryType, carryAmount, buildingType, width, height,
             buildingState, buildingProgress, buildingMaxProgress, garrisonCount,
             garrisonCapacity, repairState, repairTarget, gateState, unitType, maxHp,
-            prodUnitType, prodTicksLeft, prodTicksTotal, prodQueueCount, prodRepeat);
+            prodUnitType, prodTicksLeft, prodTicksTotal, prodQueueCount, prodRepeat,
+            transportCount, transportCapacity);
     }
 
     private static void WriteVisionStates(BinaryWriter writer, byte[] states)
@@ -1146,8 +1179,8 @@ public sealed class SnapshotFrame
 /// </summary>
 public sealed class SnapshotDelta
 {
-    /// <summary>实体全部 24 个可变字段的掩码（Id 恒写，不占位）。</summary>
-    public const uint AllFields = 0x1FFFFFFFu;
+    /// <summary>实体全部 30 个可变字段的掩码（Id 恒写，不占位）。</summary>
+    public const uint AllFields = 0x3FFFFFFFu;
 
     private readonly Dictionary<long, EntitySnapshot> _previous = new();
     private readonly HashSet<long> _currentIds = new();
@@ -1266,6 +1299,8 @@ public sealed class SnapshotDelta
         if (current.ProdTicksTotal != previous.ProdTicksTotal) mask |= 1u << 26;
         if (current.ProdQueueCount != previous.ProdQueueCount) mask |= 1u << 27;
         if (current.ProdRepeat != previous.ProdRepeat) mask |= 1u << 28;
+        if (current.TransportCount != previous.TransportCount) mask |= 1u << 29;
+        if (current.TransportCapacity != previous.TransportCapacity) mask |= 1u << 30;
         return mask;
     }
 

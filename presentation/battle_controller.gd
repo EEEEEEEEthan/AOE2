@@ -8,9 +8,10 @@ const KIND_MONK := 5
 const KIND_BUILDING := 8
 const KIND_TRADE_CART := 9
 const KIND_HUNTING_ANIMAL := 10
+const KIND_TRANSPORT_SHIP := 11
 const BUILDING_STATE_COMPLETE := 1
-const SELECTABLE_KINDS := [KIND_UNIT, KIND_VILLAGER, KIND_MONK, KIND_BUILDING, KIND_TRADE_CART]
-const TARGETABLE_KINDS := [KIND_UNIT, KIND_VILLAGER, KIND_RESOURCE_NODE, KIND_MONK, KIND_BUILDING, KIND_TRADE_CART, KIND_HUNTING_ANIMAL]
+const SELECTABLE_KINDS := [KIND_UNIT, KIND_VILLAGER, KIND_MONK, KIND_BUILDING, KIND_TRADE_CART, KIND_TRANSPORT_SHIP]
+const TARGETABLE_KINDS := [KIND_UNIT, KIND_VILLAGER, KIND_RESOURCE_NODE, KIND_MONK, KIND_BUILDING, KIND_TRADE_CART, KIND_HUNTING_ANIMAL, KIND_TRANSPORT_SHIP]
 const CLICK_RADIUS := 28.0
 const DRAG_THRESHOLD := 6.0
 const DOUBLE_CLICK_MS := 350
@@ -35,6 +36,8 @@ var _last_click_msec := 0
 var _placing_type := -1
 var _hover_cell := Vector2i(-1, -1)
 var _group_last_press: Dictionary = {}
+var _loaded_by_ship: Dictionary = {}
+var _restore_selection: Array = []
 
 
 func setup(value: GameBridge) -> void:
@@ -56,6 +59,7 @@ func setup(value: GameBridge) -> void:
 	hud.market_buy_requested.connect(_market_buy)
 	hud.market_sell_requested.connect(_market_sell)
 	hud.tribute_requested.connect(_tribute)
+	hud.transport_unload_requested.connect(_unload_transport)
 	minimap.setup(camera)
 	minimap.set_map_size(bridge.GridWidth, bridge.GridHeight)
 	minimap.jump_requested.connect(_jump_to)
@@ -83,6 +87,8 @@ func refresh() -> void:
 	var building_states: PackedInt32Array = batch["building_state"]
 	var building_progresses: PackedFloat32Array = batch["building_progress"]
 	var building_max_progresses: PackedFloat32Array = batch["building_max_progress"]
+	var transport_counts: PackedInt32Array = batch["transport_count"]
+	var transport_capacities: PackedInt32Array = batch["transport_capacity"]
 	for index in int(batch["count"]):
 		var entry := {
 			"id": int(ids[index]),
@@ -99,11 +105,14 @@ func refresh() -> void:
 			"building_state": building_states[index],
 			"building_progress": building_progresses[index],
 			"building_max_progress": building_max_progresses[index],
+			"transport_count": transport_counts[index],
+			"transport_capacity": transport_capacities[index],
 		}
 		entry["name"] = _entity_name(entry)
 		_entities.append(entry)
 		_entity_by_id[int(ids[index])] = entry
 	selection.prune(_entity_by_id)
+	_restore_pending_selection()
 	world_view.set_selection(selection.ids)
 	_player = _find_player()
 	hud.refresh(_player, _selected_entries(), _my_team)
@@ -144,6 +153,8 @@ func _entity_name(entry: Dictionary) -> String:
 		key = "monk"
 	elif kind == KIND_TRADE_CART:
 		key = "trade_cart"
+	elif kind == KIND_TRANSPORT_SHIP:
+		key = "transport_ship"
 	else:
 		key = "u%d" % int(entry["unit_type"])
 	if _name_cache.has(key):
@@ -157,6 +168,8 @@ func _entity_name(entry: Dictionary) -> String:
 		name = "僧侣"
 	elif kind == KIND_TRADE_CART:
 		name = "贸易车"
+	elif kind == KIND_TRANSPORT_SHIP:
+		name = "运输船"
 	elif int(entry["unit_type"]) >= 0:
 		name = bridge.UnitName(int(entry["unit_type"]))
 	elif kind == KIND_HUNTING_ANIMAL:
@@ -381,7 +394,47 @@ func _issue_order(position: Vector2) -> void:
 			_flash(cell, Color(1.0, 0.35, 0.3))
 			hud.set_notice("已下达攻击指令")
 			return
+		if kind == KIND_TRANSPORT_SHIP and _load_onto_transport(unit_ids, int(target["id"]), cell):
+			return
 	_move_ids(unit_ids, cell)
+
+
+func _load_onto_transport(unit_ids: Array, ship_id: int, cell: Vector2i) -> bool:
+	var loaders: Array = []
+	for id in unit_ids:
+		if int(_entity_by_id[id]["kind"]) != KIND_TRANSPORT_SHIP:
+			loaders.append(id)
+	if loaders.is_empty():
+		return false
+	bridge.LoadTransport(PackedInt64Array(loaders), ship_id)
+	var tracked: Array = _loaded_by_ship.get(ship_id, [])
+	for id in loaders:
+		if not tracked.has(id):
+			tracked.append(id)
+	_loaded_by_ship[ship_id] = tracked
+	_flash(cell, Color(0.45, 0.85, 1.0))
+	hud.set_notice("已下达登船指令")
+	return true
+
+
+func _unload_transport(ship_id: int) -> void:
+	bridge.UnloadTransport(ship_id)
+	for id in _loaded_by_ship.get(ship_id, []):
+		if not _restore_selection.has(id):
+			_restore_selection.append(id)
+	hud.set_notice("已下达卸载指令")
+
+
+func _restore_pending_selection() -> void:
+	if _restore_selection.is_empty():
+		return
+	var remaining: Array = []
+	for id in _restore_selection:
+		if _entity_by_id.has(id):
+			selection.add_id(int(id))
+		else:
+			remaining.append(id)
+	_restore_selection = remaining
 
 
 func _set_rally(building: Dictionary, cell: Vector2i, target: Dictionary) -> void:

@@ -87,12 +87,16 @@ public static class UnitDefs
 
     public const long Villager = -1;
 
+    /// <summary>运输船没有战斗组件，单独用一个负类型表记，生产入口按码头特判。</summary>
+    public const long TransportShip = -2;
+
     public static UnitDef Get(long unitType) =>
         unitType >= 0 && unitType < Table.Length ? Table[(int)unitType] : Table[Swordsman];
 
     public static string DisplayName(long unitType) => unitType switch
     {
         Villager => "村民",
+        TransportShip => "运输船",
         Swordsman => "剑士",
         Spearman => "长枪兵",
         Archer => "弓兵",
@@ -104,6 +108,7 @@ public static class UnitDefs
     public static ResourceCost Cost(long unitType) => unitType switch
     {
         Villager => new ResourceCost(wood: 0, food: 50, gold: 0, stone: 0),
+        TransportShip => new ResourceCost(wood: 100, food: 0, gold: 0, stone: 0),
         Swordsman => new ResourceCost(wood: 0, food: 60, gold: 0, stone: 0),
         Spearman => new ResourceCost(wood: 25, food: 35, gold: 0, stone: 0),
         Archer => new ResourceCost(wood: 25, food: 0, gold: 45, stone: 0),
@@ -112,7 +117,8 @@ public static class UnitDefs
         _ => default,
     };
 
-    public static long PopulationCost(long unitType) => unitType == Villager || unitType >= 0 ? 1 : 0;
+    public static long PopulationCost(long unitType) =>
+        unitType == Villager || unitType == TransportShip || unitType >= 0 ? 1 : 0;
 
     /// <summary>通用兵种所有文明可用；独特单位只有其所属文明可造。</summary>
     public static bool IsUnitAvailable(long civ, long unitType)

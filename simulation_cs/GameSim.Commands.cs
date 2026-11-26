@@ -108,15 +108,7 @@ public sealed partial class GameSim
             return false;
         }
         long buildingType = World.GetValue(building, SimComponents.Building, SimComponents.BuildingType);
-        if (unitType == UnitDefs.Villager)
-        {
-            return buildingType == BuildingTypes.TownCenter;
-        }
-        if (buildingType != BuildingTypes.Barracks)
-        {
-            return false;
-        }
-        return UnitDefs.IsUnitAvailable(Civ(player), unitType);
+        return UnitCatalog.IsProducible(this, player, buildingType, unitType);
     }
 
     /// <summary>训练指令入口：改为入队，由 <see cref="ProductionSystem"/> 计时后出生。</summary>
