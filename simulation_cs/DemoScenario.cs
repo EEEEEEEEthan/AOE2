@@ -6,6 +6,7 @@ public static class DemoScenario
     public const int GridWidth = 32;
     public const int GridHeight = 32;
     public const long Seed = 20261126;
+    public const long StartingPopulationCap = 15;
 
     public static NavGrid BuildGrid()
     {
@@ -84,11 +85,21 @@ public static class DemoScenario
     public static GameSim Build(long seed = Seed)
     {
         var sim = new GameSim(BuildGrid(), seed, 2, 6, MatchConfig.Standard, BuildTerrain());
+        AddPlayerLedgers(sim);
         SpawnForces(sim);
         IssueOrders(sim);
         SpawnEconomy(sim);
         SpawnBuildingDemo(sim);
         return sim;
+    }
+
+    /// <summary>演示局没有城镇中心建筑，直接为双方建立带起始上限的人口账本。</summary>
+    private static void AddPlayerLedgers(GameSim sim)
+    {
+        for (long team = 0; team < 2; team++)
+        {
+            sim.AddPopulationCap(team, StartingPopulationCap);
+        }
     }
 
     private static void SpawnForces(GameSim sim)

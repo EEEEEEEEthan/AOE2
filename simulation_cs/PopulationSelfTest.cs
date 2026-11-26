@@ -15,6 +15,10 @@ public static class PopulationSelfTest
         CheckCapClamp(failures);
         CheckUnconfiguredUnlimited(failures);
         CheckVillagerCost(failures);
+        CheckHouseCompletionCap(failures);
+        CheckRuinReleasesCap(failures);
+        CheckMapSetupStartingCap(failures);
+        CheckDemoLedgers(failures);
         CheckLedgerHiddenFromSnapshot(failures);
         CheckDeterminism(failures);
         return failures;
@@ -93,6 +97,61 @@ public static class PopulationSelfTest
         long villager = sim.SpawnVillager(4, 4, 0, 0.2, 10, 1.0, popCost: 2);
         Expect(failures, villager >= 0, "villager within cap spawns");
         Expect(failures, sim.PopulationUsed(0) == 2, "villager reserves population");
+    }
+
+    private static void CheckHouseCompletionCap(List<string> failures)
+    {
+        var sim = new GameSim(new NavGrid(24, 24), 409);
+        sim.AddResource(0, GameSim.ResourceWood, 500);
+        long house = sim.IssuePlaceBuilding(BuildingTypes.House, 4, 4, 0);
+        Expect(failures, house >= 0, "house foundation placed for cap test");
+        Expect(failures, sim.PopulationCap(0) == 0, "foundation provides no cap");
+        BuildingSystem.Complete(sim.World, house);
+        Expect(
+            failures,
+            sim.PopulationCap(0) == BuildingTypes.PopulationCap(BuildingTypes.House),
+            "completed house raises the cap by its type value");
+        BuildingSystem.Complete(sim.World, house);
+        Expect(
+            failures,
+            sim.PopulationCap(0) == BuildingTypes.PopulationCap(BuildingTypes.House),
+            "completing twice only counts once");
+    }
+
+    private static void CheckRuinReleasesCap(List<string> failures)
+    {
+        var sim = new GameSim(new NavGrid(24, 24), 410);
+        sim.AddResource(0, GameSim.ResourceWood, 500);
+        long house = sim.IssuePlaceBuilding(BuildingTypes.House, 4, 4, 0);
+        BuildingSystem.Complete(sim.World, house);
+        BuildingSystem.Ruin(sim.World, sim.Grid, house);
+        Expect(failures, sim.PopulationCap(0) == 0, "ruins return the house cap");
+        BuildingSystem.Ruin(sim.World, sim.Grid, house);
+        Expect(failures, sim.PopulationCap(0) == 0, "re-ruining never drives the cap negative");
+        long foundation = sim.IssuePlaceBuilding(BuildingTypes.House, 8, 8, 0);
+        BuildingSystem.Ruin(sim.World, sim.Grid, foundation);
+        Expect(failures, sim.PopulationCap(0) == 0, "ruined foundation subtracts nothing");
+    }
+
+    private static void CheckMapSetupStartingCap(List<string> failures)
+    {
+        MapData map = MapGenerator.Generate(MapType.Arabia, 20261127, 2);
+        GameSim sim = MapSetup.BuildGeneratedMatch(map, 20261127, 2);
+        long expected = BuildingTypes.PopulationCap(BuildingTypes.TownCenter);
+        foreach (PlayerStart start in map.Starts)
+        {
+            Expect(
+                failures,
+                sim.PopulationCap(start.Team) == expected,
+                $"starting town center seeds the cap for team {start.Team}");
+        }
+    }
+
+    private static void CheckDemoLedgers(List<string> failures)
+    {
+        GameSim sim = DemoScenario.Build();
+        Expect(failures, sim.PopulationCap(0) == DemoScenario.StartingPopulationCap, "demo builds team 0 ledger");
+        Expect(failures, sim.PopulationCap(1) == DemoScenario.StartingPopulationCap, "demo builds team 1 ledger");
     }
 
     private static void CheckLedgerHiddenFromSnapshot(List<string> failures)

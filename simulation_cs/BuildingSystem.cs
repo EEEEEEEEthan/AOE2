@@ -108,11 +108,36 @@ public static class BuildingSystem
         }
     }
 
+    /// <summary>施工完工结算：写满进度、转完成态并一次性发放该建筑的人口上限。</summary>
+    public static void Complete(SimWorld world, long id)
+    {
+        if (!world.HasComponent(id, SimComponents.Building))
+        {
+            return;
+        }
+        if (world.GetValue(id, SimComponents.Building, SimComponents.State) == StateComplete)
+        {
+            return;
+        }
+        long maxProgress = world.GetValue(id, SimComponents.Building, SimComponents.MaxProgress);
+        world.SetValue(id, SimComponents.Building, SimComponents.Progress, maxProgress);
+        world.SetValue(id, SimComponents.Building, SimComponents.State, StateComplete);
+        AddPopulationCap(world, id);
+    }
+
     public static void Ruin(SimWorld world, NavGrid grid, long id)
     {
         if (!world.HasComponent(id, SimComponents.Building))
         {
             return;
+        }
+        if (world.GetValue(id, SimComponents.Building, SimComponents.State) == StateRuins)
+        {
+            return;
+        }
+        if (world.GetValue(id, SimComponents.Building, SimComponents.State) == StateComplete)
+        {
+            AddPopulationCap(world, id, -1);
         }
         world.SetValue(id, SimComponents.Building, SimComponents.State, StateRuins);
         world.SetValue(id, SimComponents.Health, SimComponents.Hp, 0);
@@ -179,12 +204,23 @@ public static class BuildingSystem
         long maxProgress = world.GetValue(buildingId, SimComponents.Building, SimComponents.MaxProgress);
         if (progress >= maxProgress)
         {
-            world.SetValue(buildingId, SimComponents.Building, SimComponents.Progress, maxProgress);
-            world.SetValue(buildingId, SimComponents.Building, SimComponents.State, StateComplete);
+            Complete(world, buildingId);
             world.Detach(workerId, SimComponents.Construct);
             return;
         }
         world.SetValue(buildingId, SimComponents.Building, SimComponents.Progress, progress);
+    }
+
+    private static void AddPopulationCap(SimWorld world, long id, long sign = 1)
+    {
+        long type = world.GetValue(id, SimComponents.Building, SimComponents.BuildingType);
+        long cap = BuildingTypes.PopulationCap(type);
+        if (cap == 0)
+        {
+            return;
+        }
+        long team = world.GetValue(id, SimComponents.Team, SimComponents.TeamId);
+        PopulationSystem.AddCap(world, team, cap * sign);
     }
 
     private static void Approach(

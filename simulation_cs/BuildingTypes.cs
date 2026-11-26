@@ -69,6 +69,14 @@ public static class BuildingTypes
         _ => 0,
     };
 
+    /// <summary>完工后提供的人口上限：城镇中心与房屋提供，其余建筑不占人口额度。</summary>
+    public static long PopulationCap(long type) => type switch
+    {
+        TownCenter => 5,
+        House => 5,
+        _ => 0,
+    };
+
     public static long Cost(long type) => type switch
     {
         TownCenter => 275,
