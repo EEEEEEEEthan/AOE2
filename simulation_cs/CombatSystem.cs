@@ -91,7 +91,7 @@ public static class CombatSystem
         }
     }
 
-    public static List<long> Step(SimWorld world, SpatialHash spatial)
+    public static List<long> Step(SimWorld world, SpatialHash spatial, List<KillEvent>? kills = null)
     {
         var dead = new List<long>();
         var deadSet = new HashSet<long>();
@@ -127,11 +127,11 @@ public static class CombatSystem
             {
                 if (InRange(layout, id, explicitTarget))
                 {
-                    Attack(world, layout, id, explicitTarget, dead, deadSet);
+                    Attack(world, layout, id, explicitTarget, dead, deadSet, kills);
                 }
                 continue;
             }
-            AutoEngage(world, layout, spatial, id, dead, deadSet);
+            AutoEngage(world, layout, spatial, id, dead, deadSet, kills);
         }
         return dead;
     }
@@ -174,7 +174,8 @@ public static class CombatSystem
         SpatialHash spatial,
         long attacker,
         List<long> dead,
-        HashSet<long> deadSet)
+        HashSet<long> deadSet,
+        List<KillEvent>? kills)
     {
         if (layout.Combat.Get(attacker, layout.CombatRangeMax) <= 0)
         {
@@ -208,7 +209,7 @@ public static class CombatSystem
         if (InRange(layout, attacker, target))
         {
             StopMoving(layout, attacker);
-            Attack(world, layout, attacker, target, dead, deadSet);
+            Attack(world, layout, attacker, target, dead, deadSet, kills);
             return;
         }
         if (CombatStance.LeashTiles(stance) == 0)
@@ -394,14 +395,16 @@ public static class CombatSystem
         long attacker,
         long target,
         List<long> dead,
-        HashSet<long> deadSet)
+        HashSet<long> deadSet,
+        List<KillEvent>? kills)
     {
         long damage = ResolveDamage(layout, attacker, target);
         long cooldown = layout.Combat.Get(attacker, layout.CombatCooldown);
         layout.Combat.Set(attacker, layout.CombatCooldownLeft, Math.Max(1, cooldown));
         if (layout.Combat.Get(attacker, layout.CombatIsRanged) == 0)
         {
-            ApplyDamage(layout, target, damage, dead, deadSet);
+            long killerTeam = layout.Team.Get(attacker, layout.TeamId);
+            ApplyDamage(layout, target, damage, dead, deadSet, kills, killerTeam);
         }
         else
         {
@@ -445,13 +448,19 @@ public static class CombatSystem
         long target,
         long damage,
         List<long> dead,
-        HashSet<long> deadSet)
+        HashSet<long> deadSet,
+        List<KillEvent>? kills,
+        long killerTeam)
     {
         long hp = layout.Health.Get(target, layout.HealthHp) - damage;
         layout.Health.Set(target, layout.HealthHp, hp);
         if (hp <= 0 && deadSet.Add(target))
         {
             dead.Add(target);
+            if (kills != null && killerTeam >= 0 && layout.Team.Has(target))
+            {
+                kills.Add(new KillEvent(target, killerTeam, layout.Team.Get(target, layout.TeamId)));
+            }
         }
     }
 }

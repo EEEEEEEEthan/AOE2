@@ -16,10 +16,20 @@ public static class ProjectileSystem
         world.SetValue(id, SimComponents.Projectile, SimComponents.ProjectileTarget, target);
         world.SetValue(id, SimComponents.Projectile, SimComponents.ProjectileDamage, damage);
         world.SetValue(id, SimComponents.Projectile, SimComponents.ProjectileTicksLeft, TravelTicks(world, attacker, target));
+        // 记录发射方阵营，命中时用于击杀归属；发射者可能在弹道飞行中阵亡。
+        if (world.HasComponent(attacker, SimComponents.Team))
+        {
+            world.Attach(id, SimComponents.Team);
+            world.SetValue(
+                id,
+                SimComponents.Team,
+                SimComponents.TeamId,
+                world.GetValue(attacker, SimComponents.Team, SimComponents.TeamId));
+        }
         return id;
     }
 
-    public static List<long> Step(SimWorld world)
+    public static List<long> Step(SimWorld world, List<KillEvent>? kills = null)
     {
         var dead = new List<long>();
         ComponentStore store = world.Store(SimComponents.Projectile);
@@ -46,6 +56,15 @@ public static class ProjectileSystem
                 if (hp <= 0 && deadSet.Add(target))
                 {
                     dead.Add(target);
+                    if (kills != null
+                        && world.HasComponent(id, SimComponents.Team)
+                        && world.HasComponent(target, SimComponents.Team))
+                    {
+                        kills.Add(new KillEvent(
+                            target,
+                            world.GetValue(id, SimComponents.Team, SimComponents.TeamId),
+                            world.GetValue(target, SimComponents.Team, SimComponents.TeamId)));
+                    }
                 }
             }
             spent.Add(id);

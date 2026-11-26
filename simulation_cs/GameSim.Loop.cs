@@ -17,7 +17,7 @@ public sealed partial class GameSim
             Spatial.Sync(World);
             _spatialReady = true;
         }
-        GatherSystem.Step(World, InventoryForTeam, Grid, Terrain);
+        GatherSystem.Step(World, InventoryForTeam, Grid, Terrain, Match);
         MonkSystem.Step(World);
         OrderSystem.Step(World, Spatial);
         BuildingSystem.Step(World, Grid, Terrain);
@@ -26,9 +26,11 @@ public sealed partial class GameSim
         TradeSystem.Step(World, Grid, Terrain, this);
         MovementSystem.Step(World, Grid, Occupancy, FieldProvider, Terrain);
         Spatial.Sync(World);
-        List<long> dead = ProjectileSystem.Step(World);
-        dead.AddRange(CombatSystem.Step(World, Spatial));
+        var kills = new List<KillEvent>();
+        List<long> dead = ProjectileSystem.Step(World, kills);
+        dead.AddRange(CombatSystem.Step(World, Spatial, kills));
         ResolveDeaths(dead);
+        RecordKills(kills);
         ProductionSystem.Step(World, this);
         HuntingSystem.Step(World);
         ResearchSystem.Step(this);
@@ -72,6 +74,28 @@ public sealed partial class GameSim
         if (fieldsChanged)
         {
             InvalidateFields();
+        }
+    }
+
+    /// <summary>把本 tick 的击杀归属并入对局统计；同一目标被多次致死结算只记一次。</summary>
+    private void RecordKills(List<KillEvent> kills)
+    {
+        if (Match == null || kills.Count == 0)
+        {
+            return;
+        }
+        var counted = new HashSet<long>();
+        foreach (KillEvent kill in kills)
+        {
+            if (!counted.Add(kill.Victim))
+            {
+                continue;
+            }
+            if (kill.KillerTeam < 0 || kill.VictimTeam < 0)
+            {
+                continue;
+            }
+            Match.RecordKill(kill.KillerTeam, kill.VictimTeam);
         }
     }
 
