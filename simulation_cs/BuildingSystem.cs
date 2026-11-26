@@ -117,6 +117,7 @@ public static class BuildingSystem
         world.SetValue(id, SimComponents.Building, SimComponents.Progress, maxProgress);
         world.SetValue(id, SimComponents.Building, SimComponents.State, StateComplete);
         AddPopulationCap(world, id);
+        AttachDropSite(world, id);
         GarrisonSystem.EnsureBuildingCombat(world, id);
     }
 
@@ -141,7 +142,24 @@ public static class BuildingSystem
         world.Detach(id, SimComponents.ResourceNode);
         world.Detach(id, SimComponents.Combat);
         world.Detach(id, SimComponents.Garrison);
+        world.Detach(id, SimComponents.DropSite);
         SetBlock(world, grid, id, false);
+    }
+
+    /// <summary>完工后按建筑类型挂载投放能力；未完工的施工现场不提供投放点。</summary>
+    private static void AttachDropSite(SimWorld world, long id)
+    {
+        long type = world.GetValue(id, SimComponents.Building, SimComponents.BuildingType);
+        long mask = BuildingTypes.DropMask(type);
+        if (mask == 0)
+        {
+            return;
+        }
+        if (!world.HasComponent(id, SimComponents.DropSite))
+        {
+            world.Attach(id, SimComponents.DropSite);
+        }
+        world.SetValue(id, SimComponents.DropSite, SimComponents.AcceptMask, mask);
     }
 
     /// <summary>

@@ -20,7 +20,7 @@ public static class EntityKind
 /// <summary>网络协议版本：静态地图帧携带，握手时校验两端一致。</summary>
 public static class NetProtocol
 {
-    public const int Version = 6;
+    public const int Version = 7;
 }
 
 /// <summary>

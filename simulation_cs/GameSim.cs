@@ -909,12 +909,30 @@ public sealed class GameSim
         {
             return;
         }
+        if (drop < 0)
+        {
+            drop = ResolveNearestDropSite(villager, node);
+        }
         World.Detach(villager, SimComponents.Repair);
         World.SetValue(villager, SimComponents.Gather, SimComponents.GatherState, GatherSystem.GatherStateGathering);
         World.SetValue(villager, SimComponents.Gather, SimComponents.NodeEntity, node);
         World.SetValue(villager, SimComponents.Gather, SimComponents.DropEntity, drop);
         World.SetValue(villager, SimComponents.Gather, SimComponents.CarryAmount, 0);
         World.SetValue(villager, SimComponents.Gather, SimComponents.Progress, 0);
+    }
+
+    /// <summary>未指定投放点时，按目标资源种类在己方已完工投放建筑中就近选取。</summary>
+    private long ResolveNearestDropSite(long villager, long node)
+    {
+        if (!World.HasComponent(node, SimComponents.ResourceNode))
+        {
+            return -1;
+        }
+        long resourceKind = World.GetValue(node, SimComponents.ResourceNode, SimComponents.NodeType);
+        long team = World.GetValue(villager, SimComponents.Team, SimComponents.TeamId);
+        long x = Fixed.ToInt(World.GetValue(villager, SimComponents.Position, SimComponents.X));
+        long y = Fixed.ToInt(World.GetValue(villager, SimComponents.Position, SimComponents.Y));
+        return GatherSystem.NearestDropSite(World, team, resourceKind, x, y);
     }
 
     public void IssueHeal(long monk, long target)
