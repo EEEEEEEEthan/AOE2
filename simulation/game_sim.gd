@@ -14,14 +14,17 @@ var spatial: SpatialHash
 var lockstep: Lockstep
 var _fields: Dictionary = {}
 var _inventory_entities: Dictionary = {}
+var _vision_grids: Array[VisionGrid] = []
 
 func _init(p_grid: NavGrid, seed_value: int = 1, player_count: int = 2, ticks_per_turn: int = 6) -> void:
 	grid = p_grid
 	world = SimWorld.new(seed_value)
 	spatial = SpatialHash.new(4)
 	lockstep = Lockstep.new(player_count, ticks_per_turn)
+	for player in player_count:
+		_vision_grids.append(VisionGrid.new(grid.width, grid.height))
 
-func spawn_unit(cell_x: int, cell_y: int, team: int, max_hp: int, damage: int, range_tiles: float, speed_tiles_per_tick: float) -> int:
+func spawn_unit(cell_x: int, cell_y: int, team: int, max_hp: int, damage: int, range_tiles: float, speed_tiles_per_tick: float, sight_tiles: float = 4.0) -> int:
 	var id := world.spawn()
 	world.attach(id, SimComponents.POSITION)
 	world.attach(id, SimComponents.VELOCITY)
@@ -29,6 +32,7 @@ func spawn_unit(cell_x: int, cell_y: int, team: int, max_hp: int, damage: int, r
 	world.attach(id, SimComponents.HEALTH)
 	world.attach(id, SimComponents.COMBAT)
 	world.attach(id, SimComponents.TEAM)
+	world.attach(id, SimComponents.SIGHT)
 	world.set_value(id, SimComponents.POSITION, SimComponents.X, Fixed.add(Fixed.from_int(cell_x), Fixed.HALF))
 	world.set_value(id, SimComponents.POSITION, SimComponents.Y, Fixed.add(Fixed.from_int(cell_y), Fixed.HALF))
 	world.set_value(id, SimComponents.VELOCITY, SimComponents.X, 0)
@@ -45,6 +49,7 @@ func spawn_unit(cell_x: int, cell_y: int, team: int, max_hp: int, damage: int, r
 	world.set_value(id, SimComponents.COMBAT, SimComponents.COOLDOWN, 6)
 	world.set_value(id, SimComponents.COMBAT, SimComponents.COOLDOWN_LEFT, 0)
 	world.set_value(id, SimComponents.TEAM, SimComponents.TEAM_ID, team)
+	world.set_value(id, SimComponents.SIGHT, SimComponents.RADIUS, Fixed.from_float(sight_tiles))
 	return id
 
 func spawn_resource_node(cell_x: int, cell_y: int, node_type: int, amount: int) -> int:
@@ -143,7 +148,20 @@ func simulate_tick() -> void:
 	GatherSystem.step(world, _inventory_for_team)
 	MovementSystem.step(world, grid, _field_provider)
 	CombatSystem.step(world, spatial)
+	VisionSystem.step(world, _vision_grids)
 	world.tick += 1
+
+func vision_for(player: int) -> VisionGrid:
+	if player < 0 or player >= _vision_grids.size():
+		return null
+	return _vision_grids[player]
+
+func checksum() -> int:
+	var hash := world.checksum()
+	for vision: VisionGrid in _vision_grids:
+		hash = (hash ^ vision.checksum()) & SimWorld.MASK32
+		hash = (hash * SimWorld.FNV_PRIME) & SimWorld.MASK32
+	return hash
 
 func simulate_turn() -> int:
 	if lockstep.can_advance():
