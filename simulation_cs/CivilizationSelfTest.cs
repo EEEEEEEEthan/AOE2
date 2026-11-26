@@ -129,7 +129,11 @@ public static class CivilizationSelfTest
 
     private static long SpawnCompleteBuilding(GameSim sim, long type, int cellX, int cellY, long team)
     {
-        sim.AddResource(team, GameSim.ResourceWood, BuildingTypes.Cost(type).Wood);
+        ResourceCost cost = BuildingTypes.Cost(type);
+        for (long resourceKind = GameSim.ResourceWood; resourceKind <= GameSim.ResourceStone; resourceKind++)
+        {
+            sim.AddResource(team, resourceKind, cost.AmountOf(resourceKind));
+        }
         long id = sim.IssuePlaceBuilding(type, cellX, cellY, team);
         sim.World.SetValue(id, SimComponents.Building, SimComponents.Progress, BuildingTypes.BuildTicks(type));
         sim.World.SetValue(id, SimComponents.Building, SimComponents.State, BuildingSystem.StateComplete);

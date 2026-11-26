@@ -11,9 +11,10 @@ public static class BuildingTypes
     public const long Tower = 5;
     public const long Market = 6;
     public const long Farm = 7;
-    public const long LumberCamp = 8;
-    public const long Mill = 9;
-    public const long MiningCamp = 10;
+    public const long Dock = 8;
+    public const long LumberCamp = 9;
+    public const long Mill = 10;
+    public const long MiningCamp = 11;
 
     /// <summary>一块农田完工后挂载的食物节点总量，耗尽后需重播。</summary>
     public const long FarmFoodAmount = 250;
@@ -33,6 +34,7 @@ public static class BuildingTypes
         Tower => TechCatalog.AgeCastle,
         Market => TechCatalog.AgeFeudal,
         Farm => TechCatalog.AgeDark,
+        Dock => TechCatalog.AgeDark,
         LumberCamp => TechCatalog.AgeDark,
         Mill => TechCatalog.AgeDark,
         MiningCamp => TechCatalog.AgeDark,
@@ -48,6 +50,7 @@ public static class BuildingTypes
         Tower => 2,
         Market => 4,
         Farm => 3,
+        Dock => 3,
         LumberCamp => 2,
         Mill => 2,
         MiningCamp => 2,
@@ -63,6 +66,7 @@ public static class BuildingTypes
         Tower => 2,
         Market => 3,
         Farm => 3,
+        Dock => 3,
         LumberCamp => 2,
         Mill => 2,
         MiningCamp => 2,
@@ -78,6 +82,7 @@ public static class BuildingTypes
         Tower => 1000,
         Market => 1500,
         Farm => 480,
+        Dock => 1500,
         LumberCamp => 600,
         Mill => 600,
         MiningCamp => 600,
@@ -93,6 +98,7 @@ public static class BuildingTypes
         Tower => 120,
         Market => 180,
         Farm => 90,
+        Dock => 120,
         LumberCamp => 60,
         Mill => 60,
         MiningCamp => 60,
@@ -117,6 +123,7 @@ public static class BuildingTypes
         Tower => new ResourceCost(wood: 25, food: 0, gold: 0, stone: 125),
         Market => new ResourceCost(wood: 175, food: 0, gold: 0, stone: 0),
         Farm => new ResourceCost(wood: 60, food: 0, gold: 0, stone: 0),
+        Dock => new ResourceCost(wood: 150, food: 0, gold: 0, stone: 0),
         LumberCamp => new ResourceCost(wood: 100, food: 0, gold: 0, stone: 0),
         Mill => new ResourceCost(wood: 100, food: 0, gold: 0, stone: 0),
         MiningCamp => new ResourceCost(wood: 100, food: 0, gold: 0, stone: 0),
@@ -130,6 +137,7 @@ public static class BuildingTypes
     public static long DropMask(long type) => type switch
     {
         TownCenter => 0b1111,
+        Dock => 0b1111,
         LumberCamp => 1L << (int)GameSim.ResourceWood,
         Mill => 1L << (int)GameSim.ResourceFood,
         MiningCamp => (1L << (int)GameSim.ResourceGold) | (1L << (int)GameSim.ResourceStone),

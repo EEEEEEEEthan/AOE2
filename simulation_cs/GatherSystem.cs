@@ -10,7 +10,7 @@ public static class GatherSystem
 
     public const long GatherRangeSq = 147456;
 
-    public static void Step(SimWorld world, Func<long, long> inventoryProvider, NavGrid grid)
+    public static void Step(SimWorld world, Func<long, long> inventoryProvider, NavGrid grid, TerrainGrid? terrain = null)
     {
         ComponentStore gatherStore = world.Store(SimComponents.Gather);
         if (gatherStore.Count == 0)
@@ -19,19 +19,20 @@ public static class GatherSystem
         }
         foreach (long id in gatherStore.ActiveIds())
         {
+            long domain = Traversal.DomainOf(world, id);
             long state = gatherStore.GetValue(id, SimComponents.GatherState);
             if (state == GatherStateGathering)
             {
-                StepGathering(world, id, grid);
+                StepGathering(world, id, grid, terrain, domain);
             }
             else if (state == GatherStateReturning)
             {
-                StepReturning(world, id, inventoryProvider, grid);
+                StepReturning(world, id, inventoryProvider, grid, terrain, domain);
             }
         }
     }
 
-    private static void StepGathering(SimWorld world, long id, NavGrid grid)
+    private static void StepGathering(SimWorld world, long id, NavGrid grid, TerrainGrid? terrain, long domain)
     {
         long node = world.GetValue(id, SimComponents.Gather, SimComponents.NodeEntity);
         long remaining = 0;
@@ -46,7 +47,7 @@ public static class GatherSystem
         }
         if (!InRange(world, id, node))
         {
-            MoveToCell(world, id, node, grid);
+            MoveToCell(world, id, node, grid, terrain, domain);
             return;
         }
         Stop(world, id);
@@ -77,7 +78,8 @@ public static class GatherSystem
         }
     }
 
-    private static void StepReturning(SimWorld world, long id, Func<long, long> inventoryProvider, NavGrid grid)
+    private static void StepReturning(
+        SimWorld world, long id, Func<long, long> inventoryProvider, NavGrid grid, TerrainGrid? terrain, long domain)
     {
         long drop = world.GetValue(id, SimComponents.Gather, SimComponents.DropEntity);
         if (!IsDropSite(world, drop))
@@ -92,7 +94,7 @@ public static class GatherSystem
         }
         if (!InRange(world, id, drop))
         {
-            MoveToCell(world, id, drop, grid);
+            MoveToCell(world, id, drop, grid, terrain, domain);
             return;
         }
         Stop(world, id);
@@ -105,6 +107,11 @@ public static class GatherSystem
         }
         long carryAmount = world.GetValue(id, SimComponents.Gather, SimComponents.CarryAmount);
         long inventory = inventoryProvider(world.GetValue(id, SimComponents.Team, SimComponents.TeamId));
+        if (inventory < 0)
+        {
+            world.SetValue(id, SimComponents.Gather, SimComponents.GatherState, GatherStateIdle);
+            return;
+        }
         string column = SimComponents.ResourceColumns[(int)carryType];
         long stored = world.GetValue(inventory, SimComponents.Resource, column);
         world.SetValue(inventory, SimComponents.Resource, column, stored + carryAmount);
@@ -229,7 +236,7 @@ public static class GatherSystem
         return distanceX <= 1 && distanceY <= 1;
     }
 
-    private static void MoveToCell(SimWorld world, long id, long target, NavGrid grid)
+    private static void MoveToCell(SimWorld world, long id, long target, NavGrid grid, TerrainGrid? terrain, long domain)
     {
         long targetX;
         long targetY;
@@ -237,7 +244,7 @@ public static class GatherSystem
         {
             long workerX = Fixed.ToInt(world.GetValue(id, SimComponents.Position, SimComponents.X));
             long workerY = Fixed.ToInt(world.GetValue(id, SimComponents.Position, SimComponents.Y));
-            (long approachX, long approachY) = BuildingApproachCell(world, grid, target, workerX, workerY);
+            (long approachX, long approachY) = BuildingApproachCell(world, grid, terrain, domain, target, workerX, workerY);
             if (approachX < 0)
             {
                 return;
@@ -256,7 +263,7 @@ public static class GatherSystem
     }
 
     private static (long, long) BuildingApproachCell(
-        SimWorld world, NavGrid grid, long building, long workerX, long workerY)
+        SimWorld world, NavGrid grid, TerrainGrid? terrain, long domain, long building, long workerX, long workerY)
     {
         long originX = Fixed.ToInt(world.GetValue(building, SimComponents.Position, SimComponents.X));
         long originY = Fixed.ToInt(world.GetValue(building, SimComponents.Position, SimComponents.Y));
@@ -275,7 +282,7 @@ public static class GatherSystem
                 {
                     continue;
                 }
-                if (!grid.InBounds((int)cellX, (int)cellY) || grid.IsBlocked((int)cellX, (int)cellY))
+                if (!Traversal.CellPassable(grid, terrain, (int)cellX, (int)cellY, domain))
                 {
                     continue;
                 }

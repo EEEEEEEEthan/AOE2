@@ -7,6 +7,7 @@ namespace AoeSim;
 public enum MapType
 {
     Arabia = 0,
+    Islands = 1,
 }
 
 public interface IMapGenerator
@@ -24,6 +25,7 @@ public static class MapGenerator
         int height = ArabiaMapGenerator.DefaultHeight) => type switch
     {
         MapType.Arabia => new ArabiaMapGenerator(width, height),
+        MapType.Islands => new IslandsMapGenerator(width, height),
         _ => throw new ArgumentException($"unknown map type {type}"),
     };
 
@@ -330,6 +332,289 @@ public sealed class ArabiaMapGenerator : IMapGenerator
                 out int fallbackX, out int fallbackY))
             {
                 resources.Add(new ResourcePoint(source.Type, fallbackX, fallbackY, source.Amount));
+            }
+        }
+    }
+
+    private void SyncNavWithTerrain(TerrainGrid terrain, NavGrid nav)
+    {
+        for (int y = 0; y < _height; y++)
+        {
+            for (int x = 0; x < _width; x++)
+            {
+                byte type = terrain.TypeAt(x, y);
+                if (type == TerrainGrid.TypeWater || type == TerrainGrid.TypeCliff)
+                {
+                    nav.SetBlocked(x, y, true);
+                }
+            }
+        }
+    }
+
+    private static long CellKey(int x, int y) => ((long)x << 32) ^ (y & 0xFFFF_FFFFL);
+}
+
+/// <summary>
+/// 群岛（Islands）：整图水面打底，每位玩家在一片草地小岛上出生。
+/// 岛上产出木/食/金/石，近岸水面成簇生成鱼群，供渔船采集；码头须临水才能放置。
+/// 与阿拉伯共用整数与 <see cref="SimRng"/>，同种子逐格一致、可确定性对拍。
+/// </summary>
+public sealed class IslandsMapGenerator : IMapGenerator
+{
+    public const int DefaultWidth = 64;
+    public const int DefaultHeight = 64;
+
+    private const int MinSize = 24;
+    private const int TownCenterSize = 4;
+    private const int IslandRadius = 7;
+    private const int PlacementAttempts = 240;
+    private const int FishCount = 7;
+    private const long FishAmount = 400;
+
+    private static readonly (long Type, int Count, long Amount, int MinR, int MaxR)[] LandClusters =
+    {
+        (GameSim.ResourceWood, 8, 100, 3, 6),
+        (GameSim.ResourceFood, 3, 120, 3, 6),
+        (GameSim.ResourceGold, 3, 700, 4, 7),
+        (GameSim.ResourceStone, 2, 350, 4, 7),
+    };
+
+    private readonly int _width;
+    private readonly int _height;
+
+    public IslandsMapGenerator(int width = DefaultWidth, int height = DefaultHeight)
+    {
+        if (width < MinSize || height < MinSize)
+        {
+            throw new ArgumentException($"map size must be at least {MinSize}x{MinSize}");
+        }
+        _width = width;
+        _height = height;
+    }
+
+    public MapType Type => MapType.Islands;
+
+    public MapData Generate(long seed, int playerCount)
+    {
+        if (playerCount < 1 || playerCount > 4)
+        {
+            throw new ArgumentException("playerCount must be between 1 and 4");
+        }
+        var rng = new SimRng(MixSeed(seed));
+        var terrain = new TerrainGrid(_width, _height);
+        Array.Fill(terrain.Types, TerrainGrid.TypeWater);
+        var nav = new NavGrid(_width, _height);
+
+        List<PlayerStart> starts = BuildStarts(playerCount);
+        var occupied = new HashSet<long>();
+        foreach (PlayerStart start in starts)
+        {
+            CarveIsland(terrain, nav, start);
+            MarkTownCenter(occupied, start);
+        }
+
+        var resources = new List<ResourcePoint>();
+        for (int index = 0; index < starts.Count; index++)
+        {
+            if (IsMirrorTarget(index))
+            {
+                continue;
+            }
+            int before = resources.Count;
+            AddIslandResources(resources, occupied, terrain, nav, rng, starts[index]);
+            int mirror = MirrorOf(index);
+            if (mirror >= 0)
+            {
+                MirrorRange(resources, before, occupied, terrain, nav, starts[mirror]);
+            }
+        }
+
+        SyncNavWithTerrain(terrain, nav);
+        return new MapData("islands", seed, terrain, nav, resources: resources, starts: starts);
+    }
+
+    private static long MixSeed(long seed) => seed ^ 0x2545F4914F6CDD1DL;
+
+    private List<PlayerStart> BuildStarts(int playerCount)
+    {
+        int half = TownCenterSize / 2;
+        int leftX = Math.Max(3, _width / 4) - half;
+        int rightX = (_width - 1 - (_width / 4)) - half;
+        int midX = (_width / 2) - half;
+        int middleY = (_height / 2) - half;
+        var starts = new List<PlayerStart>(playerCount)
+        {
+            new(0, leftX, middleY),
+        };
+        if (playerCount >= 2)
+        {
+            starts.Add(new PlayerStart(1, rightX, middleY));
+        }
+        if (playerCount >= 3)
+        {
+            int topY = Math.Max(3, _height / 4) - half;
+            starts.Add(new PlayerStart(2, midX, topY));
+        }
+        if (playerCount >= 4)
+        {
+            int bottomY = (_height - 1 - (_height / 4)) - half;
+            starts.Add(new PlayerStart(3, midX, bottomY));
+        }
+        return starts;
+    }
+
+    private static bool IsMirrorTarget(int index) => index == 1;
+
+    private static int MirrorOf(int index) => index == 0 ? 1 : -1;
+
+    /// <summary>在起始点周围挖出一片圆形草地小岛，并把岛内格子从水面阻塞中放通。</summary>
+    private void CarveIsland(TerrainGrid terrain, NavGrid nav, PlayerStart start)
+    {
+        int centerX = start.X + TownCenterSize / 2;
+        int centerY = start.Y + TownCenterSize / 2;
+        int radiusSq = IslandRadius * IslandRadius;
+        for (int y = centerY - IslandRadius; y <= centerY + IslandRadius; y++)
+        {
+            for (int x = centerX - IslandRadius; x <= centerX + IslandRadius; x++)
+            {
+                if (!terrain.InBounds(x, y))
+                {
+                    continue;
+                }
+                int dx = x - centerX;
+                int dy = y - centerY;
+                if (dx * dx + dy * dy > radiusSq)
+                {
+                    continue;
+                }
+                terrain.Set(x, y, TerrainGrid.TypeGrass, 0);
+                nav.SetBlocked(x, y, false);
+            }
+        }
+    }
+
+    private static void MarkTownCenter(HashSet<long> occupied, PlayerStart start)
+    {
+        for (int y = start.Y; y < start.Y + TownCenterSize; y++)
+        {
+            for (int x = start.X; x < start.X + TownCenterSize; x++)
+            {
+                occupied.Add(CellKey(x, y));
+            }
+        }
+    }
+
+    private void AddIslandResources(
+        List<ResourcePoint> resources,
+        HashSet<long> occupied,
+        TerrainGrid terrain,
+        NavGrid nav,
+        SimRng rng,
+        PlayerStart start)
+    {
+        int centerX = start.X + TownCenterSize / 2;
+        int centerY = start.Y + TownCenterSize / 2;
+        foreach ((long type, int count, long amount, int minR, int maxR) in LandClusters)
+        {
+            for (int index = 0; index < count; index++)
+            {
+                if (TryPlaceSpot(rng, occupied, terrain, nav, centerX, centerY, minR, maxR, false, out int x, out int y))
+                {
+                    resources.Add(new ResourcePoint(type, x, y, amount));
+                }
+            }
+        }
+        for (int index = 0; index < FishCount; index++)
+        {
+            if (TryPlaceSpot(rng, occupied, terrain, nav, centerX, centerY, IslandRadius + 1, IslandRadius + 4, true, out int x, out int y))
+            {
+                resources.Add(new ResourcePoint(GameSim.ResourceFood, x, y, FishAmount));
+            }
+        }
+    }
+
+    private bool TryPlaceSpot(
+        SimRng rng,
+        HashSet<long> occupied,
+        TerrainGrid terrain,
+        NavGrid nav,
+        int centerX,
+        int centerY,
+        int minR,
+        int maxR,
+        bool water,
+        out int x,
+        out int y)
+    {
+        for (int attempt = 0; attempt < PlacementAttempts; attempt++)
+        {
+            int dx = (int)rng.NextIntRange(-maxR, maxR);
+            int dy = (int)rng.NextIntRange(-maxR, maxR);
+            int distance = Math.Max(Math.Abs(dx), Math.Abs(dy));
+            if (distance < minR)
+            {
+                continue;
+            }
+            int candidateX = centerX + dx;
+            int candidateY = centerY + dy;
+            if (IsFreeSpot(occupied, terrain, nav, candidateX, candidateY, water))
+            {
+                occupied.Add(CellKey(candidateX, candidateY));
+                x = candidateX;
+                y = candidateY;
+                return true;
+            }
+        }
+        x = 0;
+        y = 0;
+        return false;
+    }
+
+    private bool IsFreeSpot(
+        HashSet<long> occupied, TerrainGrid terrain, NavGrid nav, int x, int y, bool water)
+    {
+        if (x < 1 || y < 1 || x >= _width - 1 || y >= _height - 1)
+        {
+            return false;
+        }
+        if (occupied.Contains(CellKey(x, y)))
+        {
+            return false;
+        }
+        if (water)
+        {
+            return terrain.IsWater(x, y) && !nav.IsBuildingBlocked(x, y);
+        }
+        byte type = terrain.TypeAt(x, y);
+        if (type == TerrainGrid.TypeWater || type == TerrainGrid.TypeCliff)
+        {
+            return false;
+        }
+        if (nav.IsTerrainBlocked(x, y) || nav.IsBuildingBlocked(x, y))
+        {
+            return false;
+        }
+        return true;
+    }
+
+    private void MirrorRange(
+        List<ResourcePoint> resources,
+        int fromIndex,
+        HashSet<long> occupied,
+        TerrainGrid terrain,
+        NavGrid nav,
+        PlayerStart mirrorStart)
+    {
+        int count = resources.Count;
+        for (int index = fromIndex; index < count; index++)
+        {
+            ResourcePoint source = resources[index];
+            int mirroredX = _width - 1 - source.X;
+            bool water = terrain.IsWater(source.X, source.Y);
+            if (IsFreeSpot(occupied, terrain, nav, mirroredX, source.Y, water))
+            {
+                occupied.Add(CellKey(mirroredX, source.Y));
+                resources.Add(new ResourcePoint(source.Type, mirroredX, source.Y, source.Amount));
             }
         }
     }

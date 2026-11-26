@@ -57,8 +57,8 @@ public static class MapSetup
     {
         int centerX = start.X + BuildingTypes.SizeWidth(BuildingTypes.TownCenter) / 2;
         int centerY = start.Y + BuildingTypes.SizeHeight(BuildingTypes.TownCenter) / 2;
-        ResourcePoint? wood = NearestResource(map, GameSim.ResourceWood, centerX, centerY);
-        ResourcePoint? food = NearestResource(map, GameSim.ResourceFood, centerX, centerY);
+        ResourcePoint? wood = NearestLandResource(map, GameSim.ResourceWood, centerX, centerY);
+        ResourcePoint? food = NearestLandResource(map, GameSim.ResourceFood, centerX, centerY);
         for (int index = 0; index < StartingVillagers; index++)
         {
             if (!TryFindSpawnCell(sim, centerX, centerY, 3, out int x, out int y))
@@ -83,13 +83,18 @@ public static class MapSetup
         }
     }
 
-    private static ResourcePoint? NearestResource(MapData map, long type, int x, int y)
+    /// <summary>只挑陆地资源点：初始村民是陆地单位，不会去采水面的鱼群。</summary>
+    private static ResourcePoint? NearestLandResource(MapData map, long type, int x, int y)
     {
         ResourcePoint? nearest = null;
         long best = long.MaxValue;
         foreach (ResourcePoint point in map.Resources)
         {
             if (point.Type != type)
+            {
+                continue;
+            }
+            if (map.Terrain.IsWater(point.X, point.Y))
             {
                 continue;
             }

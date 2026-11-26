@@ -5,6 +5,7 @@ public static class SimComponents
     public const string Position = "position";
     public const string Velocity = "velocity";
     public const string Move = "move";
+    public const string Domain = "domain";
     public const string Health = "health";
     public const string Combat = "combat";
     public const string AttackTarget = "attack_target";
@@ -36,6 +37,7 @@ public static class SimComponents
 
     public const string X = "x";
     public const string Y = "y";
+    public const string DomainId = "domain_id";
     public const string TargetX = "target_x";
     public const string TargetY = "target_y";
     public const string Speed = "speed";
