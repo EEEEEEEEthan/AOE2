@@ -51,7 +51,7 @@ public sealed class SimWorld
 
     public bool IsAlive(long id) => id >= 0 && id < _alive.Count && _alive[(int)id];
 
-    public long[] Entities()
+    public System.ReadOnlySpan<long> Entities()
     {
         if (_cacheDirty)
         {
