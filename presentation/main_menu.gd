@@ -3,6 +3,7 @@ extends Control
 const LOADING_SCENE := "res://presentation/loading.tscn"
 const MATCH_SCENE := "res://presentation/main.tscn"
 const MAP_EDITOR_SCENE := "res://tools/map_editor.tscn"
+const REPLAY_SCENE := "res://presentation/replay.tscn"
 const DEDICATED_FEATURE := "dedicated_server"
 const SERVER_ARGUMENT := "--server"
 
@@ -23,6 +24,10 @@ func _on_standard_game_pressed() -> void:
 
 func _on_map_editor_pressed() -> void:
 	get_tree().change_scene_to_file(MAP_EDITOR_SCENE)
+
+
+func _on_replay_pressed() -> void:
+	get_tree().change_scene_to_file(REPLAY_SCENE)
 
 
 func _on_unavailable_pressed() -> void:

@@ -508,7 +508,10 @@ func _refresh_fog(bridge: GameBridge) -> void:
 		return
 	var states: PackedByteArray = bridge.VisionStates()
 	if states.size() < _fog_width * _fog_height:
+		# 没有视野数据（例如回放的观战视角）：直接隐藏迷雾，展示完整地图。
+		_fog.visible = false
 		return
+	_fog.visible = true
 	if _fog_states.size() != states.size():
 		_fog_states.resize(states.size())
 		_fog_states.fill(255)

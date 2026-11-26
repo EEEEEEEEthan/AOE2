@@ -738,6 +738,11 @@ unique_name_in_owner = true
 layout_mode = 2
 text = "返回主菜单"
 
+[node name="SaveReplayButton" type="Button" parent="Hud/ResultPanel/Margin/Content"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "保存本局录像"
+
 [node name="TooltipPanel" type="PanelContainer" parent="Hud"]
 unique_name_in_owner = true
 offset_left = 120.0
@@ -890,6 +895,7 @@ unique_name_in_owner = true
 [connection signal="pressed" from="Hud/CommandPanel/Margin/Content/ActionRow/StopButton" to="Hud" method="_on_stop_pressed"]
 [connection signal="pressed" from="Hud/CommandPanel/Margin/Content/ActionRow/CancelPlacementButton" to="Hud" method="_on_cancel_placement_pressed"]
 [connection signal="pressed" from="Hud/ResultPanel/Margin/Content/ExitButton" to="." method="_on_return_to_menu_pressed"]
+[connection signal="pressed" from="Hud/ResultPanel/Margin/Content/SaveReplayButton" to="." method="_on_save_replay_pressed"]
 [connection signal="pressed" from="Hud/PauseMenu/Center/PausePanel/Margin/Content/ResumeButton" to="Hud/PauseMenu" method="_on_resume_pressed"]
 [connection signal="pressed" from="Hud/PauseMenu/Center/PausePanel/Margin/Content/SaveButton" to="Hud/PauseMenu" method="_on_save_pressed"]
 [connection signal="pressed" from="Hud/PauseMenu/Center/PausePanel/Margin/Content/RestartButton" to="Hud/PauseMenu" method="_on_restart_pressed"]

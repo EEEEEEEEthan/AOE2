@@ -69,6 +69,12 @@ custom_minimum_size = Vector2(280, 44)
 layout_mode = 2
 text = "科技树"
 
+[node name="ReplayButton" type="Button" parent="Center/Content"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(280, 44)
+layout_mode = 2
+text = "观看录像"
+
 [node name="MapEditorButton" type="Button" parent="Center/Content"]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(280, 44)
@@ -113,6 +119,7 @@ dialog_text = "该功能正在开发中，敬请期待。"
 [connection signal="pressed" from="Center/Content/CampaignButton" to="." method="_on_unavailable_pressed"]
 [connection signal="pressed" from="Center/Content/MultiplayerButton" to="." method="_on_unavailable_pressed"]
 [connection signal="pressed" from="Center/Content/TechTreeButton" to="." method="_on_unavailable_pressed"]
+[connection signal="pressed" from="Center/Content/ReplayButton" to="." method="_on_replay_pressed"]
 [connection signal="pressed" from="Center/Content/MapEditorButton" to="." method="_on_map_editor_pressed"]
 [connection signal="pressed" from="Center/Content/OptionsButton" to="." method="_on_unavailable_pressed"]
 [connection signal="pressed" from="Center/Content/QuitButton" to="." method="_on_quit_pressed"]

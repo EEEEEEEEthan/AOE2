@@ -9,15 +9,26 @@ public partial class GameBridge : Node
     private const double TickSeconds = 1.0 / 30.0;
     private const int MaxStepsPerFrame = 6;
 
-    private AoeSim.LocalSession? _session;
+    private AoeSim.ILocalSession? _session;
+    private AoeSim.ReplayRecorder? _recorder;
+    private AoeSim.ReplaySession? _replay;
+    private AoeSim.ReplayData? _replayData;
     private AoeSim.DedicatedServer? _dedicated;
     private AoeSim.NavGrid? _grid;
     private AoeSim.TerrainGrid? _terrain;
     private double _accumulator;
     private Godot.Collections.Dictionary? _batch;
     private long _batchTick = long.MinValue;
+    private bool _isReplay;
+    private bool _replayPaused = true;
+    private double _replaySpeed = 1.0;
+    private string _savedReplayPath = "";
 
     public bool HasSession => _session != null;
+
+    public bool IsReplay => _isReplay;
+
+    public string LastReplayError { get; private set; } = "";
 
     public int MyTeam => (int)(_session?.Server.ViewTeam ?? 0);
 
@@ -31,6 +42,7 @@ public partial class GameBridge : Node
 
     public void StartLocalDemo()
     {
+        StopPlayback();
         AoeSim.GameSim sim = AoeSim.DemoScenario.Build();
         _grid = sim.Grid;
         _terrain = sim.Terrain;
@@ -44,18 +56,26 @@ public partial class GameBridge : Node
     public void StartGeneratedMatch(
         long seed = 20261127, int playerCount = 2, AoeSim.MapType mapType = AoeSim.MapType.Arabia)
     {
-        AoeSim.GameSim sim = AoeSim.MapSetup.BuildGeneratedMatch(mapType, seed, playerCount);
+        StopPlayback();
+        AoeSim.MapData map = AoeSim.MapGenerator.Generate(mapType, seed, playerCount);
+        AoeSim.GameSim sim = AoeSim.MapSetup.BuildGeneratedMatch(map, seed, playerCount);
         _grid = sim.Grid;
         _terrain = sim.Terrain;
-        _session = new AoeSim.LocalSession(sim);
+        var session = new AoeSim.LocalSession(sim);
+        _session = session;
         _accumulator = 0.0;
         ResetBatchCache();
+        _recorder = new AoeSim.ReplayRecorder(map, seed, playerCount, sim.Lockstep.TicksPerTurn, sim.Match!.Config);
+        session.Server.Recorder = _recorder;
+        _savedReplayPath = "";
         _session.Step();
+        NoteRecordedTick(sim);
     }
 
     /// <summary>预览/截图专用：把所有建筑类型按双方阵营摆成两排，验收建筑外观。</summary>
     public void StartBuildingShowcase()
     {
+        StopPlayback();
         var grid = new AoeSim.NavGrid(28, 12);
         var terrain = AoeSim.TerrainGrid.Flat(28, 12);
         var sim = new AoeSim.GameSim(grid, 7, 2, 6, AoeSim.MatchConfig.Standard, terrain);
@@ -126,19 +146,235 @@ public partial class GameBridge : Node
         {
             return;
         }
+        if (_isReplay)
+        {
+            if (_replayPaused || _replay == null || _replay.Finished)
+            {
+                return;
+            }
+            _accumulator += delta * _replaySpeed;
+            int replaySteps = 0;
+            while (_accumulator >= TickSeconds && replaySteps < MaxStepsPerFrame && !_replay.Finished)
+            {
+                _replay.Step();
+                _accumulator -= TickSeconds;
+                replaySteps += 1;
+            }
+            return;
+        }
         _accumulator += delta;
         int steps = 0;
         while (_accumulator >= TickSeconds && steps < MaxStepsPerFrame)
         {
-            _session.Step();
+            long checksum = _session.Step();
             _accumulator -= TickSeconds;
             steps += 1;
+            if (_recorder != null)
+            {
+                NoteRecordedTick(_session.Server.Sim, checksum);
+            }
         }
     }
 
-    public long ClientTick() => _session?.Client.Tick ?? -1;
+    private void NoteRecordedTick(AoeSim.GameSim sim) => NoteRecordedTick(sim, sim.World.Checksum());
 
-    public long MatchPhase() => _session?.Client.Latest?.Phase ?? -1;
+    private void NoteRecordedTick(AoeSim.GameSim sim, long checksum) =>
+        _recorder?.NoteTick(sim.World.Tick, checksum);
+
+    private void StopPlayback()
+    {
+        _isReplay = false;
+        _replay = null;
+        _replayData = null;
+        _replayPaused = true;
+        _replaySpeed = 1.0;
+        _recorder = null;
+        _savedReplayPath = "";
+    }
+
+    private static string ReplayDirectory()
+    {
+        string path = Godot.ProjectSettings.GlobalizePath("user://replays");
+        Godot.DirAccess.MakeDirRecursiveAbsolute(path);
+        return path;
+    }
+
+    public Godot.Collections.Array<Godot.Collections.Dictionary> ListReplays()
+    {
+        var result = new Godot.Collections.Array<Godot.Collections.Dictionary>();
+        string directory = ReplayDirectory();
+        if (!Godot.DirAccess.DirExistsAbsolute(directory))
+        {
+            return result;
+        }
+        var entries = new System.Collections.Generic.List<(long created, Godot.Collections.Dictionary item)>();
+        foreach (string file in Godot.DirAccess.GetFilesAt(directory))
+        {
+            if (!file.EndsWith(".aoe2rep", System.StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+            string fullPath = directory.PathJoin(file);
+            try
+            {
+                AoeSim.ReplayData data = AoeSim.ReplayData.Load(fullPath);
+                entries.Add((data.CreatedUnix, new Godot.Collections.Dictionary
+                {
+                    { "path", fullPath },
+                    { "name", data.Name },
+                    { "ticks", data.FinalTick },
+                    { "commands", data.TotalCommands() },
+                    { "created", data.CreatedUnix },
+                    { "ok", true },
+                }));
+            }
+            catch (System.Exception error)
+            {
+                entries.Add((0, new Godot.Collections.Dictionary
+                {
+                    { "path", fullPath },
+                    { "name", file },
+                    { "ticks", 0L },
+                    { "commands", 0L },
+                    { "created", 0L },
+                    { "ok", false },
+                    { "error", error.Message },
+                }));
+            }
+        }
+        entries.Sort((left, right) => right.created.CompareTo(left.created));
+        foreach (var entry in entries)
+        {
+            result.Add(entry.item);
+        }
+        return result;
+    }
+
+    public bool HasRecording => _recorder != null && _recorder.HasData;
+
+    public bool HasSavedReplay => _savedReplayPath.Length > 0;
+
+    /// <summary>把当前对局（到此为止）保存为录像，返回可读路径；失败时 LastReplayError 给出原因。</summary>
+    public string SaveReplay() => SaveReplay("");
+
+    public string SaveReplay(string name)
+    {
+        if (_recorder == null || !_recorder.HasData)
+        {
+            LastReplayError = "当前对局没有可保存的录像数据";
+            return "";
+        }
+        if (_savedReplayPath.Length > 0 && name.Length == 0)
+        {
+            return _savedReplayPath;
+        }
+        try
+        {
+            AoeSim.ReplayData data = _recorder.Build();
+            if (name.Length > 0)
+            {
+                data.Name = name;
+            }
+            string stamp = System.DateTime.Now.ToString("yyyyMMdd_HHmmss_fff");
+            string path = ReplayDirectory().PathJoin($"{stamp}.aoe2rep");
+            data.Save(path);
+            _savedReplayPath = path;
+            LastReplayError = "";
+            return path;
+        }
+        catch (System.Exception error)
+        {
+            LastReplayError = error.Message;
+            return "";
+        }
+    }
+
+    /// <summary>结算时自动落盘一次；已保存过则直接复用同一路径。</summary>
+    public string SaveReplayIfNeeded()
+    {
+        if (_savedReplayPath.Length > 0)
+        {
+            return _savedReplayPath;
+        }
+        return SaveReplay();
+    }
+
+    public bool StartReplay(string path)
+    {
+        StopPlayback();
+        try
+        {
+            AoeSim.ReplayData data = AoeSim.ReplayData.Load(path);
+            var replay = new AoeSim.ReplaySession(data);
+            _replayData = data;
+            _replay = replay;
+            _session = replay;
+            _isReplay = true;
+            _replayPaused = true;
+            _replaySpeed = 1.0;
+            _grid = replay.Server.Sim.Grid;
+            _terrain = replay.Server.Sim.Terrain;
+            replay.Server.ViewTeam = -1;
+            _accumulator = 0.0;
+            ResetBatchCache();
+            LastReplayError = "";
+            return true;
+        }
+        catch (System.Exception error)
+        {
+            LastReplayError = error.Message;
+            return false;
+        }
+    }
+
+    /// <summary>按目标 tick 重建回放并快进：确定性保证寻址后状态一致。</summary>
+    public bool ReplaySeek(long tick)
+    {
+        if (_replayData == null)
+        {
+            return false;
+        }
+        try
+        {
+            var replay = new AoeSim.ReplaySession(_replayData, tick);
+            _replay = replay;
+            _session = replay;
+            replay.Server.ViewTeam = -1;
+            _accumulator = 0.0;
+            ResetBatchCache();
+            return true;
+        }
+        catch (System.Exception error)
+        {
+            LastReplayError = error.Message;
+            return false;
+        }
+    }
+
+    public long ReplayTotalTicks => _replayData?.FinalTick ?? 0;
+
+    public long ReplayTick => _replay?.Server.Sim.World.Tick ?? 0;
+
+    public bool ReplayFinished => _replay == null || _replay.Finished;
+
+    public void SetReplayPaused(bool paused) => _replayPaused = paused;
+
+    public void SetReplaySpeed(double speed) => _replaySpeed = speed <= 0 ? 1.0 : speed;
+
+    public string ReplayChecksumStatus()
+    {
+        if (_replay == null || _replayData == null)
+        {
+            return "无回放";
+        }
+        if (!_replay.Finished)
+        {
+            return "回放中";
+        }
+        return _replay.ChecksumMismatch ? "校验和不一致" : "校验和一致";
+    }
+
+    public long ClientTick() => _session?.Client.Tick ?? -1;    public long MatchPhase() => _session?.Client.Latest?.Phase ?? -1;
 
     public long MatchWinnerTeam() => _session?.Client.Latest?.WinnerTeam ?? -1;
 
@@ -488,7 +724,11 @@ public partial class GameBridge : Node
         }
         for (int tick = 0; tick < maxTicks && !MatchEnded(); tick++)
         {
-            _session.Step();
+            long checksum = _session.Step();
+            if (_recorder != null)
+            {
+                NoteRecordedTick(_session.Server.Sim, checksum);
+            }
         }
     }
 

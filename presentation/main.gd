@@ -89,6 +89,10 @@ func _refresh_result() -> void:
 		%ResultPanel.hide()
 		%SurrenderButton.show()
 		return
+	if not bridge.IsReplay:
+		var saved: String = str(bridge.SaveReplayIfNeeded())
+		if not saved.is_empty() and %SaveReplayButton.text != "本局录像已保存":
+			%SaveReplayButton.text = "本局录像已保存"
 	%ResultPanel.show()
 	%SurrenderButton.hide()
 	%ResultTitle.text = _result_title()
@@ -97,6 +101,16 @@ func _refresh_result() -> void:
 		bridge.MatchEndTick(),
 	]
 	%ResultStats.text = _result_stats()
+
+
+func _on_save_replay_pressed() -> void:
+	var saved: String = str(bridge.SaveReplay())
+	if saved.is_empty():
+		%UnavailableDialog.dialog_text = "保存录像失败：%s" % bridge.LastReplayError
+		%UnavailableDialog.popup_centered()
+		return
+	%SaveReplayButton.text = "本局录像已保存"
+	%NoticeLabel.text = "录像已保存，可在主菜单「观看录像」中重放"
 
 
 func _result_title() -> String:

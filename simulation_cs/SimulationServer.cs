@@ -2,6 +2,12 @@ using System.Collections.Generic;
 
 namespace AoeSim;
 
+/// <summary>录像录制挂钩：服务器在指令通过校验并进入回合队列后回调，越权/被拒指令不会写入。</summary>
+public interface ICommandRecorder
+{
+    void Record(long turn, LockstepCommand command);
+}
+
 /// <summary>
 /// 权威服务器：每 tick 推进模拟，按 <see cref="CommandFrame.Turn"/> 收集各玩家输入，在回合边界统一应用。
 /// 玩家身份由连接层绑定，<see cref="CommandFrame.Player"/> 与指令自报的 Player 都不被信任；
@@ -20,6 +26,9 @@ public sealed class SimulationServer
 
     public GameSim Sim { get; }
     public long ViewTeam { get; set; }
+
+    /// <summary>可选录像录制器：只接收通过归属/回合校验的指令。</summary>
+    public ICommandRecorder? Recorder { get; set; }
 
     public long Turn
     {
@@ -92,6 +101,7 @@ public sealed class SimulationServer
                 {
                     slots[sourcePlayer].Add(command);
                     _acceptedCommands += 1;
+                    Recorder?.Record(target, command);
                 }
                 else
                 {
@@ -118,7 +128,21 @@ public sealed class SimulationServer
                 }
                 SlotsFor(target)[command.Player].Add(command);
                 _acceptedCommands += 1;
+                Recorder?.Record(target, command);
             }
+        }
+    }
+
+    /// <summary>回放专用：把录像里已通过校验的指令直接放进指定回合，不再重复校验。</summary>
+    public void EnqueueReplay(long turn, LockstepCommand command)
+    {
+        lock (_gate)
+        {
+            if (command.Player < 0 || command.Player >= Sim.Lockstep.PlayerCount)
+            {
+                return;
+            }
+            SlotsFor(turn)[command.Player].Add(command);
         }
     }
 
