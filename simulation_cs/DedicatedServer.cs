@@ -10,22 +10,25 @@ public static class NetFrameType
 {
     public const byte Command = 0;
     public const byte Snapshot = 1;
+    public const byte StaticMap = 2;
 }
 
 /// <summary>长度前缀分帧：[type:1][len:4 LE][payload:len]。</summary>
 public static class NetFraming
 {
-    public static void WriteFrame(NetworkStream stream, byte frameType, byte[] payload)
+    public static void WriteFrame(NetworkStream stream, byte frameType, byte[] payload) =>
+        WriteFrame(stream, frameType, payload, payload.Length);
+
+    public static void WriteFrame(NetworkStream stream, byte frameType, byte[] payload, int length)
     {
         byte[] header = new byte[5];
         header[0] = frameType;
-        int length = payload.Length;
         header[1] = (byte)(length & 0xFF);
         header[2] = (byte)((length >> 8) & 0xFF);
         header[3] = (byte)((length >> 16) & 0xFF);
         header[4] = (byte)((length >> 24) & 0xFF);
         stream.Write(header, 0, header.Length);
-        stream.Write(payload, 0, payload.Length);
+        stream.Write(payload, 0, length);
         stream.Flush();
     }
 
@@ -71,6 +74,7 @@ public sealed class DedicatedServer
 {
     private readonly TcpListener _listener;
     private readonly SimulationServer _server;
+    private readonly byte[] _staticMapPayload;
     private readonly int _ticksPerSecond;
     private Thread? _thread;
     private volatile bool _running;
@@ -79,6 +83,7 @@ public sealed class DedicatedServer
     {
         _listener = new TcpListener(IPAddress.Any, port);
         _server = new SimulationServer(sim);
+        _staticMapPayload = StaticMapFrame.FromTerrain(sim.Terrain).Encode();
         _ticksPerSecond = ticksPerSecond;
     }
 
@@ -121,6 +126,8 @@ public sealed class DedicatedServer
 
     private void ServeClient(NetworkStream stream, int tickMilliseconds)
     {
+        // 静态地图只在握手时发一次；之后的快照不再携带地形。
+        NetFraming.WriteFrame(stream, NetFrameType.StaticMap, _staticMapPayload);
         while (_running)
         {
             long deadline = System.Environment.TickCount64 + tickMilliseconds;
@@ -137,7 +144,8 @@ public sealed class DedicatedServer
             }
             _server.Step();
             SnapshotFrame snapshot = _server.Snapshot();
-            NetFraming.WriteFrame(stream, NetFrameType.Snapshot, snapshot.Encode());
+            byte[] snapshotBuffer = snapshot.EncodeToBuffer(out int snapshotLength);
+            NetFraming.WriteFrame(stream, NetFrameType.Snapshot, snapshotBuffer, snapshotLength);
             long remaining = deadline - System.Environment.TickCount64;
             if (remaining > 0)
             {
@@ -180,6 +188,11 @@ public sealed class RemoteClient
         if (!NetFraming.TryReadFrame(_stream, out byte frameType, out byte[] payload))
         {
             return false;
+        }
+        if (frameType == NetFrameType.StaticMap)
+        {
+            State.ApplyStaticMap(payload);
+            return true;
         }
         if (frameType == NetFrameType.Snapshot)
         {

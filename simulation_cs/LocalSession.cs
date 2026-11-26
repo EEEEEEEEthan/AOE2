@@ -10,14 +10,16 @@ public sealed class LocalSession
     {
         Server = new SimulationServer(sim);
         Client = new SimulationClient();
+        Client.ApplyStaticMap(StaticMapFrame.FromTerrain(sim.Terrain));
     }
 
     public void Submit(CommandFrame frame) => Server.Enqueue(frame);
 
+    /// <summary>本机局直接传递不可变快照对象，跳过每帧编解码；编码路径只留给网络。</summary>
     public long Step()
     {
         long checksum = Server.Step();
-        Client.ApplySnapshot(Server.Snapshot().Encode());
+        Client.ApplySnapshot(Server.Snapshot());
         return checksum;
     }
 }

@@ -60,11 +60,80 @@ public partial class SimulationBridge : Node
         AoeSim.GameSim sim = AoeSim.DemoScenario.Build();
         AoeSim.SnapshotFrame snapshot = AoeSim.SnapshotFrame.Build(sim.World, sim.Lockstep.Turn, sim.Match);
         AoeSim.SnapshotFrame decodedSnapshot = AoeSim.SnapshotFrame.Decode(snapshot.Encode());
-        return decodedSnapshot.Tick == snapshot.Tick
-            && decodedSnapshot.Phase == snapshot.Phase
-            && decodedSnapshot.Players.Length == snapshot.Players.Length
-            && decodedSnapshot.Entities.Length == snapshot.Entities.Length
-            && decodedSnapshot.Entities.Length > 0;
+        if (decodedSnapshot.Tick != snapshot.Tick
+            || decodedSnapshot.Phase != snapshot.Phase
+            || decodedSnapshot.Players.Length != snapshot.Players.Length
+            || decodedSnapshot.Entities.Length != snapshot.Entities.Length
+            || decodedSnapshot.Entities.Length == 0)
+        {
+            return false;
+        }
+        if (!StaticMapRoundTrips())
+        {
+            return false;
+        }
+        if (!SnapshotExcludesTerrain())
+        {
+            return false;
+        }
+        return VisionRoundTrips(sim);
+    }
+
+    private static bool SnapshotExcludesTerrain()
+    {
+        var grid = new AoeSim.NavGrid(64, 64);
+        var sim = new AoeSim.GameSim(grid, 7, 1, 6, null, AoeSim.TerrainGrid.Flat(64, 64));
+        sim.SimulateTick();
+        AoeSim.SnapshotFrame snapshot = AoeSim.SnapshotFrame.Build(
+            sim.World, sim.Lockstep.Turn, sim.Match, sim.VisionFor(0), 0);
+        AoeSim.StaticMapFrame map = AoeSim.StaticMapFrame.FromTerrain(sim.Terrain);
+        return map.TerrainTypes.Length == 64 * 64
+            && map.TerrainHeights.Length == 64 * 64
+            && snapshot.Encode().Length < 64 * 64 * 2;
+    }
+
+    private static bool StaticMapRoundTrips()
+    {
+        AoeSim.TerrainGrid terrain = AoeSim.TerrainGrid.Flat(9, 7);
+        terrain.Set(2, 3, AoeSim.TerrainGrid.TypeWater, 4);
+        AoeSim.StaticMapFrame decoded = AoeSim.StaticMapFrame.Decode(
+            AoeSim.StaticMapFrame.FromTerrain(terrain).Encode());
+        if (decoded.Width != 9 || decoded.Height != 7
+            || decoded.TerrainTypes.Length != terrain.Types.Length
+            || decoded.TerrainHeights.Length != terrain.Heights.Length)
+        {
+            return false;
+        }
+        for (int index = 0; index < terrain.Types.Length; index++)
+        {
+            if (decoded.TerrainTypes[index] != terrain.Types[index]
+                || decoded.TerrainHeights[index] != terrain.Heights[index])
+            {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private static bool VisionRoundTrips(AoeSim.GameSim sim)
+    {
+        sim.SimulateTick();
+        AoeSim.SnapshotFrame snapshot = AoeSim.SnapshotFrame.Build(
+            sim.World, sim.Lockstep.Turn, sim.Match, sim.VisionFor(0), 0);
+        AoeSim.SnapshotFrame decoded = AoeSim.SnapshotFrame.Decode(snapshot.Encode());
+        if (decoded.VisionStates.Length != snapshot.VisionStates.Length
+            || decoded.VisionStates.Length == 0)
+        {
+            return false;
+        }
+        for (int index = 0; index < snapshot.VisionStates.Length; index++)
+        {
+            if (decoded.VisionStates[index] != snapshot.VisionStates[index])
+            {
+                return false;
+            }
+        }
+        return true;
     }
 
     public bool ServerClientSelfCheck()
@@ -91,10 +160,12 @@ public partial class SimulationBridge : Node
             }
         }
         bool hasVision = session.Client.Latest != null && session.Client.Latest.VisionStates.Length > 0;
+        bool hasMap = session.Client.Map != null && session.Client.Map.TerrainTypes.Length > 0;
         return clientTick == 30
             && clientEntities == expectedEntities
             && expectedEntities > 0
             && hasVision
+            && hasMap
             && firstChecksum != 0;
     }
 
