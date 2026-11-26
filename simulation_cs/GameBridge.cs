@@ -12,6 +12,7 @@ public partial class GameBridge : Node
     private AoeSim.LocalSession? _session;
     private AoeSim.DedicatedServer? _dedicated;
     private AoeSim.NavGrid? _grid;
+    private AoeSim.TerrainGrid? _terrain;
     private double _accumulator;
 
     public bool HasSession => _session != null;
@@ -25,12 +26,14 @@ public partial class GameBridge : Node
     public void StartLocalMatch()
     {
         _grid = AoeSim.DemoScenario.BuildGrid();
+        _terrain = AoeSim.DemoScenario.BuildTerrain();
     }
 
     public void StartLocalDemo()
     {
         AoeSim.GameSim sim = AoeSim.DemoScenario.Build();
         _grid = sim.Grid;
+        _terrain = sim.Terrain;
         _session = new AoeSim.LocalSession(sim);
         _accumulator = 0.0;
         // 先推一帧快照，保证渲染首帧就有数据。
@@ -161,6 +164,49 @@ public partial class GameBridge : Node
         }
         return blocked;
     }
+
+    public int TerrainWidth => _terrain?.Width ?? 0;
+
+    public int TerrainHeight => _terrain?.Height ?? 0;
+
+    public int[] TerrainTypes()
+    {
+        if (_terrain == null)
+        {
+            return System.Array.Empty<int>();
+        }
+        var types = new int[_terrain.Types.Length];
+        for (int index = 0; index < types.Length; index++)
+        {
+            types[index] = _terrain.Types[index];
+        }
+        return types;
+    }
+
+    public int[] TerrainHeights()
+    {
+        if (_terrain == null)
+        {
+            return System.Array.Empty<int>();
+        }
+        var heights = new int[_terrain.Heights.Length];
+        for (int index = 0; index < heights.Length; index++)
+        {
+            heights[index] = _terrain.Heights[index];
+        }
+        return heights;
+    }
+
+    public int TerrainLayerAt(int tileX, int tileY)
+    {
+        if (_terrain == null)
+        {
+            return 0;
+        }
+        return _terrain.HeightAt(tileX, tileY);
+    }
+
+    public string DemoMapJson() => AoeSim.DemoScenario.BuildMap().ToJson();
 
     public Godot.Collections.Array<Godot.Collections.Dictionary> Snapshot()
     {

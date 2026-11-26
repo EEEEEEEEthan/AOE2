@@ -26,6 +26,7 @@ public static class KernelSelfTest
         CheckLockstep(failures);
         CheckVision(failures);
         CheckTech(failures);
+        CheckTerrain(failures);
         return failures;
     }
 
@@ -924,6 +925,58 @@ public static class KernelSelfTest
         Expect(failures,
             TechProgressionChecksum(true) != TechProgressionChecksum(false),
             "tech progression participates in checksum");
+    }
+
+    private static void CheckTerrain(List<string> failures)
+    {
+        var terrain = new TerrainGrid(8, 8);
+        Expect(failures, terrain.CanTraverse(2, 3, 3, 3), "flat terrain traversable");
+        terrain.SetHeight(3, 3, 1);
+        Expect(failures, terrain.CanTraverse(2, 3, 3, 3), "one level step traversable");
+        terrain.SetHeight(3, 3, 2);
+        Expect(failures, !terrain.CanTraverse(2, 3, 3, 3), "cliff height difference blocks");
+        terrain.Set(4, 4, TerrainGrid.TypeWater, 0);
+        Expect(failures, !terrain.CanTraverse(4, 3, 4, 4), "water blocks traversal");
+        terrain.Set(5, 4, TerrainGrid.TypeCliff, 0);
+        Expect(failures, !terrain.CanTraverse(4, 4, 5, 4), "cliff type blocks traversal");
+        Expect(failures, terrain.Checksum() == terrain.Clone().Checksum(), "terrain checksum clone stable");
+
+        var nav = new NavGrid(8, 8);
+        var wall = new TerrainGrid(8, 8);
+        for (int y = 0; y < 8; y++)
+        {
+            wall.Set(3, y, TerrainGrid.TypeGrass, 3);
+        }
+        var field = new FlowField(nav, wall);
+        Expect(failures,
+            field.Compute(nav, 6, 3) && !field.Reachable(1, 3),
+            "flow field respects cliff wall");
+        var flatField = new FlowField(nav, TerrainGrid.Flat(8, 8));
+        Expect(failures, flatField.Compute(nav, 6, 3) && flatField.Reachable(1, 3),
+            "flat terrain leaves flow field open");
+
+        var sim = new GameSim(new NavGrid(8, 8), 9, 1, 6, null, wall);
+        long id = sim.SpawnUnit(1, 4, 0, 10, 0, 0.0, 0.0, 0.5);
+        sim.IssueMove(id, 6, 4);
+        for (int tick = 0; tick < 40; tick++)
+        {
+            sim.SimulateTick();
+        }
+        int cellX = (int)Fixed.ToInt(sim.World.GetValue(
+            id, SimComponents.Position, SimComponents.X));
+        Expect(failures, cellX < 3, "unit cannot path across cliff wall");
+
+        var map = new MapData("test", 5, wall.Clone(), nav.Clone());
+        MapData restored = MapData.FromJson(map.ToJson());
+        Expect(failures,
+            restored.Width == 8
+            && restored.Height == 8
+            && restored.Terrain.HeightAt(3, 3) == 3
+            && restored.Nav.Width == 8,
+            "map json roundtrip keeps terrain and nav");
+        Expect(failures,
+            restored.Terrain.Checksum() == wall.Checksum(),
+            "map json roundtrip keeps terrain checksum");
     }
 
     private static long ToRangeCellsForTest(double tiles) =>

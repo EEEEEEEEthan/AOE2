@@ -38,6 +38,16 @@
 - 视野随 `SnapshotFrame` 下发：快照按观察者玩家裁剪实体（己方恒见、中立与静态建筑按已探索、敌方单位仅当前可见），并附带整张可视性位图。
 - 表现层 `WorldView` 依据位图渲染迷雾（未探索黑 / 已探索灰 / 可见透明）并隐藏未探索地形；`GameBridge` 只暴露解码后的客户端快照。`KernelSelfTest` 覆盖揭示、离开转已探索、双玩家独立、快照裁剪与确定性。
 
+## 体素地形与单位
+
+- 1 格 = 1 Godot 单位；取 4px 为 1 体素，即每格 8×8 体素，高度层 `1/8` 单位。普通地面可 0～2 层起伏，悬崖落差可达 8 层。
+- `TerrainGrid`（`simulation_cs/TerrainGrid.cs`）逐格存类型（草地/泥土/水/崖）与 uint8 高度层，**与 `NavGrid` 完全独立**：NavGrid 继续只描述建筑 footprint 与障碍，地形高度不写进去，避免与 AOE-5 冲突。
+- 寻路接高度差：`FlowField` 与 `MovementSystem` 通过 `TerrainGrid.CanTraverse` 判定，高度差超过 1 层、水或崖面不可通行，悬崖上下自然不通。
+- 地图格式由 `MapData`（`simulation_cs/MapData.cs`）组合 TerrainGrid 与 NavGrid；`maps/voxel_demo.json` 是示例，行优先扁平数组 `types` / `heights` / `blocked`。
+- 表现层（`presentation/world_view.gd`）按高度场生成体素地形，`presentation/voxel_mesher.gd` 用贪心合并（greedy meshing）并只用顶点色；地形剔除下方面，单位保留全部六面（倒地时可看到底面）。
+- 自建体素模型在 `assets/vox/`（`.vox`），由 `tools/make_vox_models.py` 生成；`presentation/vox_model.gd` 解析 RIFF 的 `SIZE/XYZI/RGBA`，调色板索引 1 作阵营色。
+- 原作素材放在项目点开头的 `.reference/` 目录，**正常提交入库**（不加入 `.gitignore`），用于对照制作体素模型。
+
 ## 对局与胜负
 
 `MatchState` / `PlayerState` 与其它状态一样存放在 ECS 世界里，随校验和与快照一起推进，表现层只经快照读取：
@@ -68,3 +78,4 @@ dotnet build AOE2Framework.sln           # 单独编译 C# 内核
 - [x] 迁移：切 Godot .NET 版、模拟内核移植 C#、服务器权威拆分（dedicated server + 协议 + 快照渲染 + 本地局本机服务器）
 - [x] 对局流程：`MatchState`/`PlayerState`、可配置胜负条件、每 tick 确定性结算与结算界面
 - [x] 战争迷雾与视野：C# 视距网格、快照按玩家裁剪、瘦客户端迷雾渲染
+- [x] 体素地形与单位：TerrainGrid/MapData、高度差寻路、贪心合并体素渲染与自建 `.vox` 资产

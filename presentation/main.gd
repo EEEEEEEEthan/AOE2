@@ -30,7 +30,7 @@ func _ready() -> void:
 		bridge.StartDedicatedServer(_server_port())
 		return
 	_start_session()
-	%WorldView.build_terrain(bridge.GridWidth, bridge.GridHeight, bridge.GridBlocked())
+	%WorldView.build_terrain(bridge)
 	%WorldView.refresh(bridge)
 
 
