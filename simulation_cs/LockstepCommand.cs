@@ -7,6 +7,10 @@ public sealed class LockstepCommand
     public const long KindStop = 2;
     public const long KindGather = 3;
     public const long KindSurrender = 4;
+    public const long KindHeal = 5;
+    public const long KindConvert = 6;
+    public const long KindPickupRelic = 7;
+    public const long KindDepositRelic = 8;
 
     public long Player { get; set; }
     public long Kind { get; set; }

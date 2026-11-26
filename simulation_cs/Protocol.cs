@@ -10,6 +10,9 @@ public static class EntityKind
     public const long ResourceNode = 2;
     public const long DropSite = 3;
     public const long Inventory = 4;
+    public const long Monk = 5;
+    public const long Relic = 6;
+    public const long RelicSlot = 7;
 }
 
 public readonly struct EntitySnapshot
@@ -117,6 +120,18 @@ public sealed class SnapshotFrame
         if (world.HasComponent(id, SimComponents.Gather))
         {
             return EntityKind.Villager;
+        }
+        if (world.HasComponent(id, SimComponents.Monk))
+        {
+            return EntityKind.Monk;
+        }
+        if (world.HasComponent(id, SimComponents.Relic))
+        {
+            return EntityKind.Relic;
+        }
+        if (world.HasComponent(id, SimComponents.RelicSlot))
+        {
+            return EntityKind.RelicSlot;
         }
         if (world.HasComponent(id, SimComponents.Combat))
         {
