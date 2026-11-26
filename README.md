@@ -44,7 +44,7 @@
 
 - 1 格 = 1 Godot 单位 = 8×8 体素（1 体素 = 1/8 单位），高度层 `1/8` 单位。普通地面可 0～2 层起伏，悬崖落差可达 8 层。地图编辑器笔刷、网格拾取、坐标换算一律以「格」为单位。
 - `TerrainGrid`（`simulation_cs/TerrainGrid.cs`）逐格存类型（草地/泥土/水/崖）与 uint8 高度层，**与 `NavGrid` 完全独立**：NavGrid 继续只描述建筑 footprint 与障碍，地形高度不写进去，避免与 AOE-5 冲突。
-- 寻路接高度差：`FlowField` 与 `MovementSystem` 通过 `TerrainGrid.CanTraverse` 判定，高度差超过 1 层、水或崖面不可通行，悬崖上下自然不通。
+- 寻路与建造只看地形类型与障碍：`FlowField` 与 `MovementSystem` 通过 `TerrainGrid.CanTraverse` 只按水/崖与越界判定，高度差不再阻断通行；`BuildingSystem.CanPlace` 同样不要求占地高度一致，可在缓坡上建造。高度仅作表现，与复刻原作一致。需要阻断的地形应标记为悬崖类型，而不是靠抬高草地形成隐形墙。
 - 地图格式由 `MapData`（`simulation_cs/MapData.cs`）组合 TerrainGrid 与 NavGrid；`maps/voxel_demo.json` 是示例，行优先扁平数组 `types` / `heights` / `blocked`，另有可选的 `placements`（出生点/资源点/建筑）。
 - 表现层（`presentation/world_view.gd`）按高度场生成体素地形，`presentation/voxel_mesher.gd` 用贪心合并（greedy meshing）并只用顶点色；地形剔除下方面，单位保留全部六面（倒地时可看到底面）。
 - 自建体素模型在 `assets/vox/`（`.vox`），由 `tools/make_vox_models.py` 生成；`presentation/vox_model.gd` 解析 RIFF 的 `SIZE/XYZI/RGBA`，调色板索引 1 作阵营色。
@@ -97,6 +97,6 @@ dotnet build AOE2Framework.sln           # 单独编译 C# 内核
 - [x] 迁移：切 Godot .NET 版、模拟内核移植 C#、服务器权威拆分（dedicated server + 协议 + 快照渲染 + 本地局本机服务器）
 - [x] 对局流程：`MatchState`/`PlayerState`、可配置胜负条件、每 tick 确定性结算与结算界面
 - [x] 战争迷雾与视野：C# 视距网格、快照按玩家裁剪、瘦客户端迷雾渲染
-- [x] 体素地形与单位：TerrainGrid/MapData、高度差寻路、贪心合并体素渲染与自建 `.vox` 资产
+- [x] 体素地形与单位：TerrainGrid/MapData、纯类型寻路（高度只作表现）、贪心合并体素渲染与自建 `.vox` 资产
 - [x] 地图编辑器：高度/地形/悬崖笔刷、出生点与资源放置、撤销重做、MapData 存读与连通校验
 - [x] 地图生成与起始资源：确定性阿拉伯生成器、镜像起始资源、TC/村民/资源点落地与自测

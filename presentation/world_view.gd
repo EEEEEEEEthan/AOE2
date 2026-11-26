@@ -245,10 +245,10 @@ func _show_building_model(building: Node3D, entity: Dictionary, path: String) ->
 		visual.mesh = model["mesh"]
 		visual.position = model["offset"]
 		visual.set_meta("vox_key", key)
-	# 模型几何中心落在 footprint 中心，底面贴地。
+	# 模型几何中心落在 footprint 中心，底面贴地；多格建筑取占地最高格避免陷入坡面。
 	building.position = Vector3(
 		entity["x"] - 0.5 + size_w * 0.5,
-		_ground_level(entity["x"], entity["y"]),
+		_ground_level_rect(entity["x"], entity["y"], size_w, size_h),
 		entity["y"] - 0.5 + size_h * 0.5)
 
 
@@ -271,7 +271,7 @@ func _show_building_block(building: Node3D, entity: Dictionary, state: int) -> v
 		visual.set_meta("vox_key", key)
 	building.position = Vector3(
 		entity["x"] - 0.5,
-		_ground_level(entity["x"], entity["y"]),
+		_ground_level_rect(entity["x"], entity["y"], size_w, size_h),
 		entity["y"] - 0.5)
 
 
@@ -335,6 +335,16 @@ func _ground_level(tile_x: float, tile_y: float) -> float:
 	if index >= _terrain_levels.size():
 		return 0.0
 	return _terrain_levels[index] * TERRAIN_LAYER
+
+
+func _ground_level_rect(tile_x: float, tile_y: float, size_w: int, size_h: int) -> float:
+	var x := int(floor(tile_x))
+	var y := int(floor(tile_y))
+	var level := 0
+	for cell_y in size_h:
+		for cell_x in size_w:
+			level = maxi(level, _height_at(x + cell_x, y + cell_y))
+	return level * TERRAIN_LAYER
 
 
 func _color_for(kind: int, team: int, node_type: int) -> Color:

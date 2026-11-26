@@ -21,8 +21,6 @@ public static class BuildingSystem
         }
         int sizeWidth = BuildingTypes.SizeWidth(type);
         int sizeHeight = BuildingTypes.SizeHeight(type);
-        byte baseHeight = 0;
-        bool hasHeight = false;
         for (int cellY = originY; cellY < originY + sizeHeight; cellY++)
         {
             for (int cellX = originX; cellX < originX + sizeWidth; cellX++)
@@ -36,16 +34,6 @@ public static class BuildingSystem
                     return false;
                 }
                 if (!IsBuildableGround(terrain, cellX, cellY))
-                {
-                    return false;
-                }
-                byte height = terrain.HeightAt(cellX, cellY);
-                if (!hasHeight)
-                {
-                    baseHeight = height;
-                    hasHeight = true;
-                }
-                else if (height != baseHeight)
                 {
                     return false;
                 }
