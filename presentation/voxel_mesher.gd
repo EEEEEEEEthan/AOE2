@@ -13,41 +13,120 @@ const FACE_DIRS := [
 ]
 
 
-## 由共享顶点高度场生成地形顶面：每格四角取各自顶点高度，逐格拼四边形。
-## 相邻格共享边顶点，表面连续；陡坡表现为接近垂直的格子面，无需额外侧墙。
+## 由共享顶点高度场生成实心台地地形：每格顶面取四角最高点，向低邻格与地图边界补竖直侧壁。
+## 陡坡因此呈现近垂直悬崖而非缓坡；地图边界有厚度，斜视角下地形是实体。
+## cell_drops 按格下沉层数（水格传 1），仅表现层，不影响模拟。
 static func heightfield_mesh(
 	vertex_heights: PackedInt32Array,
 	width: int,
 	height: int,
 	layer: float,
-	cell_colors: PackedColorArray) -> ArrayMesh:
-	var st := SurfaceTool.new()
-	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	cell_colors: PackedColorArray,
+	cell_side_colors: PackedColorArray,
+	cell_drops: PackedInt32Array) -> ArrayMesh:
 	var stride := width + 1
+	var cells := width * height
+	var tops := PackedInt32Array()
+	tops.resize(cells)
+	var lowest := 0
 	for cell_y in height:
 		for cell_x in width:
 			var base := cell_y * stride + cell_x
-			var p00 := Vector3(cell_x, vertex_heights[base] * layer, cell_y)
-			var p10 := Vector3(cell_x + 1, vertex_heights[base + 1] * layer, cell_y)
-			var p01 := Vector3(cell_x, vertex_heights[base + stride] * layer, cell_y + 1)
-			var p11 := Vector3(
-				cell_x + 1, vertex_heights[base + stride + 1] * layer, cell_y + 1)
-			var normal := _surface_normal(p00, p10, p01)
-			var color: Color = cell_colors[cell_y * width + cell_x]
-			_vertex(st, p00, normal, color)
-			_vertex(st, p01, normal, color)
-			_vertex(st, p11, normal, color)
-			_vertex(st, p00, normal, color)
-			_vertex(st, p11, normal, color)
-			_vertex(st, p10, normal, color)
+			var top := maxi(
+				maxi(vertex_heights[base], vertex_heights[base + 1]),
+				maxi(vertex_heights[base + stride], vertex_heights[base + stride + 1]))
+			var cell := cell_y * width + cell_x
+			top -= cell_drops[cell]
+			tops[cell] = top
+			lowest = mini(lowest, top)
+	var bottom := (lowest - 1) * layer
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	for cell_y in height:
+		for cell_x in width:
+			var cell := cell_y * width + cell_x
+			_emit_cell(st, cell_x, cell_y, tops[cell] * layer, bottom,
+				cell_colors[cell], cell_side_colors[cell], tops, width, height, layer)
 	return st.commit()
 
 
-static func _surface_normal(p00: Vector3, p10: Vector3, p01: Vector3) -> Vector3:
-	var normal := (p10 - p00).cross(p01 - p00)
-	if normal.length_squared() < 0.000001:
-		return Vector3.UP
-	return normal.normalized()
+static func _emit_cell(
+	st: SurfaceTool,
+	cell_x: int,
+	cell_y: int,
+	top_y: float,
+	bottom_y: float,
+	top_color: Color,
+	side_color: Color,
+	tops: PackedInt32Array,
+	width: int,
+	height: int,
+	layer: float) -> void:
+	var x0 := float(cell_x)
+	var x1 := float(cell_x + 1)
+	var z0 := float(cell_y)
+	var z1 := float(cell_y + 1)
+	_vertex(st, Vector3(x0, top_y, z0), Vector3.UP, top_color)
+	_vertex(st, Vector3(x0, top_y, z1), Vector3.UP, top_color)
+	_vertex(st, Vector3(x1, top_y, z1), Vector3.UP, top_color)
+	_vertex(st, Vector3(x0, top_y, z0), Vector3.UP, top_color)
+	_vertex(st, Vector3(x1, top_y, z1), Vector3.UP, top_color)
+	_vertex(st, Vector3(x1, top_y, z0), Vector3.UP, top_color)
+	_emit_neighbor_wall(st, tops, width, height, layer, cell_x - 1, cell_y,
+		Vector3(x0, 0.0, z1), Vector3(x0, 0.0, z0), Vector3.LEFT,
+		top_y, bottom_y, side_color)
+	_emit_neighbor_wall(st, tops, width, height, layer, cell_x + 1, cell_y,
+		Vector3(x1, 0.0, z0), Vector3(x1, 0.0, z1), Vector3.RIGHT,
+		top_y, bottom_y, side_color)
+	_emit_neighbor_wall(st, tops, width, height, layer, cell_x, cell_y - 1,
+		Vector3(x0, 0.0, z0), Vector3(x1, 0.0, z0), Vector3.FORWARD,
+		top_y, bottom_y, side_color)
+	_emit_neighbor_wall(st, tops, width, height, layer, cell_x, cell_y + 1,
+		Vector3(x1, 0.0, z1), Vector3(x0, 0.0, z1), Vector3.BACK,
+		top_y, bottom_y, side_color)
+
+
+static func _emit_neighbor_wall(
+	st: SurfaceTool,
+	tops: PackedInt32Array,
+	width: int,
+	height: int,
+	layer: float,
+	neighbor_x: int,
+	neighbor_y: int,
+	from: Vector3,
+	to: Vector3,
+	normal: Vector3,
+	top_y: float,
+	bottom_y: float,
+	color: Color) -> void:
+	var face_bottom := bottom_y
+	if (neighbor_x >= 0 and neighbor_y >= 0
+			and neighbor_x < width and neighbor_y < height):
+		face_bottom = tops[neighbor_y * width + neighbor_x] * layer
+	_emit_wall(st, from, to, top_y, face_bottom, normal, color)
+
+
+static func _emit_wall(
+	st: SurfaceTool,
+	from: Vector3,
+	to: Vector3,
+	top_y: float,
+	bottom_y: float,
+	normal: Vector3,
+	color: Color) -> void:
+	if bottom_y >= top_y:
+		return
+	var a := Vector3(from.x, top_y, from.z)
+	var b := Vector3(to.x, top_y, to.z)
+	var c := Vector3(to.x, bottom_y, to.z)
+	var d := Vector3(from.x, bottom_y, from.z)
+	_vertex(st, a, normal, color)
+	_vertex(st, b, normal, color)
+	_vertex(st, c, normal, color)
+	_vertex(st, a, normal, color)
+	_vertex(st, c, normal, color)
+	_vertex(st, d, normal, color)
 
 
 static func greedy_mesh(voxels: Dictionary, scale: Vector3, skip_bottom: bool) -> ArrayMesh:

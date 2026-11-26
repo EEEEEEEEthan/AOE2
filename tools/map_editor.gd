@@ -204,9 +204,16 @@ func _mark_dirty() -> void:
 func _rebuild_terrain() -> void:
 	var cells := _model.width * _model.height
 	var cell_colors := PackedColorArray()
+	var cell_side_colors := PackedColorArray()
+	var cell_drops := PackedInt32Array()
 	cell_colors.resize(cells)
+	cell_side_colors.resize(cells)
+	cell_drops.resize(cells)
 	for index in cells:
-		cell_colors[index] = _terrain_color(_model.types[index], true)
+		var type: int = _model.types[index]
+		cell_colors[index] = _terrain_color(type, true)
+		cell_side_colors[index] = _terrain_color(type, false)
+		cell_drops[index] = 1 if type == MapEditorModel.TYPE_WATER else 0
 	if _terrain_mesh == null:
 		_terrain_mesh = MeshInstance3D.new()
 		_terrain_mesh.name = "VoxelTerrain"
@@ -214,7 +221,8 @@ func _rebuild_terrain() -> void:
 		_terrain_mesh.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
 		%TerrainRoot.add_child(_terrain_mesh)
 	_terrain_mesh.mesh = VOXEL_MESHER.heightfield_mesh(
-		_model.vertex_heights, _model.width, _model.height, TERRAIN_LAYER, cell_colors)
+		_model.vertex_heights, _model.width, _model.height, TERRAIN_LAYER,
+		cell_colors, cell_side_colors, cell_drops)
 
 
 func _rebuild_markers() -> void:

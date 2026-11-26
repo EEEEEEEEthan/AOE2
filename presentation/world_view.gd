@@ -90,7 +90,11 @@ func build_terrain(bridge: GameBridge) -> void:
 	var stride := _terrain_width + 1
 	var cells := _terrain_width * _terrain_height
 	var cell_colors := PackedColorArray()
+	var cell_side_colors := PackedColorArray()
+	var cell_drops := PackedInt32Array()
 	cell_colors.resize(cells)
+	cell_side_colors.resize(cells)
+	cell_drops.resize(cells)
 	_terrain_levels.resize(cells)
 	for tile_y in _terrain_height:
 		for tile_x in _terrain_width:
@@ -99,10 +103,15 @@ func build_terrain(bridge: GameBridge) -> void:
 			var level := maxi(
 				maxi(vertex_heights[base], vertex_heights[base + 1]),
 				maxi(vertex_heights[base + stride], vertex_heights[base + stride + 1]))
-			_terrain_levels[index] = level
+			var is_water: bool = types[index] == 2
+			var drop := 1 if is_water else 0
+			_terrain_levels[index] = level - drop
 			cell_colors[index] = _terrain_color(types[index], true)
+			cell_side_colors[index] = _terrain_color(types[index], false)
+			cell_drops[index] = drop
 	var mesh: ArrayMesh = VOXEL_MESHER.heightfield_mesh(
-		vertex_heights, _terrain_width, _terrain_height, TERRAIN_LAYER, cell_colors)
+		vertex_heights, _terrain_width, _terrain_height, TERRAIN_LAYER,
+		cell_colors, cell_side_colors, cell_drops)
 	var terrain := MeshInstance3D.new()
 	terrain.name = "VoxelTerrain"
 	terrain.mesh = mesh
