@@ -1,13 +1,12 @@
 using System.Collections.Generic;
 using AoeSim;
-using Godot;
 
 namespace AOE2Framework;
 
-/// <summary>胜负条件与对局流程的语义断言；返回空数组表示全过。</summary>
+/// <summary>胜负条件与对局流程的语义断言；返回空列表表示全过。</summary>
 public static class MatchSelfTest
 {
-    public static Godot.Collections.Array<string> Run()
+    public static List<string> Run()
     {
         var failures = new List<string>();
         CheckPhases(failures);
@@ -19,12 +18,7 @@ public static class MatchSelfTest
         CheckSurrender(failures);
         CheckDraw(failures);
         CheckDeterminism(failures);
-        var result = new Godot.Collections.Array<string>();
-        foreach (string failure in failures)
-        {
-            result.Add(failure);
-        }
-        return result;
+        return failures;
     }
 
     private static void Expect(List<string> failures, bool condition, string message)
@@ -46,8 +40,8 @@ public static class MatchSelfTest
     private static void CheckPhases(List<string> failures)
     {
         var sim = new GameSim(new NavGrid(16, 16), 1, 2, 6, RulesOnly(VictoryCondition.Conquest));
-        sim.SpawnUnit(1, 1, 0, 50, 0, 0.0, 0.0);
-        sim.SpawnUnit(14, 14, 1, 50, 0, 0.0, 0.0);
+        sim.SpawnUnit(1, 1, 0, 50, 0, 0.0, 0.0, 0.0);
+        sim.SpawnUnit(14, 14, 1, 50, 0, 0.0, 0.0, 0.0);
         Expect(failures, sim.Match != null && sim.Match.Phase == MatchState.PhaseSetup, "match starts in setup phase");
         sim.SimulateTick();
         Expect(failures, sim.Match != null && sim.Match.Phase == MatchState.PhaseRunning, "match enters running on first tick");
@@ -57,8 +51,8 @@ public static class MatchSelfTest
     private static void CheckConquest(List<string> failures)
     {
         var sim = new GameSim(new NavGrid(16, 16), 2, 2, 6, RulesOnly(VictoryCondition.Conquest));
-        sim.SpawnUnit(5, 5, 0, 100, 20, 1.5, 0.0);
-        sim.SpawnUnit(6, 5, 1, 10, 0, 1.5, 0.0);
+        sim.SpawnUnit(5, 5, 0, 100, 20, 1.0, 2.0, 0.0);
+        sim.SpawnUnit(6, 5, 1, 10, 0, 1.0, 2.0, 0.0);
         for (int tick = 0; tick < 10; tick++)
         {
             sim.SimulateTick();
@@ -73,9 +67,9 @@ public static class MatchSelfTest
     private static void CheckRegicide(List<string> failures)
     {
         var sim = new GameSim(new NavGrid(16, 16), 3, 2, 6, RulesOnly(VictoryCondition.Regicide));
-        sim.SpawnUnit(4, 5, 0, 100, 20, 2.0, 0.0);
-        sim.SpawnKing(5, 5, 1, 10, 0, 0.0, 0.0);
-        sim.SpawnUnit(12, 12, 1, 100, 0, 0.0, 0.0);
+        sim.SpawnUnit(4, 5, 0, 100, 20, 1.0, 2.0, 0.0);
+        sim.SpawnKing(5, 5, 1, 10, 0, 0.0, 0.0, 0.0);
+        sim.SpawnUnit(12, 12, 1, 100, 0, 0.0, 0.0, 0.0);
         for (int tick = 0; tick < 10; tick++)
         {
             sim.SimulateTick();
@@ -93,7 +87,7 @@ public static class MatchSelfTest
         var sim = new GameSim(new NavGrid(16, 16), 4, 2, 6, RulesOnly(VictoryCondition.Wonder, holdTicks: 5));
         long wonder = sim.SpawnWonder(3, 3, 0, 100);
         sim.CompleteWonder(wonder);
-        sim.SpawnUnit(12, 12, 1, 100, 0, 0.0, 0.0);
+        sim.SpawnUnit(12, 12, 1, 100, 0, 0.0, 0.0, 0.0);
         for (int tick = 0; tick < 8; tick++)
         {
             sim.SimulateTick();
@@ -106,8 +100,8 @@ public static class MatchSelfTest
     private static void CheckRelic(List<string> failures)
     {
         var sim = new GameSim(new NavGrid(16, 16), 5, 2, 6, RulesOnly(VictoryCondition.Relic, holdTicks: 5));
-        sim.SpawnUnit(1, 1, 0, 100, 0, 0.0, 0.0);
-        sim.SpawnUnit(12, 12, 1, 100, 0, 0.0, 0.0);
+        sim.SpawnUnit(1, 1, 0, 100, 0, 0.0, 0.0, 0.0);
+        sim.SpawnUnit(12, 12, 1, 100, 0, 0.0, 0.0, 0.0);
         long firstRelic = sim.SpawnRelic(7, 7);
         long secondRelic = sim.SpawnRelic(8, 8);
         sim.SetRelicHolder(firstRelic, 0);
@@ -124,8 +118,8 @@ public static class MatchSelfTest
     private static void CheckScore(List<string> failures)
     {
         var sim = new GameSim(new NavGrid(16, 16), 6, 2, 6, RulesOnly(VictoryCondition.Score, scoreLimit: 5));
-        sim.SpawnUnit(1, 1, 0, 100, 0, 0.0, 0.0);
-        sim.SpawnUnit(12, 12, 1, 100, 0, 0.0, 0.0);
+        sim.SpawnUnit(1, 1, 0, 100, 0, 0.0, 0.0, 0.0);
+        sim.SpawnUnit(12, 12, 1, 100, 0, 0.0, 0.0, 0.0);
         sim.AddResource(0, GameSim.ResourceWood, 100);
         for (int tick = 0; tick < 8; tick++)
         {
@@ -139,8 +133,8 @@ public static class MatchSelfTest
     private static void CheckSurrender(List<string> failures)
     {
         var sim = new GameSim(new NavGrid(16, 16), 7, 2, 6, RulesOnly(VictoryCondition.Conquest));
-        sim.SpawnUnit(1, 1, 0, 100, 0, 0.0, 0.0);
-        sim.SpawnUnit(12, 12, 1, 100, 0, 0.0, 0.0);
+        sim.SpawnUnit(1, 1, 0, 100, 0, 0.0, 0.0, 0.0);
+        sim.SpawnUnit(12, 12, 1, 100, 0, 0.0, 0.0, 0.0);
         sim.Surrender(1);
         sim.SimulateTick();
         Expect(failures, sim.Match != null && sim.Match.Ended, "surrender ends match");
@@ -185,9 +179,9 @@ public static class MatchSelfTest
             2,
             6,
             new MatchConfig { Rules = VictoryCondition.Conquest | VictoryCondition.Regicide });
-        sim.SpawnUnit(4, 5, 0, 50, 7, 1.5, 0.1);
-        sim.SpawnKing(5, 5, 1, 10, 7, 1.5, 0.1);
-        sim.SpawnUnit(12, 12, 1, 50, 7, 1.5, 0.1);
+        sim.SpawnUnit(4, 5, 0, 50, 7, 1.0, 2.0, 0.1);
+        sim.SpawnKing(5, 5, 1, 10, 7, 1.0, 2.0, 0.1);
+        sim.SpawnUnit(12, 12, 1, 50, 7, 1.0, 2.0, 0.1);
         return sim;
     }
 }

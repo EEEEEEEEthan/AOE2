@@ -1,13 +1,12 @@
 using System.Collections.Generic;
 using AoeSim;
-using Godot;
 
 namespace AOE2Framework;
 
-/// <summary>把原 GDScript 用例的语义断言移植到 C# 内核；返回空数组表示全过。</summary>
+/// <summary>把原 GDScript 用例的语义断言移植到 C# 内核；返回空列表表示全过。</summary>
 public static class KernelSelfTest
 {
-    public static Godot.Collections.Array<string> Run()
+    public static List<string> Run()
     {
         var failures = new List<string>();
         CheckFixed(failures);
@@ -15,17 +14,15 @@ public static class KernelSelfTest
         CheckEcs(failures);
         CheckPathfinding(failures);
         CheckCombat(failures);
+        CheckOccupancy(failures);
+        CheckGridRange(failures);
+        CheckProjectile(failures);
         CheckAttack(failures);
         CheckGather(failures);
         CheckMonk(failures);
         CheckRelic(failures);
         CheckLockstep(failures);
-        var result = new Godot.Collections.Array<string>();
-        foreach (string failure in failures)
-        {
-            result.Add(failure);
-        }
-        return result;
+        return failures;
     }
 
     private static void Expect(List<string> failures, bool condition, string message)
@@ -151,7 +148,7 @@ public static class KernelSelfTest
             }
         }
         var sim = new GameSim(walled, 12);
-        long id = sim.SpawnUnit(2, 8, 0, 50, 0, 0.0, 0.6);
+        long id = sim.SpawnUnit(2, 8, 0, 50, 0, 0.0, 0.0, 0.6);
         sim.IssueMove(id, 13, 8);
         for (int tick = 0; tick < 300; tick++)
         {
@@ -166,8 +163,8 @@ public static class KernelSelfTest
     private static void CheckCombat(List<string> failures)
     {
         var sim = new GameSim(new NavGrid(12, 12), 21);
-        long attacker = sim.SpawnUnit(5, 5, 0, 100, 10, 1.2, 0.0);
-        long victim = sim.SpawnUnit(6, 5, 1, 30, 10, 1.2, 0.0);
+        long attacker = sim.SpawnUnit(5, 5, 0, 100, 10, 1.0, 1.0, 0.0);
+        long victim = sim.SpawnUnit(6, 5, 1, 30, 10, 1.0, 1.0, 0.0);
         for (int tick = 0; tick < 40; tick++)
         {
             sim.SimulateTick();
@@ -175,8 +172,8 @@ public static class KernelSelfTest
         Expect(failures, sim.World.IsAlive(attacker) && !sim.World.IsAlive(victim), "combat enemy dies");
 
         var friendly = new GameSim(new NavGrid(12, 12), 22);
-        friendly.SpawnUnit(5, 5, 0, 40, 10, 1.2, 0.0);
-        friendly.SpawnUnit(6, 5, 0, 40, 10, 1.2, 0.0);
+        friendly.SpawnUnit(5, 5, 0, 40, 10, 1.0, 1.0, 0.0);
+        friendly.SpawnUnit(6, 5, 0, 40, 10, 1.0, 1.0, 0.0);
         for (int tick = 0; tick < 40; tick++)
         {
             friendly.SimulateTick();
@@ -192,11 +189,76 @@ public static class KernelSelfTest
         Expect(failures, aliveCount == 2, "combat friendly fire disabled");
     }
 
+    private static void CheckOccupancy(List<string> failures)
+    {
+        var sim = new GameSim(new NavGrid(12, 12), 61);
+        long follower = sim.SpawnUnit(2, 5, 0, 40, 0, 0.0, 0.0, 0.4);
+        long leader = sim.SpawnUnit(3, 5, 0, 40, 0, 0.0, 0.0, 0.4);
+        sim.IssueMove(follower, 8, 5);
+        sim.IssueMove(leader, 8, 5);
+        for (int tick = 0; tick < 200; tick++)
+        {
+            sim.SimulateTick();
+        }
+        long leaderX = Fixed.ToInt(sim.World.GetValue(leader, SimComponents.Position, SimComponents.X));
+        long leaderY = Fixed.ToInt(sim.World.GetValue(leader, SimComponents.Position, SimComponents.Y));
+        long followerX = Fixed.ToInt(sim.World.GetValue(follower, SimComponents.Position, SimComponents.X));
+        long followerY = Fixed.ToInt(sim.World.GetValue(follower, SimComponents.Position, SimComponents.Y));
+        Expect(failures, leaderX != followerX || leaderY != followerY, "occupancy units never overlap");
+        Expect(failures, leaderX == 8 && leaderY == 5, "occupancy leading unit reaches goal");
+    }
+
+    private static void CheckGridRange(List<string> failures)
+    {
+        var meleeFar = new GameSim(new NavGrid(16, 16), 62);
+        long meleeAttacker = meleeFar.SpawnUnit(5, 5, 0, 100, 10, 1.0, 1.0, 0.0);
+        long meleeTarget = meleeFar.SpawnUnit(7, 5, 1, 10, 0, 0.0, 0.0, 0.0);
+        for (int tick = 0; tick < 60; tick++)
+        {
+            meleeFar.SimulateTick();
+        }
+        Expect(failures, meleeFar.World.IsAlive(meleeAttacker) && meleeFar.World.IsAlive(meleeTarget), "melee misses two cells away");
+
+        var meleeNear = new GameSim(new NavGrid(16, 16), 63);
+        meleeNear.SpawnUnit(5, 5, 0, 100, 10, 1.0, 1.0, 0.0);
+        long adjacent = meleeNear.SpawnUnit(6, 5, 1, 10, 0, 0.0, 0.0, 0.0);
+        for (int tick = 0; tick < 20; tick++)
+        {
+            meleeNear.SimulateTick();
+        }
+        Expect(failures, !meleeNear.World.IsAlive(adjacent), "melee hits adjacent cell");
+
+        var ranged = new GameSim(new NavGrid(16, 16), 64);
+        ranged.SpawnUnit(5, 5, 0, 100, 10, 2.0, 2.0, 0.0);
+        long tooClose = ranged.SpawnUnit(6, 5, 1, 10, 0, 0.0, 0.0, 0.0);
+        long inBand = ranged.SpawnUnit(7, 5, 1, 10, 0, 0.0, 0.0, 0.0);
+        for (int tick = 0; tick < 30; tick++)
+        {
+            ranged.SimulateTick();
+        }
+        Expect(failures, ranged.World.IsAlive(tooClose), "ranged respects minimum range");
+        Expect(failures, !ranged.World.IsAlive(inBand), "ranged hits within max range");
+    }
+
+    private static void CheckProjectile(List<string> failures)
+    {
+        var sim = new GameSim(new NavGrid(32, 32), 65);
+        sim.SpawnUnit(2, 5, 0, 100, 10, 1.0, 6.0, 0.0);
+        long victim = sim.SpawnUnit(6, 5, 1, 10, 0, 0.0, 0.0, 0.0);
+        sim.SimulateTick();
+        sim.SimulateTick();
+        bool aliveBeforeImpact = sim.World.IsAlive(victim);
+        sim.SimulateTick();
+        bool deadAfterImpact = !sim.World.IsAlive(victim);
+        Expect(failures, aliveBeforeImpact, "projectile damage delayed by travel ticks");
+        Expect(failures, deadAfterImpact, "projectile applies damage on arrival");
+    }
+
     private static void CheckAttack(List<string> failures)
     {
         var sim = new GameSim(new NavGrid(24, 24), 51);
-        long attacker = sim.SpawnUnit(2, 2, 0, 100, 10, 1.0, 0.5);
-        long victim = sim.SpawnUnit(12, 2, 1, 30, 0, 1.0, 0.0);
+        long attacker = sim.SpawnUnit(2, 2, 0, 100, 10, 1.0, 1.0, 0.5);
+        long victim = sim.SpawnUnit(12, 2, 1, 30, 0, 1.0, 1.0, 0.0);
         sim.IssueAttack(attacker, victim);
         Expect(failures, sim.World.HasComponent(attacker, SimComponents.AttackTarget), "attack locks explicit target");
         for (int tick = 0; tick < 200; tick++)
@@ -206,24 +268,25 @@ public static class KernelSelfTest
         Expect(failures, sim.World.IsAlive(attacker) && !sim.World.IsAlive(victim), "attack chases and kills explicit target");
 
         var friendly = new GameSim(new NavGrid(12, 12), 52);
-        long ally = friendly.SpawnUnit(4, 4, 0, 60, 5, 1.2, 0.0);
-        long friend = friendly.SpawnUnit(5, 4, 0, 60, 5, 1.2, 0.0);
+        long ally = friendly.SpawnUnit(4, 4, 0, 60, 5, 1.0, 1.0, 0.0);
+        long friend = friendly.SpawnUnit(5, 4, 0, 60, 5, 1.0, 1.0, 0.0);
         friendly.IssueAttack(ally, friend);
         Expect(failures, !friendly.World.HasComponent(ally, SimComponents.AttackTarget), "attack ignores friendly target");
 
         var priority = new GameSim(new NavGrid(12, 12), 53);
-        long hunter = priority.SpawnUnit(5, 5, 0, 100, 10, 2.0, 0.0);
-        long near = priority.SpawnUnit(5, 6, 1, 100, 0, 1.0, 0.0);
-        long far = priority.SpawnUnit(6, 6, 1, 100, 0, 1.0, 0.0);
+        long hunter = priority.SpawnUnit(5, 5, 0, 100, 10, 1.0, 2.0, 0.0);
+        long near = priority.SpawnUnit(5, 6, 1, 100, 0, 1.0, 1.0, 0.0);
+        long far = priority.SpawnUnit(6, 6, 1, 100, 0, 1.0, 1.0, 0.0);
         priority.IssueAttack(hunter, far);
+        priority.SimulateTick();
         priority.SimulateTick();
         long farHp = priority.World.GetValue(far, SimComponents.Health, SimComponents.Hp);
         long nearHp = priority.World.GetValue(near, SimComponents.Health, SimComponents.Hp);
         Expect(failures, farHp < 100 && nearHp == 100, "explicit attack beats nearest auto target");
 
         var release = new GameSim(new NavGrid(20, 20), 54);
-        long chaser = release.SpawnUnit(2, 2, 0, 100, 10, 1.0, 0.5);
-        long doomed = release.SpawnUnit(10, 2, 1, 30, 0, 1.0, 0.0);
+        long chaser = release.SpawnUnit(2, 2, 0, 100, 10, 1.0, 1.0, 0.5);
+        long doomed = release.SpawnUnit(10, 2, 1, 30, 0, 1.0, 1.0, 0.0);
         release.IssueAttack(chaser, doomed);
         release.World.Despawn(doomed);
         release.SimulateTick();
@@ -236,8 +299,8 @@ public static class KernelSelfTest
     private static long AttackDeterminismChecksum()
     {
         var sim = new GameSim(new NavGrid(20, 20), 61, 2, 6);
-        long attacker = sim.SpawnUnit(3, 3, 0, 60, 8, 1.2, 0.15);
-        long victim = sim.SpawnUnit(12, 3, 1, 60, 8, 1.2, 0.0);
+        long attacker = sim.SpawnUnit(3, 3, 0, 60, 8, 1.0, 1.0, 0.15);
+        long victim = sim.SpawnUnit(12, 3, 1, 60, 8, 1.0, 1.0, 0.0);
         sim.IssueAttack(attacker, victim);
         long checksum = 0;
         for (int tick = 0; tick < 90; tick++)
@@ -270,7 +333,7 @@ public static class KernelSelfTest
     {
         var heal = new GameSim(new NavGrid(16, 16), 101);
         long healer = heal.SpawnMonk(5, 5, 0, 60, 0.0, 10, 10, 30, 1.5, 0);
-        long ally = heal.SpawnUnit(5, 6, 0, 100, 0, 0.0, 0.0);
+        long ally = heal.SpawnUnit(5, 6, 0, 100, 0, 0.0, 0.0, 0.0);
         heal.World.SetValue(ally, SimComponents.Health, SimComponents.Hp, 40);
         heal.IssueHeal(healer, ally);
         for (int tick = 0; tick < 3; tick++)
@@ -288,7 +351,7 @@ public static class KernelSelfTest
             heal.World.GetValue(ally, SimComponents.Health, SimComponents.Hp) == 100,
             "monk heal capped at max hp");
 
-        long enemy = heal.SpawnUnit(6, 5, 1, 100, 0, 0.0, 0.0);
+        long enemy = heal.SpawnUnit(6, 5, 1, 100, 0, 0.0, 0.0, 0.0);
         heal.World.SetValue(enemy, SimComponents.Health, SimComponents.Hp, 40);
         heal.IssueHeal(healer, enemy);
         Expect(failures,
@@ -297,7 +360,7 @@ public static class KernelSelfTest
 
         var convert = new GameSim(new NavGrid(16, 16), 102);
         long monk = convert.SpawnMonk(5, 5, 0, 60, 0.0, 0, 10, 30, 1.5, 0);
-        long victim = convert.SpawnUnit(5, 6, 1, 100, 0, 0.0, 0.0);
+        long victim = convert.SpawnUnit(5, 6, 1, 100, 0, 0.0, 0.0, 0.0);
         convert.IssueConvert(monk, victim);
         for (int tick = 0; tick < 3; tick++)
         {
@@ -331,7 +394,7 @@ public static class KernelSelfTest
 
         var interrupt = new GameSim(new NavGrid(16, 16), 104);
         long damaged = interrupt.SpawnMonk(5, 5, 0, 60, 0.0, 0, 10, 30, 1.5, 0);
-        long prey = interrupt.SpawnUnit(5, 6, 1, 100, 0, 0.0, 0.0);
+        long prey = interrupt.SpawnUnit(5, 6, 1, 100, 0, 0.0, 0.0, 0.0);
         interrupt.IssueConvert(damaged, prey);
         interrupt.SimulateTick();
         long progressBefore = interrupt.World.GetValue(damaged, SimComponents.Monk, SimComponents.ConvertProgress);
@@ -359,9 +422,9 @@ public static class KernelSelfTest
         var sim = new GameSim(new NavGrid(20, 20), 111, 2, 6);
         long first = sim.SpawnMonk(4, 5, 0, 60, 0.1, 5, 6, 24, 2.0, 0);
         long second = sim.SpawnMonk(4, 8, 0, 60, 0.1, 5, 6, 24, 2.0, 0);
-        long patient = sim.SpawnUnit(5, 5, 0, 100, 0, 0.0, 0.0);
+        long patient = sim.SpawnUnit(5, 5, 0, 100, 0, 0.0, 0.0, 0.0);
         sim.World.SetValue(patient, SimComponents.Health, SimComponents.Hp, 30);
-        long foe = sim.SpawnUnit(10, 8, 1, 100, 0, 0.0, 0.0);
+        long foe = sim.SpawnUnit(10, 8, 1, 100, 0, 0.0, 0.0, 0.0);
         sim.IssueHeal(first, patient);
         sim.IssueConvert(second, foe);
         long checksum = 0;
