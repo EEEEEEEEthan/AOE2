@@ -880,12 +880,20 @@ public static class KernelSelfTest
     private static void CheckLockstep(List<string> failures)
     {
         var lockstep = new Lockstep(2, 6);
-        var first = new LockstepCommand(0, LockstepCommand.KindMove, 1, 4, 4);
-        Expect(failures, lockstep.SubmitTurn(0, 0, new List<LockstepCommand> { first }), "lockstep first accepted");
-        Expect(failures, !lockstep.CanAdvance(), "lockstep waits for all");
-        Expect(failures, !lockstep.SubmitTurn(0, 0, new List<LockstepCommand>()), "lockstep duplicate rejected");
-        Expect(failures, lockstep.SubmitTurn(0, 1, new List<LockstepCommand>()), "lockstep second accepted");
-        Expect(failures, lockstep.CanAdvance(), "lockstep advances when ready");
+        Expect(failures,
+            lockstep.Turn == 0 && lockstep.PlayerCount == 2 && lockstep.TicksPerTurn == 6,
+            "lockstep exposes the fixed turn clock");
+        lockstep.AdvanceTurn();
+        Expect(failures, lockstep.Turn == 1, "lockstep advances without waiting for submissions");
+
+        Expect(failures, InputTiming.LookaheadForLatency(300, 6) == 3, "300ms one way maps to three turns");
+        Expect(failures, InputTiming.LookaheadForLatency(0, 6) == 1, "zero latency still looks one turn ahead");
+        Expect(failures,
+            InputTiming.LookaheadForLatency(5000, 6) == InputTiming.MaxLookaheadTurns,
+            "lookahead clamps to the server window");
+        Expect(failures,
+            InputTiming.PlanTurn(7) == 7 + InputTiming.DefaultLookaheadTurns,
+            "planned turn offsets the snapshot turn by the lookahead");
 
         var original = new LockstepCommand(1, LockstepCommand.KindGather, 12, 0, 0, 30, 31);
         LockstepCommand restored = LockstepCommand.FromArray(original.ToArray());

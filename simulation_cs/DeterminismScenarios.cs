@@ -195,9 +195,14 @@ public static class DeterminismScenarios
                 playerOne.Add(new LockstepCommand(1, LockstepCommand.KindMove, id, 6, 10));
             }
         }
-        sim.SubmitTurn(0, playerZero);
-        sim.SubmitTurn(1, playerOne);
-        return sim.SimulateTurn();
+        var server = new SimulationServer(sim);
+        server.Enqueue(playerZero);
+        server.Enqueue(playerOne);
+        for (int step = 0; step < sim.Lockstep.TicksPerTurn; step++)
+        {
+            server.Step();
+        }
+        return sim.World.Checksum();
     }
 
     private static long UnitReach()

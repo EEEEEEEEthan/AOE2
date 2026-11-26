@@ -444,6 +444,33 @@ public sealed class RemoteClient
         NetFraming.WriteFrame(_stream, NetFrameType.Command, frame.Encode());
     }
 
+    /// <summary>
+    /// 输入转发层：以最近快照的回合为基准加提前量填 <see cref="CommandFrame.Turn"/>，
+    /// 再发送指令。服务器只接受当前回合起 +<see cref="InputTiming.MaxLookaheadTurns"/> 内的未来帧，
+    /// 高 RTT 下若仍按快照回合原样提交会落到已过回合被整帧丢弃。
+    /// </summary>
+    public void SubmitCommands(
+        System.Collections.Generic.IEnumerable<LockstepCommand> commands,
+        int lookaheadTurns = InputTiming.DefaultLookaheadTurns)
+    {
+        SnapshotFrame? latest = State.Latest;
+        if (_stream == null || latest == null)
+        {
+            return;
+        }
+        var batch = new System.Collections.Generic.List<LockstepCommand>(commands);
+        if (batch.Count == 0)
+        {
+            return;
+        }
+        SendCommands(new CommandFrame
+        {
+            Player = ViewerTeam,
+            Turn = InputTiming.PlanTurn(latest.Turn, lookaheadTurns),
+            Commands = batch.ToArray(),
+        });
+    }
+
     public bool Poll()
     {
         if (_stream == null || !_stream.DataAvailable)

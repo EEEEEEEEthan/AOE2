@@ -1187,25 +1187,6 @@ public sealed class GameSim
         return hash;
     }
 
-    public long SimulateTurn()
-    {
-        if (Lockstep.CanAdvance())
-        {
-            foreach (LockstepCommand command in Lockstep.TakeCommands())
-            {
-                ApplyCommand(command);
-            }
-        }
-        for (int step = 0; step < Lockstep.TicksPerTurn; step++)
-        {
-            SimulateTick();
-        }
-        return World.Checksum();
-    }
-
-    public bool SubmitTurn(long player, List<LockstepCommand> commands) =>
-        Lockstep.SubmitTurn(Lockstep.Turn, player, commands);
-
     public FlowField FieldFor(int targetX, int targetY) => FieldProvider(targetX, targetY);
 
     public void InvalidateFields()
