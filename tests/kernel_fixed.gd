@@ -1,0 +1,20 @@
+extends TestBase
+
+func run() -> void:
+	check_eq(Fixed.to_int(Fixed.from_int(7)), 7, "int roundtrip")
+	check_eq(Fixed.to_float(Fixed.from_float(1.5)), 1.5, "float roundtrip")
+	check_eq(Fixed.mul(Fixed.from_float(1.5), Fixed.from_float(2.0)), Fixed.from_float(3.0), "fixed multiply")
+	check_eq(Fixed.div(Fixed.from_int(1), Fixed.from_int(2)), Fixed.HALF, "fixed divide")
+	check_eq(Fixed.add(Fixed.from_int(2), Fixed.from_int(3)), Fixed.from_int(5), "fixed add")
+	check_eq(Fixed.sub(Fixed.from_int(2), Fixed.from_int(5)), Fixed.from_int(-3), "fixed sub")
+	check_eq(Fixed.mul(Fixed.from_int(-4), Fixed.from_int(3)), Fixed.from_int(-12), "negative multiply")
+	check_eq(Fixed.div(Fixed.from_int(-6), Fixed.from_int(3)), Fixed.from_int(-2), "negative divide")
+	check_eq(Fixed.sqrt(Fixed.from_int(4)), Fixed.from_int(2), "fixed square root")
+	check_eq(Fixed.clamp(Fixed.from_int(12), Fixed.from_int(0), Fixed.from_int(10)), Fixed.from_int(10), "clamp high")
+	check_eq(Fixed.sign(Fixed.from_int(-3)), -1, "sign negative")
+	var point := FixedVec2.from_tiles(3.0, 4.0)
+	check_eq(point.distance_sq(FixedVec2.new(0, 0)), Fixed.from_int(25), "pythagorean distance squared")
+	check_eq(point.cell_x(), 3, "cell x")
+	check_eq(point.cell_y(), 4, "cell y")
+	var scaled := point.scaled(Fixed.from_int(2))
+	check_eq(scaled.x, Fixed.from_int(6), "scaled component x")
