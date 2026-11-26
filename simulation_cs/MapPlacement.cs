@@ -9,12 +9,14 @@ public sealed class MapPlacement
     public const string KindSpawn = "spawn";
     public const string KindResource = "resource";
     public const string KindBuilding = "building";
+    public const string KindAnimal = "animal";
 
     public string Kind { get; set; } = KindSpawn;
     public int X { get; set; }
     public int Y { get; set; }
     public int Team { get; set; }
     public int NodeType { get; set; }
+    public int Subtype { get; set; }
     public int Amount { get; set; }
 
     public MapPlacement Clone() => new()
@@ -24,6 +26,7 @@ public sealed class MapPlacement
         Y = Y,
         Team = Team,
         NodeType = NodeType,
+        Subtype = Subtype,
         Amount = Amount,
     };
 }

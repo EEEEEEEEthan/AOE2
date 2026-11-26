@@ -44,7 +44,12 @@ public static class MapSetup
 
         foreach (ResourcePoint point in map.Resources)
         {
-            sim.SpawnResourceNode(point.X, point.Y, point.Type, point.Amount);
+            sim.SpawnResourceNode(point.X, point.Y, point.Type, point.Amount, point.Subtype);
+        }
+
+        foreach (AnimalSpawn animal in map.Animals)
+        {
+            sim.SpawnHuntingAnimal(animal.X, animal.Y, animal.Species);
         }
 
         foreach (PlayerStart start in map.Starts)

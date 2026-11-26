@@ -334,6 +334,7 @@ public partial class GameBridge : Node
                 { "kind", entity.Kind },
                 { "hp", entity.Hp },
                 { "node_type", entity.NodeType },
+                { "node_subtype", entity.NodeSubtype },
                 { "node_remaining", entity.NodeRemaining },
                 { "gather_state", entity.GatherState },
                 { "carry_type", entity.CarryType },
@@ -383,6 +384,7 @@ public partial class GameBridge : Node
         var kinds = new int[count];
         var hitPoints = new int[count];
         var nodeTypes = new int[count];
+        var nodeSubtypes = new int[count];
         var nodeRemainings = new int[count];
         var buildingTypes = new int[count];
         var widths = new int[count];
@@ -404,6 +406,7 @@ public partial class GameBridge : Node
             kinds[index] = (int)entity.Kind;
             hitPoints[index] = (int)entity.Hp;
             nodeTypes[index] = (int)entity.NodeType;
+            nodeSubtypes[index] = (int)entity.NodeSubtype;
             nodeRemainings[index] = (int)entity.NodeRemaining;
             buildingTypes[index] = (int)entity.BuildingType;
             widths[index] = (int)entity.Width;
@@ -427,6 +430,7 @@ public partial class GameBridge : Node
             { "kind", kinds },
             { "hp", hitPoints },
             { "node_type", nodeTypes },
+            { "node_subtype", nodeSubtypes },
             { "node_remaining", nodeRemainings },
             { "building_type", buildingTypes },
             { "width", widths },

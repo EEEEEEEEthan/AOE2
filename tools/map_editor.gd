@@ -31,6 +31,8 @@ const TOOL_LABELS := [
 ]
 
 const RESOURCE_AMOUNT := 300
+# 与 C# ResourceSubtype 对齐：木/食/金/石分别落到树/浆果丛/金矿/石矿。
+const RESOURCE_SUBTYPES := [1, 2, 3, 4]
 
 const TEAM_COLORS := [
 	Color(0.82, 0.22, 0.2),
@@ -168,7 +170,8 @@ func _apply_tool(tile: Vector2i) -> void:
 		TOOL_RESOURCE:
 			_model.add_placement(
 				MapEditorModel.KIND_RESOURCE, tile.x, tile.y, 0,
-				%NodeOption.selected, RESOURCE_AMOUNT)
+				%NodeOption.selected, RESOURCE_AMOUNT,
+				RESOURCE_SUBTYPES[%NodeOption.selected])
 		TOOL_BUILDING:
 			_model.add_placement(
 				MapEditorModel.KIND_BUILDING, tile.x, tile.y, %TeamOption.selected, 0, 0)

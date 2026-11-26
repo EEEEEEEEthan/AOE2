@@ -244,7 +244,8 @@ func paint_blocked(center_x: int, center_y: int, radius: int, value: bool) -> vo
 
 
 func add_placement(
-	kind: String, cell_x: int, cell_y: int, team: int, node_type: int, amount: int) -> bool:
+	kind: String, cell_x: int, cell_y: int, team: int, node_type: int, amount: int,
+	subtype: int = 0) -> bool:
 	if not in_bounds(cell_x, cell_y):
 		return false
 	placements = placements.filter(func(entry: Dictionary) -> bool:
@@ -255,6 +256,7 @@ func add_placement(
 		"y": cell_y,
 		"team": team,
 		"node_type": node_type,
+		"subtype": subtype,
 		"amount": amount,
 	})
 	_stroke_placements_touched = true

@@ -61,8 +61,9 @@ public static class GatherSystem
                 SimComponents.CarryType,
                 world.GetValue(node, SimComponents.ResourceNode, SimComponents.NodeType));
         }
+        long subtype = world.GetValue(node, SimComponents.ResourceNode, SimComponents.Subtype);
         long progress = world.GetValue(id, SimComponents.Gather, SimComponents.Progress)
-            + world.GetValue(id, SimComponents.Gather, SimComponents.Rate);
+            + ResourceSubtype.GatherRate(world.GetValue(id, SimComponents.Gather, SimComponents.Rate), subtype);
         while (progress >= Fixed.Scale && carryAmount < carryCapacity && remaining > 0)
         {
             progress -= Fixed.Scale;

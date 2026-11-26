@@ -286,7 +286,9 @@ public static class CombatSystem
             {
                 continue;
             }
-            if (world.GetValue(candidate, SimComponents.Team, SimComponents.TeamId) == team)
+            long candidateTeam = world.GetValue(candidate, SimComponents.Team, SimComponents.TeamId);
+            // Gaia 野生动物只吃玩家显式攻击指令，不参与自动索敌，避免单位乱追猎物。
+            if (candidateTeam == team || candidateTeam == GameSim.GaiaTeam)
             {
                 continue;
             }

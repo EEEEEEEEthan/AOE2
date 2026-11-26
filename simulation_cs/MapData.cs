@@ -8,18 +8,35 @@ namespace AoeSim;
 /// <summary>地图上的一处资源点：类型沿用 GameSim 的资源常量，坐标是格子中心所在格。</summary>
 public sealed class ResourcePoint
 {
-    public ResourcePoint(long type, int x, int y, long amount)
+    public ResourcePoint(long type, int x, int y, long amount, long subtype = 0)
     {
         Type = type;
         X = x;
         Y = y;
         Amount = amount;
+        Subtype = subtype;
     }
 
     public long Type { get; }
     public int X { get; }
     public int Y { get; }
     public long Amount { get; }
+    public long Subtype { get; }
+}
+
+/// <summary>地图上的一处野生动物出生点：Subtype 是 <see cref="AnimalSpecies"/> 物种。</summary>
+public sealed class AnimalSpawn
+{
+    public AnimalSpawn(long species, int x, int y)
+    {
+        Species = species;
+        X = x;
+        Y = y;
+    }
+
+    public long Species { get; }
+    public int X { get; }
+    public int Y { get; }
 }
 
 /// <summary>一个玩家的起始位置：X/Y 是城镇中心 4×4 占地的左上角格。</summary>
@@ -53,6 +70,7 @@ public sealed class MapData
     public NavGrid Nav { get; }
     public IReadOnlyList<MapPlacement> Placements => _placements;
     public IReadOnlyList<ResourcePoint> Resources { get; private set; }
+    public IReadOnlyList<AnimalSpawn> Animals { get; private set; }
     public IReadOnlyList<PlayerStart> Starts { get; private set; }
 
     public int Width => Terrain.Width;
@@ -67,7 +85,8 @@ public sealed class MapData
         NavGrid nav,
         IEnumerable<MapPlacement>? placements = null,
         IReadOnlyList<ResourcePoint>? resources = null,
-        IReadOnlyList<PlayerStart>? starts = null)
+        IReadOnlyList<PlayerStart>? starts = null,
+        IReadOnlyList<AnimalSpawn>? animals = null)
     {
         if (terrain.Width != nav.Width || terrain.Height != nav.Height)
         {
@@ -81,6 +100,7 @@ public sealed class MapData
             ? new List<MapPlacement>()
             : new List<MapPlacement>(placements);
         Resources = resources ?? Array.Empty<ResourcePoint>();
+        Animals = animals ?? Array.Empty<AnimalSpawn>();
         Starts = starts ?? Array.Empty<PlayerStart>();
     }
 
@@ -112,6 +132,18 @@ public sealed class MapData
                 X = point.X,
                 Y = point.Y,
                 Amount = point.Amount,
+                Subtype = point.Subtype,
+            };
+        }
+        var animals = new AnimalDto[Animals.Count];
+        for (int index = 0; index < Animals.Count; index++)
+        {
+            AnimalSpawn animal = Animals[index];
+            animals[index] = new AnimalDto
+            {
+                Species = animal.Species,
+                X = animal.X,
+                Y = animal.Y,
             };
         }
         var starts = new StartDto[Starts.Count];
@@ -132,6 +164,7 @@ public sealed class MapData
             Blocked = blocked,
             Placements = _placements.ConvertAll(placement => placement.Clone()).ToArray(),
             Resources = resources,
+            Animals = animals,
             Starts = starts,
         };
         return JsonSerializer.Serialize(dto, JsonOptions);
@@ -185,7 +218,15 @@ public sealed class MapData
         {
             foreach (ResourceDto point in dto.Resources)
             {
-                resources.Add(new ResourcePoint(point.Type, point.X, point.Y, point.Amount));
+                resources.Add(new ResourcePoint(point.Type, point.X, point.Y, point.Amount, point.Subtype));
+            }
+        }
+        var animals = new List<AnimalSpawn>();
+        if (dto.Animals != null)
+        {
+            foreach (AnimalDto animal in dto.Animals)
+            {
+                animals.Add(new AnimalSpawn(animal.Species, animal.X, animal.Y));
             }
         }
         var starts = new List<PlayerStart>();
@@ -196,7 +237,7 @@ public sealed class MapData
                 starts.Add(new PlayerStart(start.Team, start.X, start.Y));
             }
         }
-        return new MapData(dto.Name, dto.Seed, terrain, nav, placements, resources, starts);
+        return new MapData(dto.Name, dto.Seed, terrain, nav, placements, resources, starts, animals);
     }
 
     /// <summary>种子与最终布局的确定性摘要：同种子同地图必须逐项一致。</summary>
@@ -219,6 +260,7 @@ public sealed class MapData
             hash = SimWorld.HashInt(hash, placement.Y);
             hash = SimWorld.HashInt(hash, placement.Team);
             hash = SimWorld.HashInt(hash, placement.NodeType);
+            hash = SimWorld.HashInt(hash, placement.Subtype);
             hash = SimWorld.HashInt(hash, placement.Amount);
         }
         foreach (ResourcePoint point in Resources)
@@ -227,6 +269,13 @@ public sealed class MapData
             hash = SimWorld.HashInt(hash, point.X);
             hash = SimWorld.HashInt(hash, point.Y);
             hash = SimWorld.HashInt(hash, point.Amount);
+            hash = SimWorld.HashInt(hash, point.Subtype);
+        }
+        foreach (AnimalSpawn animal in Animals)
+        {
+            hash = SimWorld.HashInt(hash, animal.Species);
+            hash = SimWorld.HashInt(hash, animal.X);
+            hash = SimWorld.HashInt(hash, animal.Y);
         }
         foreach (PlayerStart start in Starts)
         {
@@ -260,6 +309,7 @@ public sealed class MapData
         public int[] Blocked { get; set; } = Array.Empty<int>();
         public MapPlacement[]? Placements { get; set; } = Array.Empty<MapPlacement>();
         public ResourceDto[]? Resources { get; set; }
+        public AnimalDto[]? Animals { get; set; }
         public StartDto[]? Starts { get; set; }
     }
 
@@ -269,6 +319,14 @@ public sealed class MapData
         public int X { get; set; }
         public int Y { get; set; }
         public long Amount { get; set; }
+        public long Subtype { get; set; }
+    }
+
+    private sealed class AnimalDto
+    {
+        public long Species { get; set; }
+        public int X { get; set; }
+        public int Y { get; set; }
     }
 
     private sealed class StartDto

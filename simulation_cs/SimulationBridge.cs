@@ -29,6 +29,8 @@ public partial class SimulationBridge : Node
 
     public Godot.Collections.Array<string> WaterSelfTest() => ToGodotArray(AOE2Framework.WaterSelfTest.Run());
 
+    public Godot.Collections.Array<string> HuntingSelfTest() => ToGodotArray(AOE2Framework.HuntingSelfTest.Run());
+
     public Godot.Collections.Array<string> CivilizationSelfTest() =>
         ToGodotArray(AOE2Framework.CivilizationSelfTest.Run());
 

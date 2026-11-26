@@ -67,7 +67,7 @@
 - 生成器只用整数与 `SimRng`：同种子逐格一致；阿拉伯地图草地打底、四周悬崖封边，双方起始点沿地图中轴镜像，起始资源（木材、浆果/羊、金、石）同样镜像成簇。
 - `MapData` 在原有的地形与阻塞之外携带资源点列表与玩家起始位置，JSON 存读与 `Checksum()` 一并覆盖这些布局数据。
 - `MapSetup`（`simulation_cs/MapSetup.cs`）把地图落进模拟层：静态阻塞随 `NavGrid` 进入寻路，资源点生成资源实体，起始位置由建筑/经济系统摆放已完工城镇中心与初始村民；城镇中心自带全资源投放能力，村民按资源就近回送。
-- `MapSelfTest` 覆盖同种子一致、双方资源镜像、地形与阻塞一致、起点可建、资源点合法、JSON 往返与生成对局落地；`tests/tools/_map_preview.gd` 抓取全景与起始基地截图。
+- `MapSelfTest` 覆盖同种子一致、双方资源与动物镜像、地形与阻塞一致、起点可建、资源点合法、JSON 往返与生成对局落地；`tests/tools/_map_preview.gd` 抓取全景与起始基地截图。
 
 ## 资源投放建筑
 
@@ -82,6 +82,15 @@
 - 渔船与战船：`GameSim.SpawnFishingShip` 复用采集系统对「鱼群」节点采集食物并返码头投放；`GameSim.SpawnWarship` 复用现有战斗/护甲/弹道体系，水战即单位对射。
 - 地图：`MapType.Islands` 群岛生成器整图水面打底、每位玩家草地小岛，岛上产木/食/金/石，近岸水面成簇生成鱼群，同种子确定性一致。
 - 自测：`WaterSelfTest`（`tests/water.gd`）覆盖群岛确定性、鱼群落水、陆/水互不通行、码头临水放置、渔船往返交付与战船水面对射。
+
+## 陆地自然资源与狩猎
+
+- 资源子类型：`ResourceNode` 在 `node_type`（资源列索引）之外新增 `subtype`（`ResourceSubtype`：树/浆果丛/金矿/石矿/尸体/鱼群），决定外观与采集速率，旧数据与农田缺省为 0。`MapPlacement`、`MapData` JSON 与 `Checksum()`、`SpawnResourceNode` 与网络快照（`EntitySnapshot.NodeSubtype`，协议版本 7）全部携带。
+- 野生动物：`GameSim.SpawnHuntingAnimal` 生成中立 gaia（team = -1）的羊/鹿/野猪，带血量、物种与尸体肉量；不挂 `Combat`，因此不反击，且 `CombatSystem` 索敌显式跳过 gaia——想打猎必须玩家下达攻击指令。
+- 死亡转尸体：`ResolveDeaths` 把死掉的动物原地转成食物 `ResourceNode`（subtype = 尸体），肉量取自物种；`HuntingSystem` 每 tick 推进腐烂倒计时，采空或腐烂归零后消失，采集复用普通 `GatherSystem`。
+- 采集差异：尸体食物采集速度 ×2、浆果 ×1.5，树木/矿脉维持原速，同样受 `GatherSystem` 携带上限约束。
+- 地图：阿拉伯与群岛生成器按子类型成簇（树、浆果丛、金矿、石矿），阿拉伯另在起始点附近成簇投放羊群与少量鹿/野猪并沿中轴镜像；`MapSetup` 落图时生成动物，初始村民优先采浆果。
+- 自测：`HuntingSelfTest`（`tests/hunting.gd`）覆盖子类型成簇、击杀→尸体→采集→腐烂、gaia 不被自动索敌与全流程确定性；黄金校验和已更新。
 
 ## 市场交易、商队与进贡
 
@@ -131,3 +140,4 @@ dotnet build AOE2Framework.sln           # 单独编译 C# 内核
 - [x] 地图编辑器：高度/地形/悬崖笔刷、出生点与资源放置、撤销重做、MapData 存读与连通校验
 - [x] 地图生成与起始资源：确定性阿拉伯生成器、镜像起始资源、TC/村民/资源点落地与自测
 - [x] 水上玩法：群岛水域地图与鱼群、陆/水通行域、码头临水放置、渔船采集与战船水战
+- [x] 陆地自然资源与狩猎：资源子类型分簇、羊/鹿/野猪可击杀转尸体、尸体腐烂与采集差异

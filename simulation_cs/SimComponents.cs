@@ -16,6 +16,8 @@ public static class SimComponents
     public const string Projectile = "projectile";
     public const string Resource = "resource";
     public const string ResourceNode = "resource_node";
+    public const string HuntingAnimal = "hunting_animal";
+    public const string Corpse = "corpse";
     public const string DropSite = "drop_site";
     public const string Match = "match";
     public const string PlayerState = "player_state";
@@ -80,7 +82,11 @@ public static class SimComponents
     public const string Stone = "stone";
     public static readonly string[] ResourceColumns = { Wood, Food, Gold, Stone };
     public const string NodeType = "node_type";
+    public const string Subtype = "subtype";
     public const string Remaining = "remaining";
+    public const string Species = "species";
+    public const string Meat = "meat";
+    public const string RotTicks = "rot_ticks";
     public const string AcceptMask = "accept_mask";
     public const string GatherState = "gather_state";
     public const string NodeEntity = "node_entity";

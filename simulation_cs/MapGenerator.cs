@@ -48,13 +48,20 @@ public sealed class ArabiaMapGenerator : IMapGenerator
     private const int StartPadRadius = 3;
     private const int PlacementAttempts = 320;
 
-    private static readonly (long Type, int Count, long Amount, int MinR, int MaxR)[] Clusters =
+    private static readonly (long Subtype, long Type, int Count, long Amount, int MinR, int MaxR)[] Clusters =
     {
-        (GameSim.ResourceWood, 12, 100, 6, 14),
-        (GameSim.ResourceFood, 4, 125, 4, 10),
-        (GameSim.ResourceFood, 4, 100, 5, 12),
-        (GameSim.ResourceGold, 3, 800, 6, 13),
-        (GameSim.ResourceStone, 2, 350, 6, 13),
+        (ResourceSubtype.Tree, GameSim.ResourceWood, 12, 100, 6, 14),
+        (ResourceSubtype.BerryBush, GameSim.ResourceFood, 4, 125, 4, 10),
+        (ResourceSubtype.BerryBush, GameSim.ResourceFood, 3, 100, 5, 12),
+        (ResourceSubtype.GoldMine, GameSim.ResourceGold, 3, 800, 6, 13),
+        (ResourceSubtype.StoneMine, GameSim.ResourceStone, 2, 350, 6, 13),
+    };
+
+    private static readonly (long Species, int Count, int MinR, int MaxR)[] Animals =
+    {
+        (AnimalSpecies.Sheep, 4, 4, 7),
+        (AnimalSpecies.Deer, 2, 8, 12),
+        (AnimalSpecies.Boar, 1, 7, 11),
     };
 
     private readonly int _width;
@@ -92,23 +99,27 @@ public sealed class ArabiaMapGenerator : IMapGenerator
         }
 
         var resources = new List<ResourcePoint>();
+        var animals = new List<AnimalSpawn>();
         for (int index = 0; index < starts.Count; index++)
         {
             if (IsMirrorTarget(index))
             {
                 continue;
             }
-            int before = resources.Count;
-            AddStartResources(resources, occupied, terrain, nav, rng, starts[index]);
+            int beforeResources = resources.Count;
+            int beforeAnimals = animals.Count;
+            AddStartResources(resources, animals, occupied, terrain, nav, rng, starts[index]);
             int mirror = MirrorOf(index);
             if (mirror >= 0)
             {
-                MirrorRange(resources, before, occupied, terrain, nav, starts[mirror]);
+                MirrorRange(resources, beforeResources, occupied, terrain, nav, starts[mirror]);
+                MirrorAnimalRange(animals, beforeAnimals, occupied, terrain, nav, starts[mirror]);
             }
         }
 
         SyncNavWithTerrain(terrain, nav);
-        return new MapData("arabia", seed, terrain, nav, resources: resources, starts: starts);
+        return new MapData(
+            "arabia", seed, terrain, nav, resources: resources, starts: starts, animals: animals);
     }
 
     private static long MixSeed(long seed) => seed ^ 0x5DEECE66DL;
@@ -194,6 +205,7 @@ public sealed class ArabiaMapGenerator : IMapGenerator
 
     private void AddStartResources(
         List<ResourcePoint> resources,
+        List<AnimalSpawn> animals,
         HashSet<long> occupied,
         TerrainGrid terrain,
         NavGrid nav,
@@ -202,7 +214,7 @@ public sealed class ArabiaMapGenerator : IMapGenerator
     {
         int centerX = start.X + TownCenterSize / 2;
         int centerY = start.Y + TownCenterSize / 2;
-        foreach ((long type, int count, long amount, int minR, int maxR) in Clusters)
+        foreach ((long subtype, long type, int count, long amount, int minR, int maxR) in Clusters)
         {
             for (int index = 0; index < count; index++)
             {
@@ -210,7 +222,19 @@ public sealed class ArabiaMapGenerator : IMapGenerator
                     rng, occupied, terrain, nav, centerX, centerY, minR, maxR,
                     out int x, out int y))
                 {
-                    resources.Add(new ResourcePoint(type, x, y, amount));
+                    resources.Add(new ResourcePoint(type, x, y, amount, subtype));
+                }
+            }
+        }
+        foreach ((long species, int count, int minR, int maxR) in Animals)
+        {
+            for (int index = 0; index < count; index++)
+            {
+                if (TryPlaceSpot(
+                    rng, occupied, terrain, nav, centerX, centerY, minR, maxR,
+                    out int x, out int y))
+                {
+                    animals.Add(new AnimalSpawn(species, x, y));
                 }
             }
         }
@@ -321,7 +345,7 @@ public sealed class ArabiaMapGenerator : IMapGenerator
             if (IsFreeSpot(occupied, terrain, nav, mirroredX, source.Y))
             {
                 occupied.Add(CellKey(mirroredX, source.Y));
-                resources.Add(new ResourcePoint(source.Type, mirroredX, source.Y, source.Amount));
+                resources.Add(new ResourcePoint(source.Type, mirroredX, source.Y, source.Amount, source.Subtype));
                 continue;
             }
             int centerX = mirrorStart.X + TownCenterSize / 2;
@@ -331,7 +355,38 @@ public sealed class ArabiaMapGenerator : IMapGenerator
                 occupied, terrain, nav, centerX, centerY, 4, 14,
                 out int fallbackX, out int fallbackY))
             {
-                resources.Add(new ResourcePoint(source.Type, fallbackX, fallbackY, source.Amount));
+                resources.Add(new ResourcePoint(source.Type, fallbackX, fallbackY, source.Amount, source.Subtype));
+            }
+        }
+    }
+
+    private void MirrorAnimalRange(
+        List<AnimalSpawn> animals,
+        int fromIndex,
+        HashSet<long> occupied,
+        TerrainGrid terrain,
+        NavGrid nav,
+        PlayerStart mirrorStart)
+    {
+        int count = animals.Count;
+        for (int index = fromIndex; index < count; index++)
+        {
+            AnimalSpawn source = animals[index];
+            int mirroredX = _width - 1 - source.X;
+            if (IsFreeSpot(occupied, terrain, nav, mirroredX, source.Y))
+            {
+                occupied.Add(CellKey(mirroredX, source.Y));
+                animals.Add(new AnimalSpawn(source.Species, mirroredX, source.Y));
+                continue;
+            }
+            int centerX = mirrorStart.X + TownCenterSize / 2;
+            int centerY = mirrorStart.Y + TownCenterSize / 2;
+            if (TryFallbackSpot(
+                new SimRng(source.Species + source.Y * 131 + 17),
+                occupied, terrain, nav, centerX, centerY, 4, 14,
+                out int fallbackX, out int fallbackY))
+            {
+                animals.Add(new AnimalSpawn(source.Species, fallbackX, fallbackY));
             }
         }
     }
@@ -371,12 +426,12 @@ public sealed class IslandsMapGenerator : IMapGenerator
     private const int FishCount = 7;
     private const long FishAmount = 400;
 
-    private static readonly (long Type, int Count, long Amount, int MinR, int MaxR)[] LandClusters =
+    private static readonly (long Subtype, long Type, int Count, long Amount, int MinR, int MaxR)[] LandClusters =
     {
-        (GameSim.ResourceWood, 8, 100, 3, 6),
-        (GameSim.ResourceFood, 3, 120, 3, 6),
-        (GameSim.ResourceGold, 3, 700, 4, 7),
-        (GameSim.ResourceStone, 2, 350, 4, 7),
+        (ResourceSubtype.Tree, GameSim.ResourceWood, 8, 100, 3, 6),
+        (ResourceSubtype.BerryBush, GameSim.ResourceFood, 3, 120, 3, 6),
+        (ResourceSubtype.GoldMine, GameSim.ResourceGold, 3, 700, 4, 7),
+        (ResourceSubtype.StoneMine, GameSim.ResourceStone, 2, 350, 4, 7),
     };
 
     private readonly int _width;
@@ -514,13 +569,13 @@ public sealed class IslandsMapGenerator : IMapGenerator
     {
         int centerX = start.X + TownCenterSize / 2;
         int centerY = start.Y + TownCenterSize / 2;
-        foreach ((long type, int count, long amount, int minR, int maxR) in LandClusters)
+        foreach ((long subtype, long type, int count, long amount, int minR, int maxR) in LandClusters)
         {
             for (int index = 0; index < count; index++)
             {
                 if (TryPlaceSpot(rng, occupied, terrain, nav, centerX, centerY, minR, maxR, false, out int x, out int y))
                 {
-                    resources.Add(new ResourcePoint(type, x, y, amount));
+                    resources.Add(new ResourcePoint(type, x, y, amount, subtype));
                 }
             }
         }
@@ -528,7 +583,7 @@ public sealed class IslandsMapGenerator : IMapGenerator
         {
             if (TryPlaceSpot(rng, occupied, terrain, nav, centerX, centerY, IslandRadius + 1, IslandRadius + 4, true, out int x, out int y))
             {
-                resources.Add(new ResourcePoint(GameSim.ResourceFood, x, y, FishAmount));
+                resources.Add(new ResourcePoint(GameSim.ResourceFood, x, y, FishAmount, ResourceSubtype.Fish));
             }
         }
     }
@@ -614,7 +669,7 @@ public sealed class IslandsMapGenerator : IMapGenerator
             if (IsFreeSpot(occupied, terrain, nav, mirroredX, source.Y, water))
             {
                 occupied.Add(CellKey(mirroredX, source.Y));
-                resources.Add(new ResourcePoint(source.Type, mirroredX, source.Y, source.Amount));
+                resources.Add(new ResourcePoint(source.Type, mirroredX, source.Y, source.Amount, source.Subtype));
             }
         }
     }
