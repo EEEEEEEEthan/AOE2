@@ -546,6 +546,51 @@ public sealed class GameSim
         return id;
     }
 
+    /// <summary>
+    /// 运输船：水面移动、无攻击能力，带乘员容量。陆地单位经装载指令上船后随船移动，
+    /// 靠岸或临码头时再卸载；被击沉时船上乘员一并损失。
+    /// </summary>
+    public long SpawnTransportShip(
+        int cellX,
+        int cellY,
+        long team,
+        long capacity = TransportSystem.DefaultCapacity,
+        long maxHp = 120,
+        double speedTilesPerTick = 0.12,
+        long popCost = 1)
+    {
+        if (!PopulationSystem.CanSpawn(World, team, popCost))
+        {
+            return -1;
+        }
+        long id = World.Spawn();
+        World.Attach(id, SimComponents.Position);
+        World.Attach(id, SimComponents.Velocity);
+        World.Attach(id, SimComponents.Move);
+        World.Attach(id, SimComponents.Health);
+        World.Attach(id, SimComponents.Team);
+        World.Attach(id, SimComponents.Footprint);
+        World.Attach(id, SimComponents.Transport);
+        World.SetValue(id, SimComponents.Position, SimComponents.X, Fixed.Add(Fixed.FromInt(cellX), Fixed.Half));
+        World.SetValue(id, SimComponents.Position, SimComponents.Y, Fixed.Add(Fixed.FromInt(cellY), Fixed.Half));
+        World.SetValue(id, SimComponents.Velocity, SimComponents.X, 0);
+        World.SetValue(id, SimComponents.Velocity, SimComponents.Y, 0);
+        World.SetValue(id, SimComponents.Move, SimComponents.TargetX, cellX);
+        World.SetValue(id, SimComponents.Move, SimComponents.TargetY, cellY);
+        World.SetValue(id, SimComponents.Move, SimComponents.Speed, Fixed.FromFloat(speedTilesPerTick));
+        World.SetValue(id, SimComponents.Move, SimComponents.Active, 0);
+        World.SetValue(id, SimComponents.Health, SimComponents.Hp, maxHp);
+        World.SetValue(id, SimComponents.Health, SimComponents.MaxHp, maxHp);
+        World.SetValue(id, SimComponents.Team, SimComponents.TeamId, team);
+        World.SetValue(id, SimComponents.Footprint, SimComponents.FootprintWidth, 1);
+        World.SetValue(id, SimComponents.Footprint, SimComponents.FootprintHeight, 1);
+        World.SetValue(id, SimComponents.Transport, SimComponents.Count, 0);
+        World.SetValue(id, SimComponents.Transport, SimComponents.Capacity, capacity);
+        AttachDomain(id, MovementDomain.Water);
+        AccountPopulation(id, team, popCost);
+        return id;
+    }
+
     /// <summary>放置并完工一座码头（临水校验在 <see cref="BuildingSystem.CanPlace"/>）。</summary>
     public long SpawnDock(int cellX, int cellY, long team)
     {
@@ -1168,6 +1213,14 @@ public sealed class GameSim
     /// <summary>解除单个单位的驻军，在建筑周边就近落位。</summary>
     public bool IssueUngarrison(long unit) => GarrisonSystem.Release(World, Grid, Terrain, unit);
 
+    /// <summary>把本队陆地单位装上运输船；要求船靠岸/临码头、单位在船边且船未满载。</summary>
+    public bool IssueTransportLoad(long unit, long ship) =>
+        TransportSystem.TryLoad(World, Grid, Terrain, unit, ship);
+
+    /// <summary>把船上乘员卸载到船体周边的合法陆地格，装不下的留在船上；船未靠岸时拒绝。</summary>
+    public int IssueTransportUnload(long ship) =>
+        TransportSystem.TryUnload(World, Grid, Terrain, ship);
+
     /// <summary>城镇警钟：召集本玩家村民进最近的城镇中心；dismiss 为真时解除并恢复其原工作。</summary>
     public int IssueTownBell(long player, bool dismiss)
     {
@@ -1241,7 +1294,9 @@ public sealed class GameSim
         || kind == LockstepCommand.KindUngarrison
         || kind == LockstepCommand.KindRepair
         || kind == LockstepCommand.KindTradeRoute
-        || kind == LockstepCommand.KindToggleGate;
+        || kind == LockstepCommand.KindToggleGate
+        || kind == LockstepCommand.KindTransportLoad
+        || kind == LockstepCommand.KindTransportUnload;
 
     public bool ApplyCommand(LockstepCommand command)
     {
@@ -1347,6 +1402,12 @@ public sealed class GameSim
             case LockstepCommand.KindToggleGate:
                 IssueToggleGate(command.Entity, command.Player, command.Aux);
                 break;
+            case LockstepCommand.KindTransportLoad:
+                IssueTransportLoad(command.Entity, command.TargetEntity);
+                break;
+            case LockstepCommand.KindTransportUnload:
+                IssueTransportUnload(command.Entity);
+                break;
         }
         return true;
     }
@@ -1406,6 +1467,10 @@ public sealed class GameSim
                 BuildingSystem.Ruin(World, Grid, id);
                 fieldsChanged = true;
                 continue;
+            }
+            if (World.HasComponent(id, SimComponents.Transport))
+            {
+                TransportSystem.SinkPassengers(World, id);
             }
             PopulationSystem.Release(World, id);
             World.Despawn(id);

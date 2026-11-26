@@ -23,6 +23,7 @@ public static class WaterSelfTest
         CheckFishingShip(failures);
         CheckWarshipCombat(failures);
         CheckGeneratedIslandsMatch(failures);
+        failures.AddRange(TransportSelfTest.Run());
         return failures;
     }
 

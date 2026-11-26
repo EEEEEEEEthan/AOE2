@@ -35,6 +35,8 @@ public static class SimComponents
     public const string Rally = "rally";
     public const string Garrison = "garrison";
     public const string Garrisoned = "garrisoned";
+    public const string Transport = "transport";
+    public const string Aboard = "aboard";
     public const string MarketState = "market_state";
     public const string Trade = "trade";
 

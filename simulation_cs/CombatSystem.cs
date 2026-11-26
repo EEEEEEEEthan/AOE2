@@ -28,6 +28,11 @@ public static class CombatSystem
             {
                 continue;
             }
+            // 运输船上的乘员同样不参战，也不把船的结算卷入乘员。
+            if (world.HasComponent(id, SimComponents.Aboard))
+            {
+                continue;
+            }
             long explicitTarget = LockedTarget(world, id);
             long cooldownLeft = world.GetValue(id, SimComponents.Combat, SimComponents.CooldownLeft);
             if (cooldownLeft > 0)
