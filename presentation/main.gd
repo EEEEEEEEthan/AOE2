@@ -14,6 +14,7 @@ func _ready() -> void:
 	%WorldView.build_terrain(sim.grid)
 	_spawn_forces()
 	_issue_orders()
+	_spawn_economy()
 	%WorldView.refresh()
 
 func _process(delta: float) -> void:
@@ -60,3 +61,10 @@ func _issue_orders() -> void:
 			sim.issue_move(id, 27, 16)
 		else:
 			sim.issue_move(id, 4, 16)
+
+func _spawn_economy() -> void:
+	var forest := sim.spawn_resource_node(6, 6, GameSim.ResourceKind.WOOD, 300)
+	var town_center := sim.spawn_drop_site(10, 10, 0b1111)
+	for index in 3:
+		var villager := sim.spawn_villager(6 + index, 8, 0, 0.09, 20, 0.5)
+		sim.issue_gather(villager, forest, town_center)
