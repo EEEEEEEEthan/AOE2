@@ -51,6 +51,53 @@ public partial class GameBridge : Node
         _session.Step();
     }
 
+    /// <summary>预览/截图专用：把所有建筑类型按双方阵营摆成两排，验收建筑外观。</summary>
+    public void StartBuildingShowcase()
+    {
+        var grid = new AoeSim.NavGrid(20, 12);
+        var terrain = AoeSim.TerrainGrid.Flat(20, 12);
+        var sim = new AoeSim.GameSim(grid, 7, 2, 6, AoeSim.MatchConfig.Standard, terrain);
+        _grid = grid;
+        _terrain = terrain;
+        long[] types =
+        {
+            AoeSim.BuildingTypes.TownCenter,
+            AoeSim.BuildingTypes.House,
+            AoeSim.BuildingTypes.Barracks,
+            AoeSim.BuildingTypes.Wall,
+            AoeSim.BuildingTypes.Tower,
+            AoeSim.BuildingTypes.Market,
+        };
+        int[] originsX = { 0, 5, 8, 12, 14, 16 };
+        for (int team = 0; team < 2; team++)
+        {
+            int originY = team == 0 ? 2 : 8;
+            for (int index = 0; index < types.Length; index++)
+            {
+                long id = sim.IssuePlaceBuilding(types[index], originsX[index], originY, team);
+                if (id >= 0)
+                {
+                    CompleteBuilding(sim, id);
+                }
+            }
+        }
+        _session = new AoeSim.LocalSession(sim);
+        _accumulator = 0.0;
+        _session.Step();
+    }
+
+    private static void CompleteBuilding(AoeSim.GameSim sim, long id)
+    {
+        long type = sim.World.GetValue(
+            id, AoeSim.SimComponents.Building, AoeSim.SimComponents.BuildingType);
+        sim.World.SetValue(
+            id, AoeSim.SimComponents.Building, AoeSim.SimComponents.Progress,
+            AoeSim.BuildingTypes.BuildTicks(type));
+        sim.World.SetValue(
+            id, AoeSim.SimComponents.Building, AoeSim.SimComponents.State,
+            AoeSim.BuildingSystem.StateComplete);
+    }
+
     public void StartDedicatedServer(int port)
     {
         AoeSim.GameSim sim = AoeSim.DemoScenario.Build();

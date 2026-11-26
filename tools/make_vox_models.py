@@ -82,6 +82,88 @@ def build_town_center():
     return v
 
 
+# 建筑按 1 格 = 8 体素建模，尺寸贴合 BuildingTypes 的占地，渲染时按 1/8 缩放即与 footprint 对齐。
+def build_town_center_hall():
+    v = {}
+    box(v, 0, 31, 0, 31, 0, 1, 6)    # stone base (4x4 footprint)
+    box(v, 2, 29, 2, 29, 2, 12, 1)   # team-colored main hall
+    for x0, x1, y0, y1 in ((0, 5, 0, 5), (26, 31, 0, 5), (0, 5, 26, 31), (26, 31, 26, 31)):
+        box(v, x0, x1, y0, y1, 2, 16, 6)  # stone corner towers
+    box(v, 2, 29, 2, 29, 12, 12, 10)  # gold trim
+    box(v, 3, 28, 3, 28, 13, 13, 7)   # roof pyramid
+    box(v, 7, 24, 7, 24, 14, 14, 7)
+    box(v, 11, 20, 11, 20, 15, 15, 7)
+    box(v, 14, 17, 14, 17, 16, 16, 7)
+    box(v, 13, 18, 2, 2, 2, 8, 3)     # gate
+    return v
+
+
+def build_house():
+    v = {}
+    box(v, 0, 15, 0, 15, 0, 1, 6)   # stone footing
+    box(v, 1, 14, 1, 14, 2, 8, 1)   # team-colored walls
+    box(v, 0, 15, 0, 15, 9, 9, 7)   # roof eave
+    box(v, 2, 13, 2, 13, 10, 10, 7)
+    box(v, 5, 10, 5, 10, 11, 11, 7)
+    box(v, 6, 9, 1, 1, 2, 6, 3)     # wooden door
+    box(v, 3, 4, 1, 1, 4, 5, 10)    # windows
+    box(v, 11, 12, 1, 1, 4, 5, 10)
+    return v
+
+
+def build_barracks():
+    v = {}
+    box(v, 0, 23, 0, 23, 0, 1, 6)   # stone footing
+    box(v, 1, 22, 1, 22, 2, 9, 1)   # team-colored walls
+    box(v, 0, 1, 0, 1, 2, 10, 6)    # corner towers
+    box(v, 22, 23, 0, 1, 2, 10, 6)
+    box(v, 0, 1, 22, 23, 2, 10, 6)
+    box(v, 22, 23, 22, 23, 2, 10, 6)
+    box(v, 0, 23, 0, 23, 10, 10, 7)  # roof eave
+    box(v, 3, 20, 3, 20, 11, 11, 7)
+    box(v, 8, 15, 8, 15, 12, 12, 7)
+    box(v, 9, 14, 1, 1, 2, 7, 3)     # gate
+    box(v, 1, 22, 1, 22, 9, 9, 10)   # gold trim
+    return v
+
+
+def build_wall():
+    v = {}
+    box(v, 0, 7, 0, 7, 0, 6, 6)      # stone body
+    box(v, 0, 7, 3, 4, 4, 5, 1)      # team-colored band
+    for x0, x1, y0, y1 in ((0, 1, 0, 1), (6, 7, 0, 1), (0, 1, 6, 7), (6, 7, 6, 7), (3, 4, 3, 4)):
+        box(v, x0, x1, y0, y1, 7, 9, 6)  # crenellations
+    return v
+
+
+def build_tower():
+    v = {}
+    box(v, 0, 15, 0, 15, 0, 2, 6)    # footing
+    box(v, 2, 13, 2, 13, 3, 20, 6)   # shaft
+    box(v, 2, 13, 2, 13, 20, 21, 1)  # team-colored band
+    box(v, 0, 15, 0, 15, 22, 23, 6)  # platform
+    for x0, x1, y0, y1 in (
+        (0, 2, 0, 2), (13, 15, 0, 2), (0, 2, 13, 15), (13, 15, 13, 15),
+        (6, 9, 0, 1), (6, 9, 14, 15), (0, 1, 6, 9), (14, 15, 6, 9),
+    ):
+        box(v, x0, x1, y0, y1, 24, 26, 6)  # battlements
+    return v
+
+
+def build_market():
+    v = {}
+    box(v, 0, 31, 0, 23, 0, 1, 6)    # stone platform
+    for x in (1, 30):
+        for y in (1, 22):
+            box(v, x, x, y, y, 2, 8, 3)  # wooden posts
+    box(v, 0, 31, 0, 23, 9, 10, 1)   # team-colored canopy
+    box(v, 0, 31, 10, 12, 9, 10, 10)  # gold canopy stripe
+    box(v, 4, 10, 4, 10, 2, 4, 3)    # crates
+    box(v, 20, 27, 4, 10, 2, 5, 3)
+    box(v, 13, 18, 3, 8, 2, 3, 8)    # goods counter
+    return v
+
+
 def write_vox(path: Path, voxels: dict) -> None:
     xs = [p[0] for p in voxels]
     ys = [p[1] for p in voxels]
@@ -116,6 +198,12 @@ def main() -> None:
         "soldier.vox": build_soldier(),
         "tree.vox": build_tree(),
         "town_center.vox": build_town_center(),
+        "town_center_hall.vox": build_town_center_hall(),
+        "house.vox": build_house(),
+        "barracks.vox": build_barracks(),
+        "wall.vox": build_wall(),
+        "tower.vox": build_tower(),
+        "market.vox": build_market(),
     }
     for name, voxels in models.items():
         write_vox(OUT / name, voxels)

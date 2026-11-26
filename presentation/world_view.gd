@@ -49,6 +49,16 @@ const MODEL_PATHS := {
 	KIND_DROP_SITE: "res://assets/vox/town_center.vox",
 }
 
+# 建筑类型（BuildingTypes）到完工模型的映射；建筑按 1 格 = 8 体素建模，缩放即贴合 footprint。
+const BUILDING_MODEL_PATHS := {
+	1: "res://assets/vox/town_center_hall.vox",
+	2: "res://assets/vox/house.vox",
+	3: "res://assets/vox/barracks.vox",
+	4: "res://assets/vox/wall.vox",
+	5: "res://assets/vox/tower.vox",
+	6: "res://assets/vox/market.vox",
+}
+
 const FOG_UNEXPLORED_COLOR := Color(0.0, 0.0, 0.0, 1.0)
 const FOG_EXPLORED_COLOR := Color(0.32, 0.34, 0.38, 0.55)
 const FOG_VISIBLE_COLOR := Color(0.0, 0.0, 0.0, 0.0)
@@ -149,14 +159,41 @@ func _create_entity(entity: Dictionary) -> Node3D:
 
 
 func _update_building(building: Node3D, entity: Dictionary) -> void:
+	var state: int = entity["building_state"]
+	var type: int = int(entity.get("building_type", 0))
+	var path: String = BUILDING_MODEL_PATHS.get(type, "")
+	if state == BUILDING_STATE_COMPLETE and not path.is_empty():
+		_show_building_model(building, entity, path)
+	else:
+		_show_building_block(building, entity, state)
+
+
+func _show_building_model(building: Node3D, entity: Dictionary, path: String) -> void:
 	var size_w: int = maxi(1, int(entity["width"]))
 	var size_h: int = maxi(1, int(entity["height"]))
-	var state: int = entity["building_state"]
+	var team_color: Color = TEAM_COLORS.get(entity["team"], Color(0.7, 0.7, 0.7))
+	var model := _model_for(path, team_color)
+	var visual := building.get_node("VoxelBuilding") as MeshInstance3D
+	var key := "model:%s:%d" % [path, team_color.to_rgba32()]
+	if visual.get_meta("vox_key", "") != key:
+		visual.mesh = model["mesh"]
+		visual.position = model["offset"]
+		visual.set_meta("vox_key", key)
+	# 模型几何中心落在 footprint 中心，底面贴地。
+	building.position = Vector3(
+		entity["x"] - 0.5 + size_w * 0.5,
+		_ground_level(entity["x"], entity["y"]),
+		entity["y"] - 0.5 + size_h * 0.5)
+
+
+func _show_building_block(building: Node3D, entity: Dictionary, state: int) -> void:
+	var size_w: int = maxi(1, int(entity["width"]))
+	var size_h: int = maxi(1, int(entity["height"]))
 	var color := _building_color(entity, state)
 	var layers := _building_layers(entity, state)
 	var key := "%d:%d:%d:%d" % [size_w, size_h, layers, color.to_rgba32()]
 	var visual := building.get_node("VoxelBuilding") as MeshInstance3D
-	if building.get_meta("vox_key", "") != key:
+	if visual.get_meta("vox_key", "") != key:
 		var voxels := {}
 		for voxel_y in range(0, layers):
 			for voxel_z in range(0, size_h):
@@ -164,7 +201,8 @@ func _update_building(building: Node3D, entity: Dictionary) -> void:
 					voxels[Vector3i(voxel_x, voxel_y, voxel_z)] = color
 		visual.mesh = VOXEL_MESHER.greedy_mesh(
 			voxels, Vector3(1.0, TERRAIN_LAYER, 1.0), true)
-		building.set_meta("vox_key", key)
+		visual.position = Vector3.ZERO
+		visual.set_meta("vox_key", key)
 	building.position = Vector3(
 		entity["x"] - 0.5,
 		_ground_level(entity["x"], entity["y"]),
@@ -190,11 +228,11 @@ func _building_color(entity: Dictionary, state: int) -> Color:
 	return BUILDING_FOUNDATION_TINT.lerp(team_color, 0.35)
 
 
-func _model_for(path: String, color: Color) -> Dictionary:
-	var key := "%s|%d" % [path, color.to_rgba32()]
+func _model_for(path: String, color: Color, scale: float = TERRAIN_LAYER) -> Dictionary:
+	var key := "%s|%d|%.4f" % [path, color.to_rgba32(), scale]
 	if _models.has(key):
 		return _models[key]
-	var model := VOX_MODEL.load_model(path, color, TERRAIN_LAYER)
+	var model := VOX_MODEL.load_model(path, color, scale)
 	_models[key] = model
 	return model
 
