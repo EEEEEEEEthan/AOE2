@@ -19,4 +19,7 @@ public sealed class Lockstep
 
     /// <summary>到回合边界直接递增回合号，不依赖客户端提交。</summary>
     public void AdvanceTurn() => Turn += 1;
+
+    /// <summary>读档专用：把回合号复位到存档时的时间点。</summary>
+    internal void RestoreTurn(long turn) => Turn = System.Math.Max(0, turn);
 }

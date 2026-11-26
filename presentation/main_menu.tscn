@@ -69,6 +69,12 @@ custom_minimum_size = Vector2(280, 44)
 layout_mode = 2
 text = "科技树"
 
+[node name="LoadGameButton" type="Button" parent="Center/Content"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(280, 44)
+layout_mode = 2
+text = "读取存档"
+
 [node name="ReplayButton" type="Button" parent="Center/Content"]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(280, 44)
@@ -136,6 +142,7 @@ filters = PackedStringArray("*.json ; 场景地图")
 [connection signal="pressed" from="Center/Content/CampaignButton" to="." method="_on_unavailable_pressed"]
 [connection signal="pressed" from="Center/Content/MultiplayerButton" to="." method="_on_multiplayer_pressed"]
 [connection signal="pressed" from="Center/Content/TechTreeButton" to="." method="_on_unavailable_pressed"]
+[connection signal="pressed" from="Center/Content/LoadGameButton" to="." method="_on_load_game_pressed"]
 [connection signal="pressed" from="Center/Content/ReplayButton" to="." method="_on_replay_pressed"]
 [connection signal="pressed" from="Center/Content/MapEditorButton" to="." method="_on_map_editor_pressed"]
 [connection signal="pressed" from="Center/Content/CustomMapButton" to="." method="_on_custom_map_pressed"]

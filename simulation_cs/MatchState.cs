@@ -93,6 +93,42 @@ public sealed class MatchState
         return new MatchState(world, entity, playerEntities, config);
     }
 
+    /// <summary>
+    /// 读档专用：不新建实体，只在已恢复的 SimWorld 里找回对局实体与各玩家状态实体，
+    /// 重建 MatchState 包装。找不到对局实体时返回 null。
+    /// </summary>
+    public static MatchState? Rebind(SimWorld world, long playerCount, MatchConfig config)
+    {
+        long matchEntity = -1;
+        ComponentStore matchStore = world.Store(SimComponents.Match);
+        ComponentStore playerStore = world.Store(SimComponents.PlayerState);
+        var playerEntities = new long[playerCount];
+        for (long team = 0; team < playerCount; team++)
+        {
+            playerEntities[team] = -1;
+        }
+        foreach (long id in world.Entities())
+        {
+            if (matchEntity < 0 && matchStore.Has(id))
+            {
+                matchEntity = id;
+            }
+            if (playerStore.Has(id))
+            {
+                long team = world.GetValue(id, SimComponents.Team, SimComponents.TeamId);
+                if (team >= 0 && team < playerCount)
+                {
+                    playerEntities[team] = id;
+                }
+            }
+        }
+        if (matchEntity < 0)
+        {
+            return null;
+        }
+        return new MatchState(world, matchEntity, playerEntities, config);
+    }
+
     public int PlayerCount => _playerEntities.Length;
 
     public long Phase

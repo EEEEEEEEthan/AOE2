@@ -871,6 +871,25 @@ unique_name_in_owner = true
 title = "开发中"
 dialog_text = "该功能正在开发中，敬请期待。"
 
+[node name="SaveDialog" type="ConfirmationDialog" parent="Hud/PauseMenu"]
+unique_name_in_owner = true
+title = "保存对局"
+ok_button_text = "保存"
+
+[node name="SaveDialogHint" type="Label" parent="Hud/PauseMenu/SaveDialog"]
+offset_left = 8.0
+offset_top = 8.0
+offset_right = 328.0
+offset_bottom = 32.0
+text = "存档名称"
+
+[node name="SaveNameEdit" type="LineEdit" parent="Hud/PauseMenu/SaveDialog"]
+unique_name_in_owner = true
+offset_left = 8.0
+offset_top = 36.0
+offset_right = 328.0
+offset_bottom = 68.0
+
 [node name="UnavailableDialog" type="AcceptDialog" parent="Hud"]
 unique_name_in_owner = true
 title = "开发中"
@@ -929,6 +948,7 @@ unique_name_in_owner = true
 [connection signal="pressed" from="Hud/ResultPanel/Margin/Content/SaveReplayButton" to="." method="_on_save_replay_pressed"]
 [connection signal="pressed" from="Hud/PauseMenu/Center/PausePanel/Margin/Content/ResumeButton" to="Hud/PauseMenu" method="_on_resume_pressed"]
 [connection signal="pressed" from="Hud/PauseMenu/Center/PausePanel/Margin/Content/SaveButton" to="Hud/PauseMenu" method="_on_save_pressed"]
+[connection signal="confirmed" from="Hud/PauseMenu/SaveDialog" to="Hud/PauseMenu" method="_on_save_confirmed"]
 [connection signal="pressed" from="Hud/PauseMenu/Center/PausePanel/Margin/Content/RestartButton" to="Hud/PauseMenu" method="_on_restart_pressed"]
 [connection signal="pressed" from="Hud/PauseMenu/Center/PausePanel/Margin/Content/SurrenderButton" to="Hud/PauseMenu" method="_on_surrender_pressed"]
 [connection signal="pressed" from="Hud/PauseMenu/Center/PausePanel/Margin/Content/PauseExitButton" to="Hud/PauseMenu" method="_on_exit_pressed"]

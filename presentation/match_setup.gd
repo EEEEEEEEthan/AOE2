@@ -20,9 +20,11 @@ var config: Dictionary = {
 var _prepared_bridge: Node = null
 var _prepared_world: Node = null
 var _network: Node = null
+var _pending_save_path := ""
 
 
 func reset_config() -> void:
+	_pending_save_path = ""
 	config = {
 		"seed": DEFAULT_SEED,
 		"player_count": DEFAULT_PLAYER_COUNT,
@@ -31,6 +33,21 @@ func reset_config() -> void:
 		"map_path": "",
 		"ai_difficulty": 1,
 	}
+
+
+## 读档入口：记录待加载的对局存档路径，由对局场景在启动时消费。
+func set_pending_save(path: String) -> void:
+	_pending_save_path = path
+
+
+func has_pending_save() -> bool:
+	return not _pending_save_path.is_empty()
+
+
+func take_pending_save() -> String:
+	var path := _pending_save_path
+	_pending_save_path = ""
+	return path
 
 
 func has_prepared() -> bool:

@@ -24,6 +24,13 @@ public partial class GameBridge : Node
     private bool _replayPaused = true;
     private double _replaySpeed = 1.0;
     private string _savedReplayPath = "";
+    private AoeSim.MapData? _map;
+    private long _seed = 20261127;
+    private int _playerCount = 2;
+    private int _aiDifficulty = 1;
+    private string _savedMatchPath = "";
+    private double _autoSaveSeconds;
+    private const double AutoSaveIntervalSeconds = 300.0;
 
     public bool HasSession => _session != null || _multiplayer != null;
 
@@ -34,6 +41,8 @@ public partial class GameBridge : Node
     public string LastReplayError { get; private set; } = "";
 
     public string LastMapError { get; private set; } = "";
+
+    public string LastMatchError { get; private set; } = "";
 
     public int MyTeam => _multiplayer != null
         ? (int)_multiplayer.MySeat
@@ -57,10 +66,12 @@ public partial class GameBridge : Node
     {
         StopPlayback();
         AoeSim.GameSim sim = AoeSim.DemoScenario.Build();
+        _map = null;
         _grid = sim.Grid;
         _terrain = sim.Terrain;
         _session = new AoeSim.LocalSession(sim);
         _accumulator = 0.0;
+        _autoSaveSeconds = 0.0;
         ResetBatchCache();
         // 先推一帧快照，保证渲染首帧就有数据。
         _session.Step();
@@ -76,6 +87,11 @@ public partial class GameBridge : Node
     {
         StopPlayback();
         AoeSim.MapData map = AoeSim.MapGenerator.Generate(mapType, seed, playerCount);
+        _map = map;
+        _seed = seed;
+        _playerCount = playerCount;
+        _aiDifficulty = aiDifficulty;
+        _autoSaveSeconds = 0.0;
         long[]? matchCivs = null;
         if (civIds != null)
         {
@@ -127,6 +143,11 @@ public partial class GameBridge : Node
             return false;
         }
         int playerCount = System.Math.Max(1, map.Starts.Count);
+        _map = map;
+        _seed = map.Seed;
+        _playerCount = playerCount;
+        _aiDifficulty = aiDifficulty;
+        _autoSaveSeconds = 0.0;
         long[]? matchCivs = null;
         if (civIds != null)
         {
@@ -177,6 +198,7 @@ public partial class GameBridge : Node
     public void StartBuildingShowcase()
     {
         StopPlayback();
+        _map = null;
         var grid = new AoeSim.NavGrid(72, 16);
         var terrain = AoeSim.TerrainGrid.Flat(72, 16);
         var sim = new AoeSim.GameSim(grid, 7, 2, 6, AoeSim.MatchConfig.Standard, terrain);
@@ -238,6 +260,7 @@ public partial class GameBridge : Node
     public void StartProductionDemo()
     {
         StopPlayback();
+        _map = null;
         AoeSim.GameSim sim = new AoeSim.GameSim(
             AoeSim.DemoScenario.BuildGrid(),
             20261127,
@@ -298,6 +321,7 @@ public partial class GameBridge : Node
     public void AdoptMultiplayer(MultiplayerSession session)
     {
         StopPlayback();
+        _map = null;
         _multiplayer = session;
         AddChild(session);
         _session = null;
@@ -356,6 +380,15 @@ public partial class GameBridge : Node
             if (_recorder != null)
             {
                 NoteRecordedTick(_session.Server.Sim, checksum);
+            }
+        }
+        if (steps > 0 && _map != null && !MatchEnded())
+        {
+            _autoSaveSeconds += steps * TickSeconds;
+            if (_autoSaveSeconds >= AutoSaveIntervalSeconds)
+            {
+                _autoSaveSeconds = 0.0;
+                AutoSaveMatch();
             }
         }
     }
@@ -481,6 +514,213 @@ public partial class GameBridge : Node
             return _savedReplayPath;
         }
         return SaveReplay();
+    }
+
+    private static string MatchSaveDirectory()
+    {
+        string path = Godot.ProjectSettings.GlobalizePath("user://saves");
+        Godot.DirAccess.MakeDirRecursiveAbsolute(path);
+        return path;
+    }
+
+    /// <summary>存档建议名：地图 + 游戏内时间，供暂停菜单预填。</summary>
+    public string SuggestedSaveName()
+    {
+        string mapName = _map?.Name ?? "对局";
+        long seconds = (_session?.Server.Sim.World.Tick ?? 0) / 30;
+        return $"{mapName} {seconds / 60:00}:{seconds % 60:00}";
+    }
+
+    /// <summary>把当前对局完整保存到磁盘；name 为空时用建议名。返回存档路径，失败返回空并写 LastMatchError。</summary>
+    public string SaveMatch(string name)
+    {
+        LastMatchError = "";
+        if (_multiplayer != null)
+        {
+            LastMatchError = "联机对局不支持本地存档";
+            return "";
+        }
+        if (_isReplay)
+        {
+            LastMatchError = "录像回放不能存为对局存档";
+            return "";
+        }
+        if (_session == null)
+        {
+            LastMatchError = "当前没有进行中的对局";
+            return "";
+        }
+        AoeSim.MapData? map = _map ?? BuildFallbackMap();
+        if (map == null)
+        {
+            LastMatchError = "当前对局缺少地图信息，无法存档";
+            return "";
+        }
+        string saveName = name.Trim();
+        if (saveName.Length == 0)
+        {
+            saveName = SuggestedSaveName();
+        }
+        try
+        {
+            string stamp = System.DateTime.Now.ToString("yyyyMMdd_HHmmss_fff");
+            string path = MatchSaveDirectory().PathJoin($"{stamp}.aoe2match");
+            AoeSim.MatchSaveData.Build(
+                _session.Server.Sim, map, saveName, _aiDifficulty).Save(path);
+            _savedMatchPath = path;
+            return path;
+        }
+        catch (System.Exception error)
+        {
+            LastMatchError = error.Message;
+            return "";
+        }
+    }
+
+    /// <summary>固定槽位保存（快速/自动存档会覆盖同名文件）。</summary>
+    private string SaveMatchToSlot(string name, string fileName)
+    {
+        LastMatchError = "";
+        if (_multiplayer != null || _isReplay || _session == null)
+        {
+            LastMatchError = "当前状态不支持存档";
+            return "";
+        }
+        AoeSim.MapData? map = _map ?? BuildFallbackMap();
+        if (map == null)
+        {
+            return "";
+        }
+        try
+        {
+            string path = MatchSaveDirectory().PathJoin(fileName);
+            AoeSim.MatchSaveData.Build(_session.Server.Sim, map, name, _aiDifficulty).Save(path);
+            return path;
+        }
+        catch (System.Exception error)
+        {
+            LastMatchError = error.Message;
+            return "";
+        }
+    }
+
+    public string QuickSaveMatch(string name = "快速存档") =>
+        SaveMatchToSlot(name, "quick.aoe2match");
+
+    private void AutoSaveMatch() => SaveMatchToSlot("自动存档", "autosave.aoe2match");
+
+    private AoeSim.MapData? BuildFallbackMap()
+    {
+        if (_terrain == null || _grid == null)
+        {
+            return null;
+        }
+        return new AoeSim.MapData("对局", _seed, _terrain, _grid);
+    }
+
+    public Godot.Collections.Array<Godot.Collections.Dictionary> ListMatchSaves()
+    {
+        var result = new Godot.Collections.Array<Godot.Collections.Dictionary>();
+        string directory = MatchSaveDirectory();
+        if (!Godot.DirAccess.DirExistsAbsolute(directory))
+        {
+            return result;
+        }
+        var entries = new System.Collections.Generic.List<(long created, Godot.Collections.Dictionary item)>();
+        foreach (string file in Godot.DirAccess.GetFilesAt(directory))
+        {
+            if (!file.EndsWith(".aoe2match", System.StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+            string fullPath = directory.PathJoin(file);
+            AoeSim.MatchSaveInfo info = AoeSim.MatchSaveData.LoadInfo(fullPath);
+            long seconds = info.Tick / 30;
+            entries.Add((info.CreatedUnix, new Godot.Collections.Dictionary
+            {
+                { "path", fullPath },
+                { "name", info.Name },
+                { "map", info.MapName },
+                { "civs", info.CivNames },
+                { "tick", info.Tick },
+                { "seconds", seconds },
+                { "created", info.CreatedUnix },
+                { "ok", info.Ok },
+                { "error", info.Error },
+            }));
+        }
+        entries.Sort((left, right) => right.created.CompareTo(left.created));
+        foreach (var entry in entries)
+        {
+            result.Add(entry.item);
+        }
+        return result;
+    }
+
+    public bool DeleteMatchSave(string path)
+    {
+        try
+        {
+            string absolute = path.StartsWith("user://", System.StringComparison.Ordinal)
+                || path.StartsWith("res://", System.StringComparison.Ordinal)
+                ? Godot.ProjectSettings.GlobalizePath(path)
+                : path;
+            if (System.IO.File.Exists(absolute))
+            {
+                System.IO.File.Delete(absolute);
+            }
+            return true;
+        }
+        catch (System.Exception error)
+        {
+            LastMatchError = error.Message;
+            return false;
+        }
+    }
+
+    /// <summary>读取存档并直接接管为可继续推进的本地对局；成功返回 true。</summary>
+    public bool LoadMatch(string path)
+    {
+        StopPlayback();
+        LastMatchError = "";
+        try
+        {
+            AoeSim.MatchSaveData data = AoeSim.MatchSaveData.Load(path);
+            AoeSim.GameSim sim = data.Restore();
+            AoeSim.MapData map = data.Map!;
+            _map = map;
+            _seed = data.Seed;
+            _playerCount = data.PlayerCount;
+            _aiDifficulty = data.AiDifficulty;
+            _grid = sim.Grid;
+            _terrain = sim.Terrain;
+            var session = new AoeSim.LocalSession(sim);
+            _session = session;
+            _accumulator = 0.0;
+            _autoSaveSeconds = 0.0;
+            ResetBatchCache();
+            _recorder = new AoeSim.ReplayRecorder(
+                map, data.Seed, data.PlayerCount, sim.Lockstep.TicksPerTurn, data.Config);
+            session.Server.Recorder = _recorder;
+            if (_aiDifficulty >= 0)
+            {
+                var difficulty = (AoeSim.AiDifficulty)_aiDifficulty;
+                for (long team = 1; team < data.PlayerCount; team++)
+                {
+                    session.Server.AddComputerPlayer(new AoeSim.ComputerPlayer(
+                        sim, team, difficulty, map.Starts, data.Seed));
+                }
+            }
+            // 不推进模拟：直接下发当前快照，保证读档后的校验和与存档一致。
+            session.Client.ApplySnapshot(session.Server.Snapshot());
+            _savedMatchPath = path;
+            return true;
+        }
+        catch (System.Exception error)
+        {
+            LastMatchError = error.Message;
+            return false;
+        }
     }
 
     public bool StartReplay(string path)

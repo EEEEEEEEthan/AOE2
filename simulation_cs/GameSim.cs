@@ -25,7 +25,7 @@ public sealed partial class GameSim
     public SpatialHash Spatial { get; }
     public OccupancyMap Occupancy { get; }
     public Lockstep Lockstep { get; }
-    public MatchState? Match { get; }
+    public MatchState? Match { get; internal set; }
     public List<VisionGrid> Vision { get; } = new();
 
     private readonly long _sightRadius = Fixed.FromFloat(DefaultSightTiles);
@@ -81,6 +81,34 @@ public sealed partial class GameSim
                 Progress(player).Civ = CivilizationCatalog.IsValid(civ)
                     ? civ
                     : CivilizationCatalog.Generic;
+            }
+        }
+    }
+
+    /// <summary>
+    /// 读档专用：组件数据已恢复后，重建不落盘的派生索引（玩家库存 / 进度实体索引）。
+    /// 空间哈希、占用图与流场由第一次 <see cref="SimulateTick"/> 从脏集合全量重建。
+    /// </summary>
+    internal void RestoreDerivedIndexes()
+    {
+        int resourceId = World.ComponentId(SimComponents.Resource);
+        int progressId = World.ComponentId(SimComponents.PlayerProgress);
+        foreach (long id in World.Entities())
+        {
+            if (!World.HasComponent(id, SimComponents.Team))
+            {
+                continue;
+            }
+            long team = World.GetValue(id, SimComponents.Team, SimComponents.TeamId);
+            if (resourceId >= 0 && World.HasComponent(id, resourceId)
+                && !_inventoryIndex.Contains(team))
+            {
+                _inventoryIndex.Set(team, id);
+            }
+            if (progressId >= 0 && World.HasComponent(id, progressId))
+            {
+                _progressIndex.Set(team, id);
+                World.RegisterPlayerEntity(SimComponents.PlayerProgress, team, id);
             }
         }
     }
