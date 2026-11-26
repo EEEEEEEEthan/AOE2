@@ -16,6 +16,66 @@ public partial class SimulationBridge : Node
         return hash;
     }
 
+    public Godot.Collections.Array<string> KernelSelfTest() => AOE2Framework.KernelSelfTest.Run();
+
+    public bool ProtocolSelfCheck()
+    {
+        var command = new AoeSim.LockstepCommand(1, AoeSim.LockstepCommand.KindGather, 12, 3, 4, 30, 31);
+        var frame = new AoeSim.CommandFrame
+        {
+            Player = 1,
+            Turn = 7,
+            Commands = new[] { command },
+        };
+        AoeSim.CommandFrame decodedCommand = AoeSim.CommandFrame.Decode(frame.Encode());
+        if (decodedCommand.Player != 1 || decodedCommand.Turn != 7 || decodedCommand.Commands.Length != 1)
+        {
+            return false;
+        }
+        AoeSim.LockstepCommand restored = decodedCommand.Commands[0];
+        if (restored.Entity != 12 || restored.TargetEntity != 30 || restored.DropEntity != 31 || restored.Kind != AoeSim.LockstepCommand.KindGather)
+        {
+            return false;
+        }
+        AoeSim.GameSim sim = AoeSim.DemoScenario.Build();
+        AoeSim.SnapshotFrame snapshot = AoeSim.SnapshotFrame.Build(sim.World, sim.Lockstep.Turn);
+        AoeSim.SnapshotFrame decodedSnapshot = AoeSim.SnapshotFrame.Decode(snapshot.Encode());
+        return decodedSnapshot.Tick == snapshot.Tick
+            && decodedSnapshot.Entities.Length == snapshot.Entities.Length
+            && decodedSnapshot.Entities.Length > 0;
+    }
+
+    public bool ServerClientSelfCheck()
+    {
+        var session = new AoeSim.LocalSession(AoeSim.DemoScenario.Build());
+        long firstChecksum = 0;
+        for (int tick = 0; tick < 30; tick++)
+        {
+            firstChecksum = session.Step();
+        }
+        long clientTick = session.Client.Tick;
+        int clientEntities = session.Client.EntityCount;
+        int serverEntities = 0;
+        foreach (long id in session.Server.Sim.World.Entities())
+        {
+            if (session.Server.Sim.World.HasComponent(id, AoeSim.SimComponents.Position))
+            {
+                serverEntities += 1;
+            }
+        }
+        return clientTick == 30 && clientEntities == serverEntities && clientEntities > 0 && firstChecksum != 0;
+    }
+
+    public long DemoChecksum(long ticks)
+    {
+        AoeSim.GameSim sim = AoeSim.DemoScenario.Build();
+        for (long tick = 0; tick < ticks; tick++)
+        {
+            sim.SimulateTick();
+        }
+        return sim.World.Checksum();
+    }
+
     public long ChecksumScenario(long scenarioId)
     {
         return scenarioId switch

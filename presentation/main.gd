@@ -1,70 +1,36 @@
 extends Node3D
 
-const GRID_WIDTH := 32
-const GRID_HEIGHT := 32
-const TICK_SECONDS := 1.0 / 30.0
-const SEED := 20261126
+const DEDICATED_FEATURE := "dedicated_server"
+const SERVER_ARGUMENT := "--server"
+const DEFAULT_PORT := 27015
 
-var sim: GameSim
-var _accumulator := 0.0
+var bridge: GameBridge
+
 
 func _ready() -> void:
-	sim = GameSim.new(_build_grid(), SEED, 2, 6)
-	%WorldView.bind_sim(sim)
-	%WorldView.build_terrain(sim.grid)
-	_spawn_forces()
-	_issue_orders()
-	_spawn_economy()
-	%WorldView.refresh()
+	bridge = GameBridge.new()
+	add_child(bridge)
+	if _is_dedicated():
+		bridge.StartDedicatedServer(_server_port())
+		return
+	bridge.StartLocalDemo()
+	%WorldView.build_terrain(bridge.GridWidth, bridge.GridHeight, bridge.GridBlocked())
+	%WorldView.refresh(bridge)
+
 
 func _process(delta: float) -> void:
-	if sim == null:
+	if bridge == null or not bridge.HasSession:
 		return
-	_accumulator += delta
-	var steps := 0
-	while _accumulator >= TICK_SECONDS and steps < 6:
-		sim.simulate_tick()
-		_accumulator -= TICK_SECONDS
-		steps += 1
-	if steps > 0:
-		%WorldView.refresh()
+	bridge.Step(delta)
+	%WorldView.refresh(bridge)
 
-func _build_grid() -> NavGrid:
-	var grid := NavGrid.new(GRID_WIDTH, GRID_HEIGHT)
-	for y in GRID_HEIGHT:
-		grid.set_blocked(0, y, true)
-		grid.set_blocked(GRID_WIDTH - 1, y, true)
-	for x in GRID_WIDTH:
-		grid.set_blocked(x, 0, true)
-		grid.set_blocked(x, GRID_HEIGHT - 1, true)
-	for y in range(3, 13):
-		grid.set_blocked(16, y, true)
-	for y in range(19, 29):
-		grid.set_blocked(16, y, true)
-	grid.set_blocked_rect(22, 6, 3, 2)
-	grid.set_blocked_rect(8, 24, 2, 4)
-	return grid
 
-func _spawn_forces() -> void:
-	for row in 9:
-		for column in 8:
-			var cell_y := 7 + row * 2
-			var team_blue_x := 3 + column
-			var team_red_x := 28 - column
-			sim.spawn_unit(team_blue_x, cell_y, 0, 60, 8, 1.2, 0.09)
-			sim.spawn_unit(team_red_x, cell_y, 1, 60, 8, 1.2, 0.09)
+func _is_dedicated() -> bool:
+	return OS.has_feature(DEDICATED_FEATURE) or (SERVER_ARGUMENT in OS.get_cmdline_user_args())
 
-func _issue_orders() -> void:
-	for id in sim.world.entities():
-		var team := sim.world.get_value(id, SimComponents.TEAM, SimComponents.TEAM_ID)
-		if team == 0:
-			sim.issue_move(id, 27, 16)
-		else:
-			sim.issue_move(id, 4, 16)
 
-func _spawn_economy() -> void:
-	var forest := sim.spawn_resource_node(6, 6, GameSim.ResourceKind.WOOD, 300)
-	var town_center := sim.spawn_drop_site(10, 10, 0b1111)
-	for index in 3:
-		var villager := sim.spawn_villager(6 + index, 8, 0, 0.09, 20, 0.5)
-		sim.issue_gather(villager, forest, town_center)
+func _server_port() -> int:
+	for argument in OS.get_cmdline_user_args():
+		if argument.begins_with("--port="):
+			return int(argument.trim_prefix("--port="))
+	return DEFAULT_PORT
