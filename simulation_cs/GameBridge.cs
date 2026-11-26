@@ -636,6 +636,37 @@ public partial class GameBridge : Node
                 { "market_stone", player.MarketStone },
                 { "population_used", player.PopulationUsed },
                 { "population_cap", player.PopulationCap },
+                { "kills", player.Kills },
+                { "losses", player.Losses },
+                { "gathered", player.Gathered },
+                { "score_military", player.ScoreMilitary },
+                { "score_economy", player.ScoreEconomy },
+                { "score_tech", player.ScoreTech },
+            });
+        }
+        return result;
+    }
+
+    /// <summary>分数曲线：由服务器按固定间隔采样，随快照下发；每项为 {tick, scores:[逐队总分]}。</summary>
+    public Godot.Collections.Array<Godot.Collections.Dictionary> ScoreTimeline()
+    {
+        var result = new Godot.Collections.Array<Godot.Collections.Dictionary>();
+        AoeSim.SnapshotFrame? frame = ClientState?.Latest;
+        if (frame == null || !frame.HasHistory)
+        {
+            return result;
+        }
+        for (int index = 0; index < frame.HistoryTicks.Length; index++)
+        {
+            var scores = new Godot.Collections.Array<long>();
+            foreach (long score in frame.HistoryScores[index])
+            {
+                scores.Add(score);
+            }
+            result.Add(new Godot.Collections.Dictionary
+            {
+                { "tick", frame.HistoryTicks[index] },
+                { "scores", scores },
             });
         }
         return result;

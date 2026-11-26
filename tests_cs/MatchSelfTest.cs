@@ -56,6 +56,9 @@ public static class MatchSelfTest
         Expect(failures, sim.Match != null && sim.Match.Reason == VictoryReason.Conquest, "conquest reason recorded");
         Expect(failures, sim.Match != null && sim.Match.Player(1).Defeated, "eliminated player defeated");
         Expect(failures, sim.Match != null && sim.Match.Player(1).Participants == 0, "eliminated player has no participants");
+        Expect(failures, sim.Match != null && sim.Match.Kills[0] == 1, "winner credited with the kill");
+        Expect(failures, sim.Match != null && sim.Match.Losses[1] == 1, "loser records the loss");
+        Expect(failures, sim.Match != null && sim.Match.HistoryTicks.Count > 0, "score history sampled on match end");
     }
 
     private static void CheckRegicide(List<string> failures)
@@ -122,6 +125,13 @@ public static class MatchSelfTest
         Expect(failures, sim.Match != null && sim.Match.Ended, "score limit ends match");
         Expect(failures, sim.Match != null && sim.Match.WinnerTeam == 0, "score winner has higher score");
         Expect(failures, sim.Match != null && sim.Match.Reason == VictoryReason.Score, "score reason recorded");
+        if (sim.Match != null)
+        {
+            long total = sim.Match.SocietyScore[0] + sim.Match.EconomyScore[0]
+                + sim.Match.MilitaryScore[0] + sim.Match.TechScore[0];
+            Expect(failures, sim.Match.Player(0).Score == total, "score equals its parts");
+            Expect(failures, sim.Match.EconomyScore[0] > 0, "economy score tracks resources");
+        }
     }
 
     private static void CheckSurrender(List<string> failures)
