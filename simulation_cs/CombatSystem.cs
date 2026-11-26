@@ -5,15 +5,15 @@ namespace AoeSim;
 
 public static class CombatSystem
 {
-    public static int Step(SimWorld world, SpatialHash spatial)
+    public static List<long> Step(SimWorld world, SpatialHash spatial)
     {
         spatial.Rebuild(world);
+        var dead = new List<long>();
         ComponentStore combatStore = world.Store(SimComponents.Combat);
         if (combatStore.Count == 0)
         {
-            return 0;
+            return dead;
         }
-        var dead = new List<long>();
         foreach (long id in world.Entities())
         {
             if (!combatStore.Has(id))
@@ -41,12 +41,7 @@ public static class CombatSystem
             }
             AutoEngage(world, spatial, id, dead);
         }
-        foreach (long id in dead)
-        {
-            PopulationSystem.Release(world, id);
-            world.Despawn(id);
-        }
-        return dead.Count;
+        return dead;
     }
 
     /// <summary>

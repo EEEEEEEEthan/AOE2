@@ -21,6 +21,7 @@ public static class SimComponents
     public const string PlayerProgress = "player_progress";
     public const string King = "king";
     public const string Building = "building";
+    public const string Construct = "construct";
     public const string Wonder = "wonder";
     public const string Relic = "relic";
     public const string Monk = "monk";
@@ -57,6 +58,11 @@ public static class SimComponents
     public const string OriginY = "origin_y";
     public const string FootprintWidth = "width";
     public const string FootprintHeight = "height";
+    public const string BuildingType = "b_type";
+    public const string SizeWidth = "size_w";
+    public const string SizeHeight = "size_h";
+    public const string MaxProgress = "max_progress";
+    public const string TargetBase = "target_base";
     public const string ProjectileTarget = "projectile_target";
     public const string ProjectileDamage = "projectile_damage";
     public const string ProjectileTicksLeft = "projectile_ticks_left";

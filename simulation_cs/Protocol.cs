@@ -13,6 +13,7 @@ public static class EntityKind
     public const long Monk = 5;
     public const long Relic = 6;
     public const long RelicSlot = 7;
+    public const long Building = 8;
 }
 
 public readonly struct EntitySnapshot
@@ -28,6 +29,12 @@ public readonly struct EntitySnapshot
     public readonly long GatherState;
     public readonly long CarryType;
     public readonly long CarryAmount;
+    public readonly long BuildingType;
+    public readonly long Width;
+    public readonly long Height;
+    public readonly long BuildingState;
+    public readonly long BuildingProgress;
+    public readonly long BuildingMaxProgress;
 
     public EntitySnapshot(
         long id,
@@ -40,7 +47,13 @@ public readonly struct EntitySnapshot
         long nodeRemaining,
         long gatherState,
         long carryType,
-        long carryAmount)
+        long carryAmount,
+        long buildingType,
+        long width,
+        long height,
+        long buildingState,
+        long buildingProgress,
+        long buildingMaxProgress)
     {
         Id = id;
         X = x;
@@ -53,6 +66,12 @@ public readonly struct EntitySnapshot
         GatherState = gatherState;
         CarryType = carryType;
         CarryAmount = carryAmount;
+        BuildingType = buildingType;
+        Width = width;
+        Height = height;
+        BuildingState = buildingState;
+        BuildingProgress = buildingProgress;
+        BuildingMaxProgress = buildingMaxProgress;
     }
 }
 
@@ -158,6 +177,21 @@ public sealed class SnapshotFrame
                 carryType = world.GetValue(id, SimComponents.Gather, SimComponents.CarryType);
                 carryAmount = world.GetValue(id, SimComponents.Gather, SimComponents.CarryAmount);
             }
+            long buildingType = 0;
+            long width = 0;
+            long height = 0;
+            long buildingState = 0;
+            long buildingProgress = 0;
+            long buildingMaxProgress = 0;
+            if (kind == EntityKind.Building)
+            {
+                buildingType = world.GetValue(id, SimComponents.Building, SimComponents.BuildingType);
+                width = world.GetValue(id, SimComponents.Building, SimComponents.SizeWidth);
+                height = world.GetValue(id, SimComponents.Building, SimComponents.SizeHeight);
+                buildingState = world.GetValue(id, SimComponents.Building, SimComponents.State);
+                buildingProgress = world.GetValue(id, SimComponents.Building, SimComponents.Progress);
+                buildingMaxProgress = world.GetValue(id, SimComponents.Building, SimComponents.MaxProgress);
+            }
             entities.Add(new EntitySnapshot(
                 id,
                 world.GetValue(id, SimComponents.Position, SimComponents.X),
@@ -169,7 +203,13 @@ public sealed class SnapshotFrame
                 nodeRemaining,
                 gatherState,
                 carryType,
-                carryAmount));
+                carryAmount,
+                buildingType,
+                width,
+                height,
+                buildingState,
+                buildingProgress,
+                buildingMaxProgress));
         }
         var frame = new SnapshotFrame { Tick = world.Tick, Turn = turn, Entities = entities.ToArray() };
         if (vision != null)
@@ -257,6 +297,10 @@ public sealed class SnapshotFrame
         {
             return EntityKind.RelicSlot;
         }
+        if (world.HasComponent(id, SimComponents.Building))
+        {
+            return EntityKind.Building;
+        }
         if (world.HasComponent(id, SimComponents.Combat))
         {
             return EntityKind.Unit;
@@ -330,6 +374,12 @@ public sealed class SnapshotFrame
                 writer.Write(entity.GatherState);
                 writer.Write(entity.CarryType);
                 writer.Write(entity.CarryAmount);
+                writer.Write(entity.BuildingType);
+                writer.Write(entity.Width);
+                writer.Write(entity.Height);
+                writer.Write(entity.BuildingState);
+                writer.Write(entity.BuildingProgress);
+                writer.Write(entity.BuildingMaxProgress);
             }
             writer.Write(VisionWidth);
             writer.Write(VisionHeight);
@@ -381,6 +431,12 @@ public sealed class SnapshotFrame
         for (int index = 0; index < count; index++)
         {
             entities[index] = new EntitySnapshot(
+                reader.ReadInt64(),
+                reader.ReadInt64(),
+                reader.ReadInt64(),
+                reader.ReadInt64(),
+                reader.ReadInt64(),
+                reader.ReadInt64(),
                 reader.ReadInt64(),
                 reader.ReadInt64(),
                 reader.ReadInt64(),

@@ -26,6 +26,13 @@ const KIND_UNIT := 0
 const KIND_VILLAGER := 1
 const KIND_RESOURCE_NODE := 2
 const KIND_DROP_SITE := 3
+const KIND_BUILDING := 8
+
+const BUILDING_STATE_FOUNDATION := 0
+const BUILDING_STATE_COMPLETE := 1
+const BUILDING_STATE_RUINS := 2
+const BUILDING_RUIN_COLOR := Color(0.24, 0.22, 0.2)
+const BUILDING_FOUNDATION_TINT := Color(0.72, 0.66, 0.55)
 
 const TERRAIN_GRASS_TOP := Color(0.34, 0.5, 0.24)
 const TERRAIN_GRASS_SIDE := Color(0.38, 0.29, 0.18)
@@ -95,12 +102,15 @@ func refresh(bridge: GameBridge) -> void:
 		alive[id] = true
 		var unit: Node3D = _units.get(id)
 		if unit == null:
-			unit = _create_unit(entity)
+			unit = _create_entity(entity)
 			_units[id] = unit
-		unit.position = Vector3(
-			entity["x"],
-			_ground_level(entity["x"], entity["y"]),
-			entity["y"])
+		if entity["kind"] == KIND_BUILDING:
+			_update_building(unit, entity)
+		else:
+			unit.position = Vector3(
+				entity["x"],
+				_ground_level(entity["x"], entity["y"]),
+				entity["y"])
 		unit.visible = _is_visible_entity(entity)
 	for id in _units.keys():
 		if not alive.has(id):
@@ -123,6 +133,61 @@ func _create_unit(entity: Dictionary) -> Node3D:
 	root.add_child(visual)
 	add_child(root)
 	return root
+
+
+func _create_entity(entity: Dictionary) -> Node3D:
+	if entity["kind"] != KIND_BUILDING:
+		return _create_unit(entity)
+	var building := Node3D.new()
+	var visual := MeshInstance3D.new()
+	visual.name = "VoxelBuilding"
+	visual.material_override = _get_voxel_material()
+	visual.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_ON
+	building.add_child(visual)
+	add_child(building)
+	return building
+
+
+func _update_building(building: Node3D, entity: Dictionary) -> void:
+	var size_w: int = maxi(1, int(entity["width"]))
+	var size_h: int = maxi(1, int(entity["height"]))
+	var state: int = entity["building_state"]
+	var color := _building_color(entity, state)
+	var layers := _building_layers(entity, state)
+	var key := "%d:%d:%d:%d" % [size_w, size_h, layers, color.to_rgba32()]
+	var visual := building.get_node("VoxelBuilding") as MeshInstance3D
+	if building.get_meta("vox_key", "") != key:
+		var voxels := {}
+		for voxel_y in range(0, layers):
+			for voxel_z in range(0, size_h):
+				for voxel_x in range(0, size_w):
+					voxels[Vector3i(voxel_x, voxel_y, voxel_z)] = color
+		visual.mesh = VOXEL_MESHER.greedy_mesh(
+			voxels, Vector3(1.0, TERRAIN_LAYER, 1.0), true)
+		building.set_meta("vox_key", key)
+	building.position = Vector3(
+		entity["x"] - 0.5,
+		_ground_level(entity["x"], entity["y"]),
+		entity["y"] - 0.5)
+
+
+func _building_layers(entity: Dictionary, state: int) -> int:
+	if state == BUILDING_STATE_RUINS:
+		return 1
+	if state == BUILDING_STATE_COMPLETE:
+		return 11
+	var progress: float = entity["building_progress"]
+	var max_progress: float = max(1.0, entity["building_max_progress"])
+	return 2 + int(round(clamp(progress / max_progress, 0.0, 1.0) * 9.0))
+
+
+func _building_color(entity: Dictionary, state: int) -> Color:
+	if state == BUILDING_STATE_RUINS:
+		return BUILDING_RUIN_COLOR
+	var team_color: Color = TEAM_COLORS.get(entity["team"], Color(0.7, 0.7, 0.7))
+	if state == BUILDING_STATE_COMPLETE:
+		return team_color.darkened(0.15)
+	return BUILDING_FOUNDATION_TINT.lerp(team_color, 0.35)
 
 
 func _model_for(path: String, color: Color) -> Dictionary:
