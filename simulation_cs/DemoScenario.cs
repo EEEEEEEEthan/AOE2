@@ -51,11 +51,20 @@ public static class DemoScenario
                 int cellY = 7 + row * 2;
                 int teamBlueX = 3 + column;
                 int teamRedX = 28 - column;
-                sim.SpawnUnit(teamBlueX, cellY, 0, 60, 8, 1.0, 1.0, 0.09);
-                sim.SpawnUnit(teamRedX, cellY, 1, 60, 8, 1.0, 1.0, 0.09);
+                sim.SpawnUnit(teamBlueX, cellY, 0, UnitTypeFor(row, column));
+                sim.SpawnUnit(teamRedX, cellY, 1, UnitTypeFor(row, column + 2));
             }
         }
     }
+
+    /// <summary>四兵种轮转混编，偏好长枪兵/弓兵对位，便于目视验证克制。</summary>
+    private static long UnitTypeFor(int row, int column) => (row + column) % 4 switch
+    {
+        0 => UnitDefs.Swordsman,
+        1 => UnitDefs.Spearman,
+        2 => UnitDefs.Archer,
+        _ => UnitDefs.Knight,
+    };
 
     private static void IssueOrders(GameSim sim)
     {
