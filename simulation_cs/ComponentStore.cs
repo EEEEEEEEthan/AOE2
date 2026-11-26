@@ -46,10 +46,34 @@ public sealed class ComponentStore
     private List<bool> _active = new();
     private List<string>? _sortedColumnNames;
     private int[] _sortedColumnIds = Array.Empty<int>();
+    private long[] _activeIds = Array.Empty<long>();
+    private bool _activeIdsDirty = true;
 
     public int Count { get; private set; }
 
     public bool Has(long id) => id >= 0 && id < _active.Count && _active[(int)id];
+
+    /// <summary>
+    /// 该组件当前挂载的实体 id 升序快照。Add/Remove 置脏，下次访问重建一次；
+    /// 系统遍历候选实体用它代替「全实体扫描 + Has(id)」。
+    /// </summary>
+    public ReadOnlySpan<long> ActiveIds()
+    {
+        if (_activeIdsDirty)
+        {
+            var ids = new List<long>(Count);
+            for (int id = 0; id < _active.Count; id++)
+            {
+                if (_active[id])
+                {
+                    ids.Add(id);
+                }
+            }
+            _activeIds = ids.ToArray();
+            _activeIdsDirty = false;
+        }
+        return _activeIds;
+    }
 
     public void Add(long id)
     {
@@ -62,6 +86,7 @@ public sealed class ComponentStore
         {
             _active[(int)id] = true;
             Count += 1;
+            _activeIdsDirty = true;
         }
     }
 
@@ -71,6 +96,7 @@ public sealed class ComponentStore
         {
             _active[(int)id] = false;
             Count -= 1;
+            _activeIdsDirty = true;
         }
     }
 

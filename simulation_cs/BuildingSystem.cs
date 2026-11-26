@@ -102,12 +102,9 @@ public static class BuildingSystem
         {
             return;
         }
-        foreach (long id in world.Entities())
+        foreach (long id in constructStore.ActiveIds())
         {
-            if (constructStore.Has(id))
-            {
-                StepWorker(world, grid, terrain, id);
-            }
+            StepWorker(world, grid, terrain, id);
         }
     }
 

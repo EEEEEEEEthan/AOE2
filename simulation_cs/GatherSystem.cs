@@ -17,12 +17,8 @@ public static class GatherSystem
         {
             return;
         }
-        foreach (long id in world.Entities())
+        foreach (long id in gatherStore.ActiveIds())
         {
-            if (!gatherStore.Has(id))
-            {
-                continue;
-            }
             long state = gatherStore.GetValue(id, SimComponents.GatherState);
             if (state == GatherStateGathering)
             {

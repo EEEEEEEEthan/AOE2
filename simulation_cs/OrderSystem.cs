@@ -25,6 +25,9 @@ public static class OrderSystem
     public const long DefaultLeashCells = 6;
     public const long DefaultFollowCells = 2;
 
+    [ThreadStatic]
+    private static List<long>? _candidates;
+
     public static void Step(SimWorld world, SpatialHash spatial)
     {
         ComponentStore orderStore = world.Store(SimComponents.Order);
@@ -32,10 +35,9 @@ public static class OrderSystem
         {
             return;
         }
-        spatial.Rebuild(world);
-        foreach (long id in world.Entities())
+        foreach (long id in orderStore.ActiveIds())
         {
-            if (!orderStore.Has(id) || !world.IsAlive(id))
+            if (!world.IsAlive(id))
             {
                 continue;
             }
@@ -483,7 +485,8 @@ public static class OrderSystem
         long team = world.GetValue(attacker, SimComponents.Team, SimComponents.TeamId);
         long x = world.GetValue(attacker, SimComponents.Position, SimComponents.X);
         long y = world.GetValue(attacker, SimComponents.Position, SimComponents.Y);
-        List<long> candidates = spatial.QueryRadius(x, y, Fixed.FromInt(radiusCells + 1));
+        List<long> candidates = _candidates ??= new List<long>();
+        spatial.QueryRadius(x, y, Fixed.FromInt(radiusCells + 1), candidates);
         int attackerX = (int)Fixed.ToInt(x);
         int attackerY = (int)Fixed.ToInt(y);
         long best = -1;

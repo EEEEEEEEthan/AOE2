@@ -20,9 +20,9 @@ public static class MonkSystem
         {
             return;
         }
-        foreach (long id in world.Entities())
+        foreach (long id in monkStore.ActiveIds())
         {
-            if (!monkStore.Has(id) || !world.IsAlive(id))
+            if (!world.IsAlive(id))
             {
                 continue;
             }

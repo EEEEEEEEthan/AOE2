@@ -15,9 +15,9 @@ public static class RelicSystem
         {
             return;
         }
-        foreach (long id in world.Entities())
+        foreach (long id in relicStore.ActiveIds())
         {
-            if (!relicStore.Has(id) || !world.IsAlive(id))
+            if (!world.IsAlive(id))
             {
                 continue;
             }

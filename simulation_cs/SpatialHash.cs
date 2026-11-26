@@ -28,12 +28,9 @@ public sealed class SpatialHash
     public void Rebuild(SimWorld world)
     {
         Clear();
-        foreach (long id in world.Entities())
+        ComponentStore positionStore = world.Store(SimComponents.Position);
+        foreach (long id in positionStore.ActiveIds())
         {
-            if (!world.HasComponent(id, SimComponents.Position))
-            {
-                continue;
-            }
             Insert(
                 id,
                 world.GetValue(id, SimComponents.Position, SimComponents.X),
@@ -44,9 +41,17 @@ public sealed class SpatialHash
     public List<long> QueryRadius(long xFixed, long yFixed, long radiusFixed)
     {
         var result = new List<long>();
+        QueryRadius(xFixed, yFixed, radiusFixed, result);
+        return result;
+    }
+
+    /// <summary>把半径内候选写入调用方提供的复用缓冲（先清空），热路径用它消除每次分配。</summary>
+    public void QueryRadius(long xFixed, long yFixed, long radiusFixed, List<long> result)
+    {
+        result.Clear();
         if (radiusFixed < 0)
         {
-            return result;
+            return;
         }
         long minX = Coordinate(xFixed - radiusFixed);
         long maxX = Coordinate(xFixed + radiusFixed);
@@ -63,7 +68,6 @@ public sealed class SpatialHash
                 result.AddRange(bucket);
             }
         }
-        return result;
     }
 
     private long Coordinate(long value)
