@@ -176,6 +176,48 @@ def build_farm():
     return v
 
 
+def build_palisade_wall():
+    v = {}
+    for x in (0, 2, 4, 6):
+        box(v, x, x + 1, 3, 4, 0, 7, 3)
+    box(v, 0, 7, 3, 4, 2, 2, 3)
+    box(v, 0, 7, 3, 4, 5, 6, 1)
+    return v
+
+
+def build_gate(door):
+    v = {}
+    box(v, 0, 1, 1, 6, 0, 9, 6)
+    box(v, 6, 7, 1, 6, 0, 9, 6)
+    box(v, 0, 1, 1, 6, 4, 5, 1)
+    box(v, 6, 7, 1, 6, 4, 5, 1)
+    if door:
+        box(v, 0, 7, 1, 6, 7, 9, 6)
+        box(v, 2, 5, 3, 4, 0, 6, 3)
+        box(v, 2, 5, 3, 4, 3, 3, 10)
+    return v
+
+
+def build_gate_closed():
+    return build_gate(True)
+
+
+def build_gate_open():
+    return build_gate(False)
+
+
+def build_fortified_wall():
+    v = {}
+    box(v, 0, 7, 0, 7, 0, 8, 6)
+    box(v, 0, 7, 3, 4, 4, 5, 1)
+    for x0, x1, y0, y1 in (
+        (0, 1, 0, 1), (3, 4, 0, 1), (6, 7, 0, 1),
+        (0, 1, 6, 7), (3, 4, 6, 7), (6, 7, 6, 7),
+    ):
+        box(v, x0, x1, y0, y1, 9, 10, 6)
+    return v
+
+
 def upscale(voxels: dict, factor: int = 2) -> dict:
     """把模型升到 16 体素/格：每个体素扩成 factor³ 块，世界尺寸不变、分辨率翻倍。"""
     scaled = {}
@@ -228,6 +270,10 @@ def main() -> None:
         "tower.vox": build_tower(),
         "market.vox": build_market(),
         "farm.vox": build_farm(),
+        "palisade_wall.vox": build_palisade_wall(),
+        "gate.vox": build_gate_closed(),
+        "gate_open.vox": build_gate_open(),
+        "fortified_wall.vox": build_fortified_wall(),
     }
     for name, voxels in models.items():
         voxels = upscale(voxels)
