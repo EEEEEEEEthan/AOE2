@@ -9,6 +9,9 @@ public sealed class GameSim
     public const long ResourceGold = 2;
     public const long ResourceStone = 3;
 
+    /// <summary>中立野生动物队伍：不与任何玩家开战，也不会被自动索敌。</summary>
+    public const long GaiaTeam = -1;
+
     public const double DefaultSightTiles = 4.0;
     public const int DefaultFieldCacheCapacity = 128;
 
@@ -398,7 +401,7 @@ public sealed class GameSim
         }
     }
 
-    public long SpawnResourceNode(int cellX, int cellY, long nodeType, long amount)
+    public long SpawnResourceNode(int cellX, int cellY, long nodeType, long amount, long subtype = ResourceSubtype.None)
     {
         EnsureInventoryInitialized();
         long id = World.Spawn();
@@ -407,7 +410,37 @@ public sealed class GameSim
         World.SetValue(id, SimComponents.Position, SimComponents.X, Fixed.Add(Fixed.FromInt(cellX), Fixed.Half));
         World.SetValue(id, SimComponents.Position, SimComponents.Y, Fixed.Add(Fixed.FromInt(cellY), Fixed.Half));
         World.SetValue(id, SimComponents.ResourceNode, SimComponents.NodeType, nodeType);
+        World.SetValue(id, SimComponents.ResourceNode, SimComponents.Subtype, subtype);
         World.SetValue(id, SimComponents.ResourceNode, SimComponents.Remaining, amount);
+        return id;
+    }
+
+    /// <summary>
+    /// 生成一只中立（gaia）野生动物：带血量与位置，可被玩家显式攻击；不挂 Combat，因此不会反击，
+    /// 也不会进入自动索敌。死亡后由 <see cref="HuntingSystem"/> 转为食物尸体。
+    /// </summary>
+    public long SpawnHuntingAnimal(int cellX, int cellY, long species)
+    {
+        if (!AnimalSpecies.IsValid(species))
+        {
+            return -1;
+        }
+        long hp = AnimalSpecies.MaxHp(species);
+        long id = World.Spawn();
+        World.Attach(id, SimComponents.Position);
+        World.Attach(id, SimComponents.Health);
+        World.Attach(id, SimComponents.Team);
+        World.Attach(id, SimComponents.HuntingAnimal);
+        World.Attach(id, SimComponents.Footprint);
+        World.SetValue(id, SimComponents.Position, SimComponents.X, Fixed.Add(Fixed.FromInt(cellX), Fixed.Half));
+        World.SetValue(id, SimComponents.Position, SimComponents.Y, Fixed.Add(Fixed.FromInt(cellY), Fixed.Half));
+        World.SetValue(id, SimComponents.Health, SimComponents.Hp, hp);
+        World.SetValue(id, SimComponents.Health, SimComponents.MaxHp, hp);
+        World.SetValue(id, SimComponents.Team, SimComponents.TeamId, GaiaTeam);
+        World.SetValue(id, SimComponents.HuntingAnimal, SimComponents.Species, species);
+        World.SetValue(id, SimComponents.HuntingAnimal, SimComponents.Meat, AnimalSpecies.Meat(species));
+        World.SetValue(id, SimComponents.Footprint, SimComponents.FootprintWidth, 1);
+        World.SetValue(id, SimComponents.Footprint, SimComponents.FootprintHeight, 1);
         return id;
     }
 
@@ -1298,6 +1331,7 @@ public sealed class GameSim
         List<long> dead = ProjectileSystem.Step(World);
         dead.AddRange(CombatSystem.Step(World, Spatial));
         ResolveDeaths(dead);
+        HuntingSystem.Step(World);
         ResearchSystem.Step(this);
         RelicSystem.Step(World, InventoryForTeam);
         if (Match != null)
@@ -1315,6 +1349,11 @@ public sealed class GameSim
         {
             if (!World.IsAlive(id))
             {
+                continue;
+            }
+            if (World.HasComponent(id, SimComponents.HuntingAnimal))
+            {
+                HuntingSystem.TurnIntoCorpse(World, id);
                 continue;
             }
             if (World.HasComponent(id, SimComponents.Building))

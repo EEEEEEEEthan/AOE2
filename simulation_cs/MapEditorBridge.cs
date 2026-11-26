@@ -197,6 +197,7 @@ public partial class MapEditorBridge : Node
                 Y = IntField(dict, "y"),
                 Team = IntField(dict, "team"),
                 NodeType = IntField(dict, "node_type"),
+                Subtype = IntField(dict, "subtype"),
                 Amount = IntField(dict, "amount"),
             });
         }
@@ -215,6 +216,7 @@ public partial class MapEditorBridge : Node
                 { "y", placement.Y },
                 { "team", placement.Team },
                 { "node_type", placement.NodeType },
+                { "subtype", placement.Subtype },
                 { "amount", placement.Amount },
             });
         }

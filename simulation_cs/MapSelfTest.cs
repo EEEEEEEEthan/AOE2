@@ -59,6 +59,19 @@ public static class MapSelfTest
         }
         Expect(failures, mirrored, "two player resources mirror across the map axis");
 
+        var animalCells = new HashSet<(long, int, int)>();
+        foreach (AnimalSpawn animal in map.Animals)
+        {
+            animalCells.Add((animal.Species, animal.X, animal.Y));
+        }
+        bool animalsMirrored = map.Animals.Count > 0;
+        foreach (AnimalSpawn animal in map.Animals)
+        {
+            animalsMirrored &= animalCells.Contains((animal.Species, map.Width - 1 - animal.X, animal.Y));
+        }
+        Expect(failures, animalsMirrored, "two player animals mirror across the map axis");
+        Expect(failures, map.Animals.Count > 0, "map generator places hunting animals");
+
         MapData four = Generate(Seed, 4);
         Expect(failures, four.Starts.Count == 4, "four player map has four starts");
     }
@@ -141,6 +154,7 @@ public static class MapSelfTest
         int townCenters = 0;
         int villagers = 0;
         int resourceNodes = 0;
+        int animals = 0;
         bool allComplete = true;
         foreach (long id in sim.World.Entities())
         {
@@ -166,6 +180,10 @@ public static class MapSelfTest
             {
                 resourceNodes += 1;
             }
+            if (sim.World.HasComponent(id, SimComponents.HuntingAnimal))
+            {
+                animals += 1;
+            }
         }
         Expect(failures, townCenters == 2, "generated match places one town center per player");
         Expect(failures, allComplete, "starting town centers are complete");
@@ -174,6 +192,7 @@ public static class MapSelfTest
             villagers == 2 * MapSetup.StartingVillagers,
             "generated match places starting villagers");
         Expect(failures, resourceNodes == map.Resources.Count, "generated match spawns every resource point");
+        Expect(failures, animals == map.Animals.Count, "generated match spawns every hunting animal");
         Expect(failures, sim.Grid.Width == Size && sim.Grid.Height == Size, "generated match uses map grid");
     }
 }

@@ -15,12 +15,13 @@ public static class EntityKind
     public const long RelicSlot = 7;
     public const long Building = 8;
     public const long TradeCart = 9;
+    public const long HuntingAnimal = 10;
 }
 
 /// <summary>网络协议版本：静态地图帧携带，握手时校验两端一致。</summary>
 public static class NetProtocol
 {
-    public const int Version = 6;
+    public const int Version = 7;
 }
 
 /// <summary>
@@ -110,6 +111,7 @@ public readonly struct EntitySnapshot
     public readonly long Kind;
     public readonly long Hp;
     public readonly long NodeType;
+    public readonly long NodeSubtype;
     public readonly long NodeRemaining;
     public readonly long GatherState;
     public readonly long CarryType;
@@ -133,6 +135,7 @@ public readonly struct EntitySnapshot
         long kind,
         long hp,
         long nodeType,
+        long nodeSubtype,
         long nodeRemaining,
         long gatherState,
         long carryType,
@@ -155,6 +158,7 @@ public readonly struct EntitySnapshot
         Kind = kind;
         Hp = hp;
         NodeType = nodeType;
+        NodeSubtype = nodeSubtype;
         NodeRemaining = nodeRemaining;
         GatherState = gatherState;
         CarryType = carryType;
@@ -284,11 +288,17 @@ public sealed class SnapshotFrame
             long team = world.GetValue(id, SimComponents.Team, SimComponents.TeamId);
             long hp = world.GetValue(id, SimComponents.Health, SimComponents.Hp);
             long nodeType = 0;
+            long nodeSubtype = 0;
             long nodeRemaining = 0;
             if (world.HasComponent(id, SimComponents.ResourceNode))
             {
                 nodeType = world.GetValue(id, SimComponents.ResourceNode, SimComponents.NodeType);
+                nodeSubtype = world.GetValue(id, SimComponents.ResourceNode, SimComponents.Subtype);
                 nodeRemaining = world.GetValue(id, SimComponents.ResourceNode, SimComponents.Remaining);
+            }
+            else if (world.HasComponent(id, SimComponents.HuntingAnimal))
+            {
+                nodeSubtype = world.GetValue(id, SimComponents.HuntingAnimal, SimComponents.Species);
             }
             long gatherState = 0;
             long carryType = 0;
@@ -336,6 +346,7 @@ public sealed class SnapshotFrame
                 kind,
                 hp,
                 nodeType,
+                nodeSubtype,
                 nodeRemaining,
                 gatherState,
                 carryType,
@@ -434,6 +445,10 @@ public sealed class SnapshotFrame
         if (world.HasComponent(id, SimComponents.ResourceNode))
         {
             return EntityKind.ResourceNode;
+        }
+        if (world.HasComponent(id, SimComponents.HuntingAnimal))
+        {
+            return EntityKind.HuntingAnimal;
         }
         if (world.HasComponent(id, SimComponents.DropSite))
         {
@@ -547,6 +562,7 @@ public sealed class SnapshotFrame
                 writer.Write(entity.Kind);
                 writer.Write(entity.Hp);
                 writer.Write(entity.NodeType);
+                writer.Write(entity.NodeSubtype);
                 writer.Write(entity.NodeRemaining);
                 writer.Write(entity.GatherState);
                 writer.Write(entity.CarryType);
@@ -676,6 +692,7 @@ public sealed class SnapshotFrame
         for (int index = 0; index < count; index++)
         {
             entities[index] = new EntitySnapshot(
+                reader.ReadInt64(),
                 reader.ReadInt64(),
                 reader.ReadInt64(),
                 reader.ReadInt64(),
