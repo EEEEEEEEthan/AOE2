@@ -12,6 +12,14 @@ public sealed class LockstepCommand
     public const long KindPickupRelic = 7;
     public const long KindDepositRelic = 8;
     public const long KindStance = 9;
+    public const long KindAttackMove = 10;
+    public const long KindPatrol = 11;
+    public const long KindGuard = 12;
+    public const long KindFollow = 13;
+    public const long KindHold = 14;
+    public const long KindSetRally = 15;
+
+    public const int FieldCount = 12;
 
     public long Player { get; set; }
     public long Kind { get; set; }
@@ -21,6 +29,10 @@ public sealed class LockstepCommand
     public long TargetEntity { get; set; }
     public long DropEntity { get; set; }
     public long Stance { get; set; }
+    public long Cell2X { get; set; }
+    public long Cell2Y { get; set; }
+    public long Aux { get; set; }
+    public long Queue { get; set; }
 
     public LockstepCommand(
         long player = 0,
@@ -30,7 +42,11 @@ public sealed class LockstepCommand
         long cellY = 0,
         long targetEntity = -1,
         long dropEntity = -1,
-        long stance = -1)
+        long stance = -1,
+        long cell2X = 0,
+        long cell2Y = 0,
+        long aux = 0,
+        long queue = 0)
     {
         Player = player;
         Kind = kind;
@@ -40,10 +56,18 @@ public sealed class LockstepCommand
         TargetEntity = targetEntity;
         DropEntity = dropEntity;
         Stance = stance;
+        Cell2X = cell2X;
+        Cell2Y = cell2Y;
+        Aux = aux;
+        Queue = queue;
     }
 
     public long[] ToArray() =>
-        new[] { Player, Kind, Entity, CellX, CellY, TargetEntity, DropEntity, Stance };
+        new[]
+        {
+            Player, Kind, Entity, CellX, CellY, TargetEntity, DropEntity, Stance,
+            Cell2X, Cell2Y, Aux, Queue,
+        };
 
     public static LockstepCommand FromArray(long[] values)
     {
@@ -79,6 +103,22 @@ public sealed class LockstepCommand
         if (values.Length >= 8)
         {
             command.Stance = values[7];
+        }
+        if (values.Length >= 9)
+        {
+            command.Cell2X = values[8];
+        }
+        if (values.Length >= 10)
+        {
+            command.Cell2Y = values[9];
+        }
+        if (values.Length >= 11)
+        {
+            command.Aux = values[10];
+        }
+        if (values.Length >= 12)
+        {
+            command.Queue = values[11];
         }
         return command;
     }

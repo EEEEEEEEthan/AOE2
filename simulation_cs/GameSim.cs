@@ -102,6 +102,7 @@ public sealed class GameSim
             return;
         }
         World.SetValue(id, SimComponents.Combat, SimComponents.Stance, stance);
+        World.Detach(id, SimComponents.Order);
         if (World.HasComponent(id, SimComponents.Engage))
         {
             World.Detach(id, SimComponents.Engage);
@@ -376,6 +377,7 @@ public sealed class GameSim
         }
         World.Detach(id, SimComponents.AttackTarget);
         World.Detach(id, SimComponents.Engage);
+        World.Detach(id, SimComponents.Order);
         World.SetValue(id, SimComponents.Move, SimComponents.TargetX, cellX);
         World.SetValue(id, SimComponents.Move, SimComponents.TargetY, cellY);
         World.SetValue(id, SimComponents.Move, SimComponents.Active, 1);
@@ -403,6 +405,7 @@ public sealed class GameSim
             World.SetValue(attacker, SimComponents.Velocity, SimComponents.Y, 0);
         }
         World.Detach(attacker, SimComponents.Engage);
+        World.Detach(attacker, SimComponents.Order);
         World.Attach(attacker, SimComponents.AttackTarget);
         World.SetValue(attacker, SimComponents.AttackTarget, SimComponents.TargetEntity, target);
     }
@@ -512,10 +515,31 @@ public sealed class GameSim
         }
         World.Detach(id, SimComponents.AttackTarget);
         World.Detach(id, SimComponents.Engage);
+        World.Detach(id, SimComponents.Order);
         World.SetValue(id, SimComponents.Move, SimComponents.Active, 0);
         World.SetValue(id, SimComponents.Velocity, SimComponents.X, 0);
         World.SetValue(id, SimComponents.Velocity, SimComponents.Y, 0);
     }
+
+    public void IssueAttackMove(long id, long cellX, long cellY) =>
+        OrderSystem.IssueAttackMove(World, id, cellX, cellY, 0, false);
+
+    public void IssuePatrol(long id, long firstX, long firstY, long secondX, long secondY) =>
+        OrderSystem.IssuePatrol(World, id, firstX, firstY, secondX, secondY, false);
+
+    public void IssueGuard(long id, long target) =>
+        OrderSystem.IssueGuard(World, id, target, 0, false);
+
+    public void IssueFollow(long id, long target) =>
+        OrderSystem.IssueFollow(World, id, target, 0, false);
+
+    public void IssueHold(long id) => OrderSystem.IssueHold(World, id, false);
+
+    public void IssueSetRally(long building, long cellX, long cellY, long target) =>
+        OrderSystem.SetRally(World, building, cellX, cellY, target);
+
+    public bool ApplyRallyTo(long building, long unit) =>
+        OrderSystem.ApplyRally(World, building, unit);
 
     public void ApplyCommand(LockstepCommand command)
     {
@@ -551,6 +575,29 @@ public sealed class GameSim
             case LockstepCommand.KindStance:
                 SetStance(command.Entity, command.Stance);
                 break;
+            case LockstepCommand.KindAttackMove:
+                OrderSystem.IssueAttackMove(
+                    World, command.Entity, command.CellX, command.CellY, command.Aux, command.Queue != 0);
+                break;
+            case LockstepCommand.KindPatrol:
+                OrderSystem.IssuePatrol(
+                    World, command.Entity, command.CellX, command.CellY,
+                    command.Cell2X, command.Cell2Y, command.Queue != 0);
+                break;
+            case LockstepCommand.KindGuard:
+                OrderSystem.IssueGuard(
+                    World, command.Entity, command.TargetEntity, command.Aux, command.Queue != 0);
+                break;
+            case LockstepCommand.KindFollow:
+                OrderSystem.IssueFollow(
+                    World, command.Entity, command.TargetEntity, command.Aux, command.Queue != 0);
+                break;
+            case LockstepCommand.KindHold:
+                OrderSystem.IssueHold(World, command.Entity, command.Queue != 0);
+                break;
+            case LockstepCommand.KindSetRally:
+                OrderSystem.SetRally(World, command.Entity, command.CellX, command.CellY, command.TargetEntity);
+                break;
         }
     }
 
@@ -562,6 +609,7 @@ public sealed class GameSim
         }
         GatherSystem.Step(World, InventoryForTeam);
         MonkSystem.Step(World);
+        OrderSystem.Step(World, Spatial);
         MovementSystem.Step(World, Grid, Occupancy, FieldProvider);
         ProjectileSystem.Step(World);
         CombatSystem.Step(World, Spatial);

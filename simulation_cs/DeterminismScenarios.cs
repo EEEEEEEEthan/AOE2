@@ -37,8 +37,26 @@ public static class DeterminismScenarios
             6 => DiagonalStep(),
             7 => GatherDeplete(),
             8 => AttackBattle(),
+            9 => OrderBattle(),
             _ => -1,
         };
+    }
+
+    private static long OrderBattle()
+    {
+        var sim = new GameSim(new NavGrid(24, 24), 309, 2, 6);
+        long attacker = sim.SpawnUnit(2, 10, 0, 100, 8, 1.0, 1.0, 0.4);
+        sim.SpawnUnit(7, 10, 1, 40, 6, 1.0, 1.0, 0.0);
+        long patroller = sim.SpawnUnit(3, 3, 0, 80, 4, 1.0, 1.0, 0.4);
+        long guarder = sim.SpawnUnit(4, 5, 0, 80, 4, 1.0, 1.0, 0.4);
+        sim.IssueAttackMove(attacker, 20, 10);
+        sim.IssuePatrol(patroller, 3, 2, 3, 12);
+        sim.IssueGuard(guarder, attacker);
+        for (int tick = 0; tick < 120; tick++)
+        {
+            sim.SimulateTick();
+        }
+        return sim.World.Checksum();
     }
 
     private static long PathMarch(long seed, bool withExtraTeam)
