@@ -9,7 +9,6 @@ namespace AoeSim;
 public static class MapSetup
 {
     public const int StartingVillagers = 3;
-    public const long StartingPopulationCap = 15;
     public const long StartingWood = 500;
     public const long StartingFood = 200;
     public const long StartingGold = 100;
@@ -41,12 +40,11 @@ public static class MapSetup
                 BuildingTypes.TownCenter, start.X, start.Y, start.Team);
             if (townCenter >= 0)
             {
-                Complete(townCenter, sim);
+                BuildingSystem.Complete(sim.World, townCenter);
             }
             int centerX = start.X + BuildingTypes.SizeWidth(BuildingTypes.TownCenter) / 2;
             int centerY = start.Y + BuildingTypes.SizeHeight(BuildingTypes.TownCenter) / 2;
             drops[start.Team] = sim.SpawnDropSite(centerX, centerY, 0b1111);
-            sim.AddPopulationCap(start.Team, StartingPopulationCap);
         }
 
         foreach (ResourcePoint point in map.Resources)
@@ -58,16 +56,6 @@ public static class MapSetup
         {
             SpawnVillagers(sim, map, start, drops[start.Team]);
         }
-    }
-
-    private static void Complete(long townCenter, GameSim sim)
-    {
-        long type = sim.World.GetValue(
-            townCenter, SimComponents.Building, SimComponents.BuildingType);
-        sim.World.SetValue(
-            townCenter, SimComponents.Building, SimComponents.Progress, BuildingTypes.BuildTicks(type));
-        sim.World.SetValue(
-            townCenter, SimComponents.Building, SimComponents.State, BuildingSystem.StateComplete);
     }
 
     private static void SpawnVillagers(GameSim sim, MapData map, PlayerStart start, long drop)
