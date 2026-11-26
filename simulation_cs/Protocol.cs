@@ -723,6 +723,7 @@ public sealed class SnapshotFrame
                 reader.ReadInt64(),
                 reader.ReadInt64(),
                 reader.ReadInt64(),
+                reader.ReadInt64(),
                 reader.ReadInt64());
         }
         frame.Entities = entities;

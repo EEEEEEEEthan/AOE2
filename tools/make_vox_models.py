@@ -82,7 +82,7 @@ def build_town_center():
     return v
 
 
-# 建筑按 1 格 = 8 体素建模，尺寸贴合 BuildingTypes 的占地，渲染时按 1/8 缩放即与 footprint 对齐。
+# 建筑按 1 格 = 16 体素建模，尺寸贴合 BuildingTypes 的占地，渲染时按 1/16 缩放即与 footprint 对齐。
 def build_town_center_hall():
     v = {}
     box(v, 0, 31, 0, 31, 0, 1, 6)    # stone base (4x4 footprint)
@@ -176,6 +176,17 @@ def build_farm():
     return v
 
 
+def upscale(voxels: dict, factor: int = 2) -> dict:
+    """把模型升到 16 体素/格：每个体素扩成 factor³ 块，世界尺寸不变、分辨率翻倍。"""
+    scaled = {}
+    for (x, y, z), color in voxels.items():
+        for dx in range(factor):
+            for dy in range(factor):
+                for dz in range(factor):
+                    scaled[(x * factor + dx, y * factor + dy, z * factor + dz)] = color
+    return scaled
+
+
 def write_vox(path: Path, voxels: dict) -> None:
     xs = [p[0] for p in voxels]
     ys = [p[1] for p in voxels]
@@ -219,6 +230,7 @@ def main() -> None:
         "farm.vox": build_farm(),
     }
     for name, voxels in models.items():
+        voxels = upscale(voxels)
         write_vox(OUT / name, voxels)
         print(f"{name}: {len(voxels)} voxels")
 

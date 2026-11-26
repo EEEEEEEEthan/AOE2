@@ -160,15 +160,15 @@ public sealed class ArabiaMapGenerator : IMapGenerator
     {
         for (int x = 0; x < _width; x++)
         {
-            terrain.Set(x, 0, TerrainGrid.TypeCliff, 2);
-            terrain.Set(x, _height - 1, TerrainGrid.TypeCliff, 2);
+            terrain.Set(x, 0, TerrainGrid.TypeCliff, 4);
+            terrain.Set(x, _height - 1, TerrainGrid.TypeCliff, 4);
             nav.SetBlocked(x, 0, true);
             nav.SetBlocked(x, _height - 1, true);
         }
         for (int y = 0; y < _height; y++)
         {
-            terrain.Set(0, y, TerrainGrid.TypeCliff, 2);
-            terrain.Set(_width - 1, y, TerrainGrid.TypeCliff, 2);
+            terrain.Set(0, y, TerrainGrid.TypeCliff, 4);
+            terrain.Set(_width - 1, y, TerrainGrid.TypeCliff, 4);
             nav.SetBlocked(0, y, true);
             nav.SetBlocked(_width - 1, y, true);
         }

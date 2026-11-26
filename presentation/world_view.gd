@@ -4,7 +4,10 @@ extends Node3D
 const VOXEL_MESHER := preload("res://presentation/voxel_mesher.gd")
 const VOX_MODEL := preload("res://presentation/vox_model.gd")
 
-const TERRAIN_LAYER := 1.0 / 8.0
+const VOXELS_PER_CELL := 16
+# 纯单位口径：地形横向按格（四顶点高度场）生成，不切 16×16 子体素；
+# TERRAIN_LAYER 只负责把高度层换算成 1/16 单位，模型与高度层共用这一密度。
+const TERRAIN_LAYER := 1.0 / float(VOXELS_PER_CELL)
 
 const TEAM_COLORS := {
 	0: Color(0.82, 0.22, 0.2),
@@ -49,7 +52,7 @@ const MODEL_PATHS := {
 	KIND_DROP_SITE: "res://assets/vox/town_center.vox",
 }
 
-# 建筑类型（BuildingTypes）到完工模型的映射；建筑按 1 格 = 8 体素建模，缩放即贴合 footprint。
+# 建筑类型（BuildingTypes）到完工模型的映射；建筑按 1 格 = 16 体素建模，缩放即贴合 footprint。
 const BUILDING_MODEL_PATHS := {
 	1: "res://assets/vox/town_center_hall.vox",
 	2: "res://assets/vox/house.vox",
@@ -289,13 +292,14 @@ func _show_building_block(building: Node3D, entity: Dictionary, state: int) -> v
 
 
 func _building_layers(entity: Dictionary, state: int) -> int:
+	# 层数翻倍，配合 TERRAIN_LAYER = 1/16 保持地基/废墟块的视觉高度不变。
 	if state == BUILDING_STATE_RUINS:
-		return 1
+		return 2
 	if state == BUILDING_STATE_COMPLETE:
-		return 11
+		return 22
 	var progress: float = entity["building_progress"]
 	var max_progress: float = max(1.0, entity["building_max_progress"])
-	return 2 + int(round(clamp(progress / max_progress, 0.0, 1.0) * 9.0))
+	return 4 + int(round(clamp(progress / max_progress, 0.0, 1.0) * 18.0))
 
 
 func _building_color(entity: Dictionary, state: int) -> Color:

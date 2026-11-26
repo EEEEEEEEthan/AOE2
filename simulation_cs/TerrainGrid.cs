@@ -12,7 +12,7 @@ public static class MovementDomain
 /// <summary>
 /// 带四顶点高度的地形：每格 4 个角各有一个高度，相邻格共享边上的顶点，
 /// 整体是一张 (宽 + 1) × (高 + 1) 的顶点高度场，格内高度由四角派生。
-/// 悬崖/陡坡由顶点高差形成；高度以 1/8 格为单位的体素层数表示，整数存储，确定性。
+/// 悬崖/陡坡由顶点高差形成；高度以 1/16 格为单位的体素层数表示，整数存储，确定性。
 /// 与 NavGrid 解耦：NavGrid 只描述建筑/障碍占位。
 /// </summary>
 public sealed class TerrainGrid
@@ -22,8 +22,8 @@ public sealed class TerrainGrid
     public const byte TypeWater = 2;
     public const byte TypeCliff = 3;
 
-    /// <summary>可通行/可建造的最大坡度，按 1/8 格高度层计；超过即视为悬崖或陡坡。</summary>
-    public const int MaxWalkableSlope = 2;
+    /// <summary>可通行/可建造的最大坡度，按 1/16 格高度层计；超过即视为悬崖或陡坡。</summary>
+    public const int MaxWalkableSlope = 4;
 
     public int Width { get; }
     public int Height { get; }

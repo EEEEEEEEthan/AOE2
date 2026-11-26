@@ -2,7 +2,8 @@ extends Node3D
 
 const VOXEL_MESHER := preload("res://presentation/voxel_mesher.gd")
 
-const TERRAIN_LAYER := 1.0 / 8.0
+const VOXELS_PER_CELL := 16
+const TERRAIN_LAYER := 1.0 / float(VOXELS_PER_CELL)
 
 const TOOL_RAISE := 0
 const TOOL_LOWER := 1

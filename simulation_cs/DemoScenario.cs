@@ -43,26 +43,26 @@ public static class DemoScenario
         var terrain = new TerrainGrid(GridWidth, GridHeight);
         for (int y = 0; y < GridHeight; y++)
         {
-            terrain.Set(0, y, TerrainGrid.TypeCliff, 1);
-            terrain.Set(GridWidth - 1, y, TerrainGrid.TypeCliff, 1);
+            terrain.Set(0, y, TerrainGrid.TypeCliff, 2);
+            terrain.Set(GridWidth - 1, y, TerrainGrid.TypeCliff, 2);
         }
         for (int x = 0; x < GridWidth; x++)
         {
-            terrain.Set(x, 0, TerrainGrid.TypeCliff, 1);
-            terrain.Set(x, GridHeight - 1, TerrainGrid.TypeCliff, 1);
+            terrain.Set(x, 0, TerrainGrid.TypeCliff, 2);
+            terrain.Set(x, GridHeight - 1, TerrainGrid.TypeCliff, 2);
         }
         for (int y = 3; y < 13; y++)
         {
-            terrain.Set(16, y, TerrainGrid.TypeCliff, 2);
+            terrain.Set(16, y, TerrainGrid.TypeCliff, 4);
         }
         for (int y = 19; y < 29; y++)
         {
-            terrain.Set(16, y, TerrainGrid.TypeCliff, 2);
+            terrain.Set(16, y, TerrainGrid.TypeCliff, 4);
         }
-        SetRect(terrain, 22, 6, 3, 2, TerrainGrid.TypeCliff, 2);
-        SetRect(terrain, 8, 24, 2, 4, TerrainGrid.TypeCliff, 2);
-        SetRect(terrain, 20, 2, 7, 4, TerrainGrid.TypeGrass, 4);
-        SetRect(terrain, 8, 2, 5, 4, TerrainGrid.TypeDirt, 1);
+        SetRect(terrain, 22, 6, 3, 2, TerrainGrid.TypeCliff, 4);
+        SetRect(terrain, 8, 24, 2, 4, TerrainGrid.TypeCliff, 4);
+        SetRect(terrain, 20, 2, 7, 4, TerrainGrid.TypeGrass, 8);
+        SetRect(terrain, 8, 2, 5, 4, TerrainGrid.TypeDirt, 2);
         SetRect(terrain, 27, 27, 3, 3, TerrainGrid.TypeWater, 0);
         return terrain;
     }
