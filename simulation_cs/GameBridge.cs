@@ -259,10 +259,24 @@ public partial class GameBridge : Node
         {
             return System.Array.Empty<int>();
         }
-        var heights = new int[_terrain.Heights.Length];
+        var heights = new int[_terrain.Types.Length];
         for (int index = 0; index < heights.Length; index++)
         {
-            heights[index] = _terrain.Heights[index];
+            heights[index] = _terrain.HeightAt(index % _terrain.Width, index / _terrain.Width);
+        }
+        return heights;
+    }
+
+    public int[] TerrainVertexHeights()
+    {
+        if (_terrain == null)
+        {
+            return System.Array.Empty<int>();
+        }
+        var heights = new int[_terrain.VertexHeights.Length];
+        for (int index = 0; index < heights.Length; index++)
+        {
+            heights[index] = _terrain.VertexHeights[index];
         }
         return heights;
     }
