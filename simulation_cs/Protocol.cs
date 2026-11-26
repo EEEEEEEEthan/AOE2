@@ -483,6 +483,10 @@ public sealed class SnapshotFrame
         {
             return EntityKind.TradeCart;
         }
+        if (world.HasComponent(id, SimComponents.Transport))
+        {
+            return EntityKind.Unit;
+        }
         if (world.HasComponent(id, SimComponents.Combat))
         {
             return EntityKind.Unit;
