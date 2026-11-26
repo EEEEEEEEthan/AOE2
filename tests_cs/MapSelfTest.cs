@@ -1,12 +1,15 @@
 using System.Collections.Generic;
 using AoeSim;
 
+using static AOE2Framework.SelfTestBase;
+
 namespace AOE2Framework;
 
 /// <summary>地图生成器的确定性、对称性、可建性与落地驱动自测。</summary>
 public static class MapSelfTest
 {
     private const int Size = 32;
+
     private const long Seed = 20261127;
 
     public static List<string> Run()
@@ -19,14 +22,6 @@ public static class MapSelfTest
         CheckJsonRoundtrip(failures);
         CheckSpawnedMatch(failures);
         return failures;
-    }
-
-    private static void Expect(List<string> failures, bool condition, string message)
-    {
-        if (!condition)
-        {
-            failures.Add(message);
-        }
     }
 
     private static MapData Generate(long seed = Seed, int players = 2) =>

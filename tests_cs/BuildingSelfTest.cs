@@ -1,6 +1,8 @@
 using System.Collections.Generic;
 using AoeSim;
 
+using static AOE2Framework.SelfTestBase;
+
 namespace AOE2Framework;
 
 /// <summary>建筑一期 C# 内核自测：多格占地、放置校验、施工、摧毁废墟、寻路恢复与确定性。</summary>
@@ -33,14 +35,6 @@ public static class BuildingSelfTest
         CheckDeterminism(failures);
         CheckCommandRoundtrip(failures);
         return failures;
-    }
-
-    private static void Expect(List<string> failures, bool condition, string message)
-    {
-        if (!condition)
-        {
-            failures.Add(message);
-        }
     }
 
     private static void CheckPlacementBlocking(List<string> failures)

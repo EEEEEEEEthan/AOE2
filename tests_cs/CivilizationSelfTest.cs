@@ -1,12 +1,15 @@
 using System.Collections.Generic;
 using AoeSim;
 
+using static AOE2Framework.SelfTestBase;
+
 namespace AOE2Framework;
 
 /// <summary>文明差异、独特单位与科技树裁剪的语义断言；返回空列表表示全过。</summary>
 public static class CivilizationSelfTest
 {
     private static readonly long[] GenericCivs = { CivilizationCatalog.Generic, CivilizationCatalog.Generic };
+
     private static readonly long[] LongbowCivs = { CivilizationCatalog.Longbow, CivilizationCatalog.Longbow };
 
     public static List<string> Run()
@@ -18,14 +21,6 @@ public static class CivilizationSelfTest
         CheckTechClipping(failures);
         CheckChecksum(failures);
         return failures;
-    }
-
-    private static void Expect(List<string> failures, bool condition, string message)
-    {
-        if (!condition)
-        {
-            failures.Add(message);
-        }
     }
 
     private static GameSim Build(long seed, long[] civs) =>

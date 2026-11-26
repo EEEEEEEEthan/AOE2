@@ -2,6 +2,8 @@ using System;
 using System.Collections.Generic;
 using AoeSim;
 
+using static AOE2Framework.SelfTestBase;
+
 namespace AOE2Framework;
 
 /// <summary>
@@ -22,14 +24,6 @@ public static class WaterSelfTest
         CheckWarshipCombat(failures);
         CheckGeneratedIslandsMatch(failures);
         return failures;
-    }
-
-    private static void Expect(List<string> failures, bool condition, string message)
-    {
-        if (!condition)
-        {
-            failures.Add(message);
-        }
     }
 
     private static TerrainGrid ShoreTerrain(int width, int height, int waterFromX)

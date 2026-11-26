@@ -1,6 +1,8 @@
 using System.Collections.Generic;
 using AoeSim;
 
+using static AOE2Framework.SelfTestBase;
+
 namespace AOE2Framework;
 
 /// <summary>
@@ -21,14 +23,6 @@ public static class HuntingSelfTest
         CheckGaiaNotAutoTargeted(failures);
         CheckDeterminism(failures);
         return failures;
-    }
-
-    private static void Expect(List<string> failures, bool condition, string message)
-    {
-        if (!condition)
-        {
-            failures.Add(message);
-        }
     }
 
     private static void CheckMapSubtypes(List<string> failures)

@@ -1,6 +1,8 @@
 using System.Collections.Generic;
 using AoeSim;
 
+using static AOE2Framework.SelfTestBase;
+
 namespace AOE2Framework;
 
 /// <summary>胜负条件与对局流程的语义断言；返回空列表表示全过。</summary>
@@ -19,14 +21,6 @@ public static class MatchSelfTest
         CheckDraw(failures);
         CheckDeterminism(failures);
         return failures;
-    }
-
-    private static void Expect(List<string> failures, bool condition, string message)
-    {
-        if (!condition)
-        {
-            failures.Add(message);
-        }
     }
 
     private static MatchConfig RulesOnly(VictoryCondition condition, long holdTicks = 5, long scoreLimit = 27000) => new()
