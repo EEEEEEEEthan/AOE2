@@ -83,6 +83,13 @@
 - 失败判定：玩家所有单位与建筑被摧毁、国王被杀、或主动投降；全部玩家出局判平局。
 - 表现层在快照里拿到对局状态后显示结算面板（胜方、触发条件、结束 tick、双方分数与存活数），并提供投降/退出入口。
 
+## 文明
+
+- `CivilizationCatalog` 定义每个文明：名称、独特单位、全局属性加成与被禁科技位图。一期落两个文明——通用 baseline 与不列颠（长弓兵、全局攻击 +1、禁用鳞甲）。
+- `GameSim` 构造时按玩家传入 `civIds` 选择文明（缺省通用）；文明 id 写入 `PlayerProgress.civ` 列，随校验和同步。
+- 兵种生成前校验 `UnitDefs.IsUnitAvailable(civ, unitType)`，独特单位非所属文明不可造；属性走 `TechCatalog.EffectiveStat(civ, ...)`，在时代/科技加成之上叠加文明加成。
+- 研究前校验 `TechCatalog.IsAvailable(civ, techId)`，被本文明禁用的科技不可研究。
+
 ## 运行与测试
 
 ```text

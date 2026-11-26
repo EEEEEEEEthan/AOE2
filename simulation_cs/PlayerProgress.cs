@@ -27,6 +27,13 @@ public sealed class PlayerProgress
         set => _world.SetValue(Entity, SimComponents.PlayerProgress, SimComponents.Research, value);
     }
 
+    /// <summary>所属文明 id；缺省为通用文明。写入后随校验和同步。</summary>
+    public long Civ
+    {
+        get => _world.GetValue(Entity, SimComponents.PlayerProgress, SimComponents.Civ);
+        set => _world.SetValue(Entity, SimComponents.PlayerProgress, SimComponents.Civ, value);
+    }
+
     public static long FindEntity(SimWorld world, long team)
     {
         if (world.TryGetPlayerEntity(SimComponents.PlayerProgress, team, out long indexed))

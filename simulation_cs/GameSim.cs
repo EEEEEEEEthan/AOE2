@@ -27,6 +27,7 @@ public sealed class GameSim
     private readonly LinkedList<long> _fieldRecency = new();
     private readonly Dictionary<long, long> _inventoryEntities = new();
     private readonly Dictionary<long, long> _progressEntities = new();
+    private readonly long[] _civIds;
     private bool _spatialReady;
 
     /// <summary>当前流场缓存中的条目数，供性能测试与监控断言。</summary>
@@ -46,7 +47,8 @@ public sealed class GameSim
         int ticksPerTurn = 6,
         MatchConfig? matchConfig = null,
         TerrainGrid? terrain = null,
-        int fieldCacheCapacity = DefaultFieldCacheCapacity)
+        int fieldCacheCapacity = DefaultFieldCacheCapacity,
+        long[]? civIds = null)
     {
         if (fieldCacheCapacity < 1)
         {
@@ -63,15 +65,31 @@ public sealed class GameSim
         Spatial = new SpatialHash(4);
         Occupancy = new OccupancyMap(grid.Width, grid.Height);
         Lockstep = new Lockstep(playerCount, ticksPerTurn);
+        _civIds = new long[playerCount];
         for (int player = 0; player < playerCount; player++)
         {
             Vision.Add(new VisionGrid(grid.Width, grid.Height));
+            long civ = civIds != null && player < civIds.Length
+                ? civIds[player]
+                : CivilizationCatalog.Generic;
+            _civIds[player] = CivilizationCatalog.IsValid(civ) ? civ : CivilizationCatalog.Generic;
         }
         if (matchConfig != null)
         {
             Match = MatchState.Create(World, Lockstep.PlayerCount, matchConfig);
         }
+        if (civIds != null)
+        {
+            for (int player = 0; player < Lockstep.PlayerCount; player++)
+            {
+                Progress(player);
+            }
+        }
     }
+
+    /// <summary>某玩家本局所选文明；越界返回通用文明。</summary>
+    public long Civ(long team) =>
+        team >= 0 && team < _civIds.Length ? _civIds[team] : CivilizationCatalog.Generic;
 
     /// <summary>
     /// 按兵种生成单位：HP/攻击/射程/护甲/克制全部取自 <see cref="UnitDefs"/>，
@@ -79,6 +97,10 @@ public sealed class GameSim
     /// </summary>
     public long SpawnUnit(int cellX, int cellY, long team, long unitType, long stance = CombatStance.Aggressive, long popCost = 0)
     {
+        if (!UnitDefs.IsUnitAvailable(Civ(team), unitType))
+        {
+            return -1;
+        }
         UnitDef def = UnitDefs.Get(unitType);
         long id = SpawnUnitCore(
             cellX,
@@ -183,16 +205,17 @@ public sealed class GameSim
         World.SetValue(id, SimComponents.Move, SimComponents.Active, 0);
         long age = PlayerAge(team);
         long research = PlayerResearch(team);
-        long effectiveMaxHp = TechCatalog.EffectiveStat(age, research, TechCatalog.StatMaxHp, maxHp);
-        long effectiveDamage = TechCatalog.EffectiveStat(age, research, TechCatalog.StatDamage, damage);
+        long civ = Civ(team);
+        long effectiveMaxHp = TechCatalog.EffectiveStat(civ, age, research, TechCatalog.StatMaxHp, maxHp);
+        long effectiveDamage = TechCatalog.EffectiveStat(civ, age, research, TechCatalog.StatDamage, damage);
         long rangeMin = ToRangeCells(rangeMinTiles);
         long rangeMax = TechCatalog.EffectiveStat(
-            age, research, TechCatalog.StatRangeMax, ToRangeCells(rangeMaxTiles));
+            civ, age, research, TechCatalog.StatRangeMax, ToRangeCells(rangeMaxTiles));
         if (rangeMax < rangeMin)
         {
             rangeMax = rangeMin;
         }
-        long cooldown = TechCatalog.EffectiveStat(age, research, TechCatalog.StatCooldown, 6);
+        long cooldown = TechCatalog.EffectiveStat(civ, age, research, TechCatalog.StatCooldown, 6);
         World.SetValue(id, SimComponents.Health, SimComponents.Hp, effectiveMaxHp);
         World.SetValue(id, SimComponents.Health, SimComponents.MaxHp, effectiveMaxHp);
         World.SetValue(id, SimComponents.Combat, SimComponents.Damage, effectiveDamage);
@@ -235,6 +258,11 @@ public sealed class GameSim
                 World.SetValue(entity, SimComponents.Team, SimComponents.TeamId, team);
                 World.SetValue(entity, SimComponents.PlayerProgress, SimComponents.Age, TechCatalog.AgeDark);
                 World.SetValue(entity, SimComponents.PlayerProgress, SimComponents.Research, 0);
+                long civ = Civ(team);
+                if (civ != CivilizationCatalog.Generic)
+                {
+                    World.SetValue(entity, SimComponents.PlayerProgress, SimComponents.Civ, civ);
+                }
                 World.RegisterPlayerEntity(SimComponents.PlayerProgress, team, entity);
             }
             _progressEntities[team] = entity;
