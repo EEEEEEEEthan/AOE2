@@ -21,6 +21,8 @@ public sealed class SimWorld
     private int[] _sortedComponentIds = Array.Empty<int>();
     private long[] _aliveCache = Array.Empty<long>();
     private bool _cacheDirty = true;
+    private readonly Dictionary<string, Dictionary<long, long>> _playerEntities = new(StringComparer.Ordinal);
+    private readonly Dictionary<long, (string Component, long Team)> _playerEntityOwner = new();
 
     public SimWorld(long seed = 1)
     {
@@ -51,6 +53,47 @@ public sealed class SimWorld
         for (int index = 0; index < _stores.Count; index++)
         {
             _stores[index].Remove(id);
+        }
+        ForgetPlayerEntity(id);
+    }
+
+    /// <summary>
+    /// 登记「每玩家一个实体」的派生索引（人口账本、玩家进度等）。索引不进组件存储，
+    /// 也不参与校验和，只把按玩家查找从全表扫描降到 O(1)。
+    /// </summary>
+    public void RegisterPlayerEntity(string component, long team, long id)
+    {
+        if (!_playerEntities.TryGetValue(component, out Dictionary<long, long>? byTeam))
+        {
+            byTeam = new Dictionary<long, long>();
+            _playerEntities.Add(component, byTeam);
+        }
+        byTeam[team] = id;
+        _playerEntityOwner[id] = (component, team);
+    }
+
+    public bool TryGetPlayerEntity(string component, long team, out long id)
+    {
+        if (_playerEntities.TryGetValue(component, out Dictionary<long, long>? byTeam))
+        {
+            return byTeam.TryGetValue(team, out id);
+        }
+        id = -1;
+        return false;
+    }
+
+    private void ForgetPlayerEntity(long id)
+    {
+        if (!_playerEntityOwner.TryGetValue(id, out (string Component, long Team) owner))
+        {
+            return;
+        }
+        _playerEntityOwner.Remove(id);
+        if (_playerEntities.TryGetValue(owner.Component, out Dictionary<long, long>? byTeam)
+            && byTeam.TryGetValue(owner.Team, out long registered)
+            && registered == id)
+        {
+            byTeam.Remove(owner.Team);
         }
     }
 

@@ -234,6 +234,7 @@ public sealed class GameSim
             World.SetValue(entity, SimComponents.PlayerProgress, SimComponents.Age, TechCatalog.AgeDark);
             World.SetValue(entity, SimComponents.PlayerProgress, SimComponents.Research, 0);
             _progressEntities[team] = entity;
+            World.RegisterPlayerEntity(SimComponents.PlayerProgress, team, entity);
         }
         return new PlayerProgress(World, entity, team);
     }
