@@ -17,7 +17,11 @@ TestEntry="*res://tests/tools/_test_entry.gd"
 version="4.8"
 flavor="beta5"
 install_directory="~/godots"
-dotnet="false"
+dotnet="true"
+
+[dotnet]
+
+project/assembly_name="AOE2Framework"
 
 [test]
 
