@@ -182,6 +182,70 @@ public sealed class GameSim
         World.SetValue(id, SimComponents.Position, SimComponents.X, Fixed.Add(Fixed.FromInt(cellX), Fixed.Half));
         World.SetValue(id, SimComponents.Position, SimComponents.Y, Fixed.Add(Fixed.FromInt(cellY), Fixed.Half));
         World.SetValue(id, SimComponents.Relic, SimComponents.HolderTeam, -1);
+        World.SetValue(id, SimComponents.Relic, SimComponents.Carrier, -1);
+        World.SetValue(id, SimComponents.Relic, SimComponents.StoredIn, -1);
+        World.SetValue(id, SimComponents.Relic, SimComponents.SpawnX, Fixed.FromInt(cellX));
+        World.SetValue(id, SimComponents.Relic, SimComponents.SpawnY, Fixed.FromInt(cellY));
+        return id;
+    }
+
+    public long SpawnMonk(
+        int cellX,
+        int cellY,
+        long team,
+        long maxHp,
+        double speedTilesPerTick,
+        long healRate,
+        long convertRate,
+        long convertRequired,
+        double rangeTiles,
+        long conversionResistance)
+    {
+        long id = World.Spawn();
+        World.Attach(id, SimComponents.Position);
+        World.Attach(id, SimComponents.Velocity);
+        World.Attach(id, SimComponents.Move);
+        World.Attach(id, SimComponents.Health);
+        World.Attach(id, SimComponents.Team);
+        World.Attach(id, SimComponents.Monk);
+        World.SetValue(id, SimComponents.Position, SimComponents.X, Fixed.Add(Fixed.FromInt(cellX), Fixed.Half));
+        World.SetValue(id, SimComponents.Position, SimComponents.Y, Fixed.Add(Fixed.FromInt(cellY), Fixed.Half));
+        World.SetValue(id, SimComponents.Velocity, SimComponents.X, 0);
+        World.SetValue(id, SimComponents.Velocity, SimComponents.Y, 0);
+        World.SetValue(id, SimComponents.Move, SimComponents.TargetX, cellX);
+        World.SetValue(id, SimComponents.Move, SimComponents.TargetY, cellY);
+        World.SetValue(id, SimComponents.Move, SimComponents.Speed, Fixed.FromFloat(speedTilesPerTick));
+        World.SetValue(id, SimComponents.Move, SimComponents.Active, 0);
+        World.SetValue(id, SimComponents.Health, SimComponents.Hp, maxHp);
+        World.SetValue(id, SimComponents.Health, SimComponents.MaxHp, maxHp);
+        World.SetValue(id, SimComponents.Team, SimComponents.TeamId, team);
+        long rangeFixed = Fixed.FromFloat(rangeTiles);
+        World.SetValue(id, SimComponents.Monk, SimComponents.State, MonkSystem.StateIdle);
+        World.SetValue(id, SimComponents.Monk, SimComponents.TargetEntity, -1);
+        World.SetValue(id, SimComponents.Monk, SimComponents.ConvertProgress, 0);
+        World.SetValue(id, SimComponents.Monk, SimComponents.ConvertRate, convertRate);
+        World.SetValue(id, SimComponents.Monk, SimComponents.ConvertRequired, convertRequired);
+        World.SetValue(id, SimComponents.Monk, SimComponents.HealRate, healRate);
+        World.SetValue(id, SimComponents.Monk, SimComponents.ConversionResistance, conversionResistance);
+        World.SetValue(id, SimComponents.Monk, SimComponents.RangeSq, Fixed.Mul(rangeFixed, rangeFixed));
+        World.SetValue(id, SimComponents.Monk, SimComponents.LastHp, maxHp);
+        return id;
+    }
+
+    public long SpawnRelicSlot(int cellX, int cellY, long team, long goldRate, long goldPeriod)
+    {
+        EnsureInventoryInitialized();
+        long id = World.Spawn();
+        World.Attach(id, SimComponents.Position);
+        World.Attach(id, SimComponents.Team);
+        World.Attach(id, SimComponents.RelicSlot);
+        World.SetValue(id, SimComponents.Position, SimComponents.X, Fixed.Add(Fixed.FromInt(cellX), Fixed.Half));
+        World.SetValue(id, SimComponents.Position, SimComponents.Y, Fixed.Add(Fixed.FromInt(cellY), Fixed.Half));
+        World.SetValue(id, SimComponents.Team, SimComponents.TeamId, team);
+        World.SetValue(id, SimComponents.RelicSlot, SimComponents.TeamId, team);
+        World.SetValue(id, SimComponents.RelicSlot, SimComponents.GoldRate, goldRate);
+        World.SetValue(id, SimComponents.RelicSlot, SimComponents.GoldPeriod, goldPeriod);
+        World.SetValue(id, SimComponents.RelicSlot, SimComponents.GoldProgress, 0);
         return id;
     }
 
@@ -191,6 +255,25 @@ public sealed class GameSim
         {
             World.SetValue(id, SimComponents.Relic, SimComponents.HolderTeam, team);
         }
+    }
+
+    /// <summary>某方当前持有的圣物数量（地面未归属的圣物不计）。供圣物胜利条件调用。</summary>
+    public long RelicCountOf(long team)
+    {
+        ComponentStore relicStore = World.Store(SimComponents.Relic);
+        long count = 0;
+        foreach (long id in World.Entities())
+        {
+            if (!relicStore.Has(id) || !World.IsAlive(id))
+            {
+                continue;
+            }
+            if (World.GetValue(id, SimComponents.Relic, SimComponents.HolderTeam) == team)
+            {
+                count += 1;
+            }
+        }
+        return count;
     }
 
     public void Surrender(long team)
@@ -279,6 +362,90 @@ public sealed class GameSim
         World.SetValue(villager, SimComponents.Gather, SimComponents.Progress, 0);
     }
 
+    public void IssueHeal(long monk, long target)
+    {
+        if (!World.IsAlive(monk) || !World.HasComponent(monk, SimComponents.Monk))
+        {
+            return;
+        }
+        if (monk == target || !World.IsAlive(target) || !World.HasComponent(target, SimComponents.Health))
+        {
+            return;
+        }
+        if (World.GetValue(target, SimComponents.Team, SimComponents.TeamId)
+            != World.GetValue(monk, SimComponents.Team, SimComponents.TeamId))
+        {
+            return;
+        }
+        SetMonkTarget(monk, MonkSystem.StateHealing, target);
+    }
+
+    public void IssueConvert(long monk, long target)
+    {
+        if (!World.IsAlive(monk) || !World.HasComponent(monk, SimComponents.Monk))
+        {
+            return;
+        }
+        if (monk == target || !World.IsAlive(target) || !World.HasComponent(target, SimComponents.Health))
+        {
+            return;
+        }
+        if (World.GetValue(target, SimComponents.Team, SimComponents.TeamId)
+            == World.GetValue(monk, SimComponents.Team, SimComponents.TeamId))
+        {
+            return;
+        }
+        SetMonkTarget(monk, MonkSystem.StateConverting, target);
+    }
+
+    public void IssuePickupRelic(long monk, long relic)
+    {
+        if (!World.IsAlive(monk) || !World.HasComponent(monk, SimComponents.Monk))
+        {
+            return;
+        }
+        if (!World.IsAlive(relic) || !World.HasComponent(relic, SimComponents.Relic))
+        {
+            return;
+        }
+        if (World.GetValue(relic, SimComponents.Relic, SimComponents.Carrier) >= 0
+            || World.GetValue(relic, SimComponents.Relic, SimComponents.StoredIn) >= 0)
+        {
+            return;
+        }
+        SetMonkTarget(monk, MonkSystem.StateSeekRelic, relic);
+    }
+
+    public void IssueDepositRelic(long monk, long slot)
+    {
+        if (!World.IsAlive(monk) || !World.HasComponent(monk, SimComponents.Monk))
+        {
+            return;
+        }
+        if (!World.IsAlive(slot) || !World.HasComponent(slot, SimComponents.RelicSlot))
+        {
+            return;
+        }
+        if (MonkSystem.CarriedRelic(World, monk) < 0)
+        {
+            return;
+        }
+        SetMonkTarget(monk, MonkSystem.StateSeekDeposit, slot);
+    }
+
+    private void SetMonkTarget(long monk, long state, long target)
+    {
+        if (World.HasComponent(monk, SimComponents.Move))
+        {
+            World.SetValue(monk, SimComponents.Move, SimComponents.Active, 0);
+            World.SetValue(monk, SimComponents.Velocity, SimComponents.X, 0);
+            World.SetValue(monk, SimComponents.Velocity, SimComponents.Y, 0);
+        }
+        World.SetValue(monk, SimComponents.Monk, SimComponents.State, state);
+        World.SetValue(monk, SimComponents.Monk, SimComponents.TargetEntity, target);
+        World.SetValue(monk, SimComponents.Monk, SimComponents.ConvertProgress, 0);
+    }
+
     public void Stop(long id)
     {
         if (!World.IsAlive(id))
@@ -310,6 +477,18 @@ public sealed class GameSim
             case LockstepCommand.KindSurrender:
                 Surrender(command.Player);
                 break;
+            case LockstepCommand.KindHeal:
+                IssueHeal(command.Entity, command.TargetEntity);
+                break;
+            case LockstepCommand.KindConvert:
+                IssueConvert(command.Entity, command.TargetEntity);
+                break;
+            case LockstepCommand.KindPickupRelic:
+                IssuePickupRelic(command.Entity, command.TargetEntity);
+                break;
+            case LockstepCommand.KindDepositRelic:
+                IssueDepositRelic(command.Entity, command.TargetEntity);
+                break;
         }
     }
 
@@ -320,8 +499,10 @@ public sealed class GameSim
             return;
         }
         GatherSystem.Step(World, InventoryForTeam);
+        MonkSystem.Step(World);
         MovementSystem.Step(World, Grid, FieldProvider);
         CombatSystem.Step(World, Spatial);
+        RelicSystem.Step(World, InventoryForTeam);
         if (Match != null)
         {
             MatchSystem.Step(World, Match);
@@ -372,7 +553,8 @@ public sealed class GameSim
         }
     }
 
-    private long InventoryForTeam(long team) => _inventoryEntities[team];
+    private long InventoryForTeam(long team) =>
+        _inventoryEntities.TryGetValue(team, out long inventory) ? inventory : -1;
 
     private FlowField FieldProvider(int targetX, int targetY)
     {

@@ -19,6 +19,8 @@ public static class SimComponents
     public const string Building = "building";
     public const string Wonder = "wonder";
     public const string Relic = "relic";
+    public const string Monk = "monk";
+    public const string RelicSlot = "relic_slot";
 
     public const string X = "x";
     public const string Y = "y";
@@ -70,4 +72,19 @@ public static class SimComponents
     public const string Surrendered = "surrendered";
     public const string Complete = "complete";
     public const string HolderTeam = "holder_team";
+
+    public const string State = "state";
+    public const string ConvertProgress = "convert_progress";
+    public const string ConvertRate = "convert_rate";
+    public const string ConvertRequired = "convert_required";
+    public const string HealRate = "heal_rate";
+    public const string ConversionResistance = "conversion_resistance";
+    public const string LastHp = "last_hp";
+    public const string Carrier = "carrier";
+    public const string StoredIn = "stored_in";
+    public const string SpawnX = "spawn_x";
+    public const string SpawnY = "spawn_y";
+    public const string GoldRate = "gold_rate";
+    public const string GoldPeriod = "gold_period";
+    public const string GoldProgress = "gold_progress";
 }
