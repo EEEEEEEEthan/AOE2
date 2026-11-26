@@ -6,6 +6,7 @@ public sealed class LockstepCommand
     public const long KindAttack = 1;
     public const long KindStop = 2;
     public const long KindGather = 3;
+    public const long KindSurrender = 4;
 
     public long Player { get; set; }
     public long Kind { get; set; }

@@ -13,16 +13,21 @@ public sealed class GameSim
     public NavGrid Grid { get; }
     public SpatialHash Spatial { get; }
     public Lockstep Lockstep { get; }
+    public MatchState? Match { get; }
 
     private readonly Dictionary<long, FlowField> _fields = new();
     private readonly Dictionary<long, long> _inventoryEntities = new();
 
-    public GameSim(NavGrid grid, long seed = 1, int playerCount = 2, int ticksPerTurn = 6)
+    public GameSim(NavGrid grid, long seed = 1, int playerCount = 2, int ticksPerTurn = 6, MatchConfig? matchConfig = null)
     {
         Grid = grid;
         World = new SimWorld(seed);
         Spatial = new SpatialHash(4);
         Lockstep = new Lockstep(playerCount, ticksPerTurn);
+        if (matchConfig != null)
+        {
+            Match = MatchState.Create(World, Lockstep.PlayerCount, matchConfig);
+        }
     }
 
     public long SpawnUnit(
@@ -120,6 +125,89 @@ public sealed class GameSim
         return id;
     }
 
+    public long SpawnKing(
+        int cellX,
+        int cellY,
+        long team,
+        long maxHp,
+        long damage,
+        double rangeTiles,
+        double speedTilesPerTick)
+    {
+        long id = SpawnUnit(cellX, cellY, team, maxHp, damage, rangeTiles, speedTilesPerTick);
+        World.Attach(id, SimComponents.King);
+        if (Match != null && team >= 0 && team < Match.PlayerCount)
+        {
+            Match.Player(team).HadKing = true;
+        }
+        return id;
+    }
+
+    public long SpawnBuilding(int cellX, int cellY, long team, long maxHp)
+    {
+        long id = World.Spawn();
+        World.Attach(id, SimComponents.Position);
+        World.Attach(id, SimComponents.Health);
+        World.Attach(id, SimComponents.Team);
+        World.Attach(id, SimComponents.Building);
+        World.SetValue(id, SimComponents.Position, SimComponents.X, Fixed.Add(Fixed.FromInt(cellX), Fixed.Half));
+        World.SetValue(id, SimComponents.Position, SimComponents.Y, Fixed.Add(Fixed.FromInt(cellY), Fixed.Half));
+        World.SetValue(id, SimComponents.Health, SimComponents.Hp, maxHp);
+        World.SetValue(id, SimComponents.Health, SimComponents.MaxHp, maxHp);
+        World.SetValue(id, SimComponents.Team, SimComponents.TeamId, team);
+        return id;
+    }
+
+    public long SpawnWonder(int cellX, int cellY, long team, long maxHp)
+    {
+        long id = SpawnBuilding(cellX, cellY, team, maxHp);
+        World.Attach(id, SimComponents.Wonder);
+        World.SetValue(id, SimComponents.Wonder, SimComponents.Complete, 0);
+        return id;
+    }
+
+    public void CompleteWonder(long id)
+    {
+        if (World.IsAlive(id) && World.HasComponent(id, SimComponents.Wonder))
+        {
+            World.SetValue(id, SimComponents.Wonder, SimComponents.Complete, 1);
+        }
+    }
+
+    public long SpawnRelic(int cellX, int cellY)
+    {
+        long id = World.Spawn();
+        World.Attach(id, SimComponents.Position);
+        World.Attach(id, SimComponents.Relic);
+        World.SetValue(id, SimComponents.Position, SimComponents.X, Fixed.Add(Fixed.FromInt(cellX), Fixed.Half));
+        World.SetValue(id, SimComponents.Position, SimComponents.Y, Fixed.Add(Fixed.FromInt(cellY), Fixed.Half));
+        World.SetValue(id, SimComponents.Relic, SimComponents.HolderTeam, -1);
+        return id;
+    }
+
+    public void SetRelicHolder(long id, long team)
+    {
+        if (World.IsAlive(id) && World.HasComponent(id, SimComponents.Relic))
+        {
+            World.SetValue(id, SimComponents.Relic, SimComponents.HolderTeam, team);
+        }
+    }
+
+    public void Surrender(long team)
+    {
+        if (Match == null || Match.Ended || team < 0 || team >= Match.PlayerCount)
+        {
+            return;
+        }
+        PlayerState player = Match.Player(team);
+        if (player.Defeated)
+        {
+            return;
+        }
+        player.Defeated = true;
+        player.Surrendered = true;
+    }
+
     public long Resource(long player, long resourceKind)
     {
         EnsureInventoryInitialized();
@@ -189,14 +277,25 @@ public sealed class GameSim
             case LockstepCommand.KindGather:
                 IssueGather(command.Entity, command.TargetEntity, command.DropEntity);
                 break;
+            case LockstepCommand.KindSurrender:
+                Surrender(command.Player);
+                break;
         }
     }
 
     public void SimulateTick()
     {
+        if (Match != null && Match.Ended)
+        {
+            return;
+        }
         GatherSystem.Step(World, InventoryForTeam);
         MovementSystem.Step(World, Grid, FieldProvider);
         CombatSystem.Step(World, Spatial);
+        if (Match != null)
+        {
+            MatchSystem.Step(World, Match);
+        }
         World.Tick += 1;
     }
 

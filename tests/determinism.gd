@@ -13,7 +13,7 @@ const SCENARIO_GOLDENS := [
 ]
 const RNG_DIGEST_12345 := 1825340387
 const RNG_DIGEST_999 := 813643442
-const DEMO_300 := 3805832939
+const DEMO_300 := 654417002
 
 
 func run() -> void:
