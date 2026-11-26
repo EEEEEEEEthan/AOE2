@@ -46,6 +46,23 @@ public static class TechCatalog
     private static readonly long[] TechGoldCost = { 0, 0, 50 };
     private static readonly long[] TechResearchTicks = { 90, 90, 120 };
 
+    private static readonly string[] TechDisplayNames = { "锻造", "鳞甲", "锥形箭" };
+
+    private static readonly string[] TechEffectTexts =
+    {
+        "所有单位攻击 +2。",
+        "所有单位最大生命 +10。",
+        "所有远程单位射程 +1。",
+    };
+
+    private static readonly string[] AgeDisplayNames =
+    {
+        "黑暗时代",
+        "封建时代",
+        "城堡时代",
+        "帝王时代",
+    };
+
     /// <summary>科技承载建筑：一期建筑表没有铁匠铺，用兵营/市场做最小前置。</summary>
     private static readonly long[] TechRequiredBuilding =
     {
@@ -57,6 +74,14 @@ public static class TechCatalog
     public static bool IsValidAge(long age) => age >= AgeDark && age <= MaxAge;
 
     public static bool IsValidTech(long techId) => techId >= 0 && techId < TechCount;
+
+    public static string TechName(long techId) =>
+        IsValidTech(techId) ? TechDisplayNames[(int)techId] : "";
+
+    public static string TechDescription(long techId) =>
+        IsValidTech(techId) ? TechEffectTexts[(int)techId] : "";
+
+    public static string AgeName(long age) => IsValidAge(age) ? AgeDisplayNames[(int)age] : "";
 
     /// <summary>本文明是否可研究该科技：全局合法且不在该文明的禁用清单内。</summary>
     public static bool IsAvailable(long civ, long techId) => CivilizationCatalog.IsTechEnabled(civ, techId);

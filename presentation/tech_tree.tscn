@@ -1,0 +1,71 @@
+[gd_scene load_steps=3 format=3]
+
+[ext_resource type="Script" path="res://presentation/tech_tree.gd" id="1_tree"]
+[ext_resource type="PackedScene" path="res://presentation/tech_card.tscn" id="2_card"]
+
+[node name="TechTree" type="CanvasLayer"]
+layer = 10
+script = ExtResource("1_tree")
+card_scene = ExtResource("2_card")
+
+[node name="Shade" type="ColorRect" parent="."]
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0, 0, 0, 0.55)
+
+[node name="Frame" type="PanelContainer" parent="."]
+anchors_preset = 15
+anchor_left = 0.05
+anchor_top = 0.05
+anchor_right = 0.95
+anchor_bottom = 0.95
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="Margin" type="MarginContainer" parent="Frame"]
+layout_mode = 2
+
+[node name="Content" type="VBoxContainer" parent="Frame/Margin"]
+layout_mode = 2
+
+[node name="TopBar" type="HBoxContainer" parent="Frame/Margin/Content"]
+layout_mode = 2
+
+[node name="Title" type="Label" parent="Frame/Margin/Content/TopBar"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "文明科技树"
+
+[node name="CivLabel" type="Label" parent="Frame/Margin/Content/TopBar"]
+layout_mode = 2
+text = "文明："
+
+[node name="CivSelect" type="OptionButton" parent="Frame/Margin/Content/TopBar"]
+unique_name_in_owner = true
+layout_mode = 2
+item_count = 1
+popup/item_0/text = "通用"
+popup/item_0/id = 0
+
+[node name="CloseButton" type="Button" parent="Frame/Margin/Content/TopBar"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "关闭"
+
+[node name="Scroll" type="ScrollContainer" parent="Frame/Margin/Content"]
+layout_mode = 2
+size_flags_vertical = 3
+
+[node name="Body" type="HBoxContainer" parent="Frame/Margin/Content/Scroll"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_vertical = 3
+
+[node name="SampleCard" parent="Frame/Margin/Content/Scroll/Body" instance=ExtResource("2_card")]
+layout_mode = 2
+
+[connection signal="pressed" from="Frame/Margin/Content/TopBar/CloseButton" to="." method="_on_close_pressed"]
+[connection signal="item_selected" from="Frame/Margin/Content/TopBar/CivSelect" to="." method="_on_civ_selected"]

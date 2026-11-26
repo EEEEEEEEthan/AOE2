@@ -28,6 +28,7 @@ func _ready() -> void:
 	%ResultPanel.hide()
 	if _is_dedicated():
 		%SurrenderButton.hide()
+		%TechTreeButton.hide()
 		bridge.StartDedicatedServer(_server_port())
 		return
 	_start_session()
@@ -97,6 +98,17 @@ func _player_state_text(player: Dictionary) -> String:
 	if player["defeated"] != 0:
 		return "已淘汰"
 	return "未获胜"
+
+
+func _on_tech_tree_pressed() -> void:
+	%SurrenderButton.hide()
+	%TechTreeButton.hide()
+	%TechTree.open(bridge)
+
+
+func _on_tech_tree_closed() -> void:
+	%SurrenderButton.show()
+	%TechTreeButton.show()
 
 
 func _on_surrender_pressed() -> void:
