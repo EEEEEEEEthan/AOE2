@@ -1,13 +1,13 @@
 class_name SimComponents
 extends RefCounted
-
 const POSITION := &"position"
 const VELOCITY := &"velocity"
 const MOVE := &"move"
 const HEALTH := &"health"
 const COMBAT := &"combat"
 const TEAM := &"team"
-
+const BUILDING := &"building"
+const CONSTRUCT := &"construct"
 const X := &"x"
 const Y := &"y"
 const TARGET_X := &"target_x"
@@ -21,3 +21,10 @@ const RANGE_SQ := &"range_sq"
 const COOLDOWN := &"cooldown"
 const COOLDOWN_LEFT := &"cooldown_left"
 const TEAM_ID := &"team_id"
+const B_TYPE := &"b_type"
+const SIZE_W := &"size_w"
+const SIZE_H := &"size_h"
+const PROGRESS := &"progress"
+const MAX_PROGRESS := &"max_progress"
+const STATE := &"state"
+const TARGET_BASE := &"target_base"

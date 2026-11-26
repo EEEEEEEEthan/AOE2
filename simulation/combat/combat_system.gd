@@ -1,12 +1,12 @@
 class_name CombatSystem
 extends RefCounted
 
-static func step(world: SimWorld, spatial: SpatialHash) -> int:
+static func step(world: SimWorld, spatial: SpatialHash) -> PackedInt64Array:
 	spatial.rebuild(world)
+	var dead := PackedInt64Array()
 	var combat_store := world.store(SimComponents.COMBAT)
 	if combat_store.count == 0:
-		return 0
-	var dead := PackedInt64Array()
+		return dead
 	for id in world.entities():
 		if not combat_store.has(id):
 			continue
@@ -20,10 +20,7 @@ static func step(world: SimWorld, spatial: SpatialHash) -> int:
 		if target < 0:
 			continue
 		_apply_damage(world, id, target, dead)
-	if dead.size() > 0:
-		for id in dead:
-			world.despawn(id)
-	return dead.size()
+	return dead
 
 static func _nearest_enemy(world: SimWorld, spatial: SpatialHash, attacker: int) -> int:
 	var team := world.get_value(attacker, SimComponents.TEAM, SimComponents.TEAM_ID)

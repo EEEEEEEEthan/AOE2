@@ -14,6 +14,7 @@ func _ready() -> void:
 	%WorldView.build_terrain(sim.grid)
 	_spawn_forces()
 	_issue_orders()
+	_place_building_demo()
 	%WorldView.refresh()
 
 func _process(delta: float) -> void:
@@ -60,3 +61,10 @@ func _issue_orders() -> void:
 			sim.issue_move(id, 27, 16)
 		else:
 			sim.issue_move(id, 4, 16)
+
+func _place_building_demo() -> void:
+	var building := sim.issue_place(BuildingTypes.BARRACKS, 4, 3, 0)
+	if building < 0:
+		return
+	var builder := sim.spawn_unit(8, 4, 0, 40, 0, 0.0, 0.09)
+	sim.issue_construct(builder, building)

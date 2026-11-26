@@ -46,6 +46,23 @@ func issue_move(id: int, cell_x: int, cell_y: int) -> void:
 	world.set_value(id, SimComponents.MOVE, SimComponents.TARGET_Y, cell_y)
 	world.set_value(id, SimComponents.MOVE, SimComponents.ACTIVE, 1)
 
+func issue_place(type: int, cell_x: int, cell_y: int, player: int) -> int:
+	var id := BuildingSystem.place(world, grid, type, cell_x, cell_y, player)
+	if id >= 0:
+		invalidate_fields()
+	return id
+
+func issue_construct(villager_id: int, building_id: int) -> void:
+	if not world.is_alive(villager_id) or not world.has_component(villager_id, SimComponents.MOVE):
+		return
+	if not world.is_alive(building_id) or not world.has_component(building_id, SimComponents.BUILDING):
+		return
+	if world.get_value(building_id, SimComponents.BUILDING, SimComponents.STATE) != BuildingSystem.STATE_FOUNDATION:
+		return
+	world.attach(villager_id, SimComponents.CONSTRUCT)
+	world.set_value(villager_id, SimComponents.CONSTRUCT, SimComponents.TARGET_BASE, building_id)
+	world.set_value(villager_id, SimComponents.CONSTRUCT, SimComponents.STATE, BuildingSystem.CONSTRUCT_ACTIVE)
+
 func stop(id: int) -> void:
 	if not world.is_alive(id):
 		return
@@ -59,13 +76,32 @@ func apply_command(command: LockstepCommand) -> void:
 			issue_move(command.entity, command.cell_x, command.cell_y)
 		LockstepCommand.Kind.STOP:
 			stop(command.entity)
+		LockstepCommand.Kind.PLACE_BUILDING:
+			issue_place(command.build_type, command.cell_x, command.cell_y, command.player)
+		LockstepCommand.Kind.CONSTRUCT:
+			issue_construct(command.entity, command.target_entity)
 		_:
 			pass
 
 func simulate_tick() -> void:
+	BuildingSystem.step(world, grid)
 	MovementSystem.step(world, grid, _field_provider)
-	CombatSystem.step(world, spatial)
+	var dead := CombatSystem.step(world, spatial)
+	_resolve_deaths(dead)
 	world.tick += 1
+
+func _resolve_deaths(dead: PackedInt64Array) -> void:
+	var fields_changed := false
+	for id in dead:
+		if not world.is_alive(id):
+			continue
+		if world.has_component(id, SimComponents.BUILDING):
+			BuildingSystem.ruin(world, grid, id)
+			fields_changed = true
+		else:
+			world.despawn(id)
+	if fields_changed:
+		invalidate_fields()
 
 func simulate_turn() -> int:
 	if lockstep.can_advance():
