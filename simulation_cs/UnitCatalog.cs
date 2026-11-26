@@ -3,6 +3,7 @@ namespace AoeSim;
 /// <summary>
 /// 生产目录：补充 <see cref="UnitDefs"/> 未覆盖的生产端参数——耗时、队列上限与可造建筑。
 /// 造价、人口与文明可用性直接复用 <see cref="UnitDefs"/>，不重复建模。
+/// 训练入口只接受家族基础兵；升级等级在出生结算时按玩家当前研究位图解析。
 /// </summary>
 public static class UnitCatalog
 {
@@ -21,7 +22,7 @@ public static class UnitCatalog
             return buildingType == BuildingTypes.TownCenter;
         }
         long civ = sim.Civ(team);
-        if (!UnitDefs.IsUnitAvailable(civ, unitType))
+        if (!UnitDefs.IsUnitAvailable(civ, unitType) || !UnitFamilies.IsTrainableBase(unitType))
         {
             return false;
         }
@@ -29,8 +30,12 @@ public static class UnitCatalog
         {
             BuildingTypes.Barracks =>
                 unitType == UnitDefs.Swordsman || unitType == UnitDefs.Spearman,
-            BuildingTypes.ArcheryRange => unitType == UnitDefs.Archer,
-            BuildingTypes.Stable => unitType == UnitDefs.Knight,
+            BuildingTypes.ArcheryRange =>
+                unitType == UnitDefs.Archer || unitType == UnitDefs.Skirmisher,
+            BuildingTypes.Stable =>
+                unitType == UnitDefs.Knight
+                || unitType == UnitDefs.Scout
+                || unitType == UnitDefs.Camel,
             BuildingTypes.Castle => unitType == CivilizationCatalog.UniqueUnit(civ),
             _ => false,
         };
@@ -43,6 +48,9 @@ public static class UnitCatalog
         UnitDefs.Spearman => 22,
         UnitDefs.Archer => 35,
         UnitDefs.Knight => 30,
+        UnitDefs.Skirmisher => 34,
+        UnitDefs.Scout => 28,
+        UnitDefs.Camel => 32,
         _ => 35,
     };
 

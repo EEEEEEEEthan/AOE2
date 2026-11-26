@@ -230,7 +230,9 @@ public static class ProductionSystem
                 cellX, cellY, team, MapSetup.VillagerSpeed,
                 MapSetup.VillagerCarryCapacity, MapSetup.VillagerGatherRate, pop);
         }
-        return sim.SpawnUnit(cellX, cellY, team, unitType, CombatStance.Aggressive, pop);
+        // 队列里存家族基础兵，出生时按当前研究位图解析到最新等级。
+        long resolved = UnitFamilies.ResolveUnit(sim.PlayerResearch(team), unitType);
+        return sim.SpawnUnit(cellX, cellY, team, resolved, CombatStance.Aggressive, pop);
     }
 
     private static void TryRepeat(SimWorld world, GameSim sim, long id, long team)
