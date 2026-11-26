@@ -18,6 +18,10 @@ public static class MovementSystem
         { -1, -1 },
     };
 
+    /// <summary>
+    /// 单位通过 <paramref name="fieldProvider"/> 共享按目标格缓存的有界流场，各自按所在格取方向；
+    /// 不为单个单位或分摊落点新建流场。
+    /// </summary>
     public static void Step(
         SimWorld world,
         NavGrid grid,

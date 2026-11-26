@@ -10,6 +10,7 @@ public sealed class GameSim
     public const long ResourceStone = 3;
 
     public const double DefaultSightTiles = 4.0;
+    public const int DefaultFieldCacheCapacity = 128;
 
     public SimWorld World { get; }
     public NavGrid Grid { get; }
@@ -22,8 +23,20 @@ public sealed class GameSim
 
     private readonly long _sightRadius = Fixed.FromFloat(DefaultSightTiles);
     private readonly Dictionary<long, FlowField> _fields = new();
+    private readonly Dictionary<long, LinkedListNode<long>> _fieldNodes = new();
+    private readonly LinkedList<long> _fieldRecency = new();
     private readonly Dictionary<long, long> _inventoryEntities = new();
     private readonly Dictionary<long, long> _progressEntities = new();
+
+    /// <summary>当前流场缓存中的条目数，供性能测试与监控断言。</summary>
+    public int FieldCacheCount => _fields.Count;
+
+    public int FieldCacheCapacity { get; }
+
+    /// <summary>本 tick 新建的流场数；每次 SimulateTick 开始时清零，不进校验和。</summary>
+    public int FieldsCreatedThisTick { get; private set; }
+
+    public long FieldsCreatedTotal { get; private set; }
 
     public GameSim(
         NavGrid grid,
@@ -31,8 +44,14 @@ public sealed class GameSim
         int playerCount = 2,
         int ticksPerTurn = 6,
         MatchConfig? matchConfig = null,
-        TerrainGrid? terrain = null)
+        TerrainGrid? terrain = null,
+        int fieldCacheCapacity = DefaultFieldCacheCapacity)
     {
+        if (fieldCacheCapacity < 1)
+        {
+            throw new System.ArgumentOutOfRangeException(nameof(fieldCacheCapacity));
+        }
+        FieldCacheCapacity = fieldCacheCapacity;
         Grid = grid;
         Terrain = terrain ?? TerrainGrid.Flat(grid.Width, grid.Height);
         if (Terrain.Width != grid.Width || Terrain.Height != grid.Height)
@@ -915,6 +934,7 @@ public sealed class GameSim
 
     public void SimulateTick()
     {
+        FieldsCreatedThisTick = 0;
         if (Match != null && Match.Ended)
         {
             return;
@@ -998,7 +1018,12 @@ public sealed class GameSim
 
     public FlowField FieldFor(int targetX, int targetY) => FieldProvider(targetX, targetY);
 
-    public void InvalidateFields() => _fields.Clear();
+    public void InvalidateFields()
+    {
+        _fields.Clear();
+        _fieldNodes.Clear();
+        _fieldRecency.Clear();
+    }
 
     private void EnsureInventoryInitialized()
     {
@@ -1023,16 +1048,34 @@ public sealed class GameSim
     private long InventoryForTeam(long team) =>
         _inventoryEntities.TryGetValue(team, out long inventory) ? inventory : -1;
 
+    /// <summary>
+    /// 按目标格共享有界 LRU 流场：编队或大规模移动必须让单位共享同一目标格的流场，
+    /// 单位各自按所在格取方向，不能为分摊落点生成多张流场，否则一次移动会触发多张全图 BFS。
+    /// 流场是派生数据、不进校验和，淘汰后重建结果完全一致。
+    /// </summary>
     private FlowField FieldProvider(int targetX, int targetY)
     {
         long key = ((long)targetX << 32) ^ (targetY & 0xFFFF_FFFFL);
         if (_fields.TryGetValue(key, out FlowField? field))
         {
+            LinkedListNode<long> node = _fieldNodes[key];
+            _fieldRecency.Remove(node);
+            _fieldRecency.AddLast(node);
             return field;
         }
         field = new FlowField(Grid, Terrain);
         field.Compute(Grid, targetX, targetY);
+        if (_fields.Count >= FieldCacheCapacity)
+        {
+            LinkedListNode<long> oldest = _fieldRecency.First!;
+            _fieldRecency.RemoveFirst();
+            _fieldNodes.Remove(oldest.Value);
+            _fields.Remove(oldest.Value);
+        }
         _fields[key] = field;
+        _fieldNodes[key] = _fieldRecency.AddLast(key);
+        FieldsCreatedThisTick += 1;
+        FieldsCreatedTotal += 1;
         return field;
     }
 }
