@@ -29,8 +29,8 @@
 
 - **服务器**：`SimulationServer` 持有权威 `GameSim`，按 30Hz 推进并产出 `SnapshotFrame`；`DedicatedServer` 把同一内核放进独立进程，经 TCP（`Protocol.cs` 的长度前缀帧）广播快照、接收 `CommandFrame`。每个连接按接入顺序占用一个空闲玩家位，满员后拒绝新连接，避免复用 team 冒充已有玩家。每条连接由 `SnapshotDelta` 做增量下发：首帧关键帧，其后只发新增/变化实体（按字段掩码）与消失实体 id，慢客户端丢帧则重发关键帧。模拟仍按 30Hz 推进，快照默认每 2 tick（15Hz）下发一次；同一 tick 的全量快照只构建一份，再按各连接队伍裁剪，避免多观察者重复遍历世界。
 - **连接身份与权限**：连接层把「连接 → 玩家」绑定好，指令入队时以该玩家覆写 `CommandFrame.Player` 与指令自报的 `Player`；`GameSim.IsCommandAllowed` 再校验：作用于实体的指令要求该实体属于该玩家，作用于玩家的指令（投降/时代/科技/放置建筑）要求玩家合法。越权、过期、非法指令直接丢弃并计入 `RejectedCommands`，不进入模拟。
-- **锁步回合**：服务器固定每 `Lockstep.TicksPerTurn` 个 tick 为一次回合边界，回合开始时按玩家升序统一应用该回合收到的输入，再递增回合号；缺输入的玩家按空输入推进，服务器不会为等待输入而停顿。本地局与联机对局共用这套「不等输入」语义，`Lockstep` 只是一枚回合时钟（`AdvanceTurn`），不再有 `SubmitTurn`/`CanAdvance` 等会让人误以为要等待全员的接口。早于当前回合的帧被拒绝，当前回合已开始后收到的帧顺延到下一回合，允许提前提交至多 8 个回合。
-- **客户端提前提交**：`RemoteClient.SubmitCommands` 以最近快照回合为基准加提前量填 `CommandFrame.Turn`（默认 4 回合，覆盖约 300ms 单向延迟并在 +8 窗口内），`InputTiming` 集中负责「延迟 → 提前量」换算；否则高 RTT 下帧到达时回合已过会被整帧丢弃。`ServerSelfTest` 用 300ms 单向延迟回归守住「不丢指令 + 本地/联机校验和一致」。
+- **锁步回合**：服务器固定每 `Lockstep.TicksPerTurn` 个 tick 为一次回合边界，回合开始时按玩家升序统一应用该回合收到的输入，再递增回合号；缺输入的玩家按空输入推进，服务器不会为等待输入而停顿。本地局与联机对局共用这套「不等输入」语义，`Lockstep` 只是一枚回合时钟（`AdvanceTurn`），不再有 `SubmitTurn`/`CanAdvance` 等会让人误以为要等待全员的接口。早于当前回合的帧被拒绝，当前回合已开始后收到的帧顺延到下一回合，允许提前提交至多 `InputTiming.MaxLookaheadTurns` 个回合。
+- **客户端提前提交**：`RemoteClient.SubmitCommands` 以最近快照回合为基准加提前量填 `CommandFrame.Turn`（默认 `InputTiming.DefaultLookaheadTurns` 回合，覆盖约 300ms 单向延迟并在服务器窗口内），`InputTiming` 集中负责「延迟 → 提前量」换算；服务器与客户端共用的窗口上限只有 `InputTiming.MaxLookaheadTurns` 一处定义，避免两处魔数漂移。否则高 RTT 下帧到达时回合已过会被整帧丢弃。`ServerSelfTest` 用 300ms 单向延迟回归守住「不丢指令 + 本地/联机校验和一致」。
 - **瘦客户端**：`SimulationClient` 只保存解码后的快照用于渲染，从不直接读服务器模拟对象；本地局用 `LocalSession` 内嵌本机服务器，快照同样走编码/解码。
 - **表现层**：`presentation/` 通过 `GameBridge` 读快照渲染，不再引用任何模拟类；`WorldView` 在相邻两次快照之间按帧时间插值单位位置，快照降到 10~15Hz 也不会跳格，且只改渲染状态、不影响模拟与校验和。
 - **确定性**：整数/定点、`String` 内容排序、FNV 校验和、实体升序迭代全部保留；`tests/determinism.gd` 用固化黄金校验和守住回归，`tests/kernel.gd` 覆盖各模块语义。
