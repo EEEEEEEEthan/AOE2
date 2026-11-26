@@ -860,6 +860,18 @@ public static class KernelSelfTest
         SnapshotFrame filtered = SnapshotFrame.Build(shared.World, shared.Lockstep.Turn, shared.Match, blueGrid, 0);
         Expect(failures, ContainsEntity(filtered, blue), "own unit stays in viewer snapshot");
         Expect(failures, !ContainsEntity(filtered, red), "hidden enemy filtered from snapshot");
+        SnapshotFrame redView = SnapshotFrame.Build(shared.World, shared.Lockstep.Turn, shared.Match, redGrid, 1);
+        Expect(failures, ContainsEntity(redView, red), "red viewer keeps its own unit");
+        Expect(failures, !ContainsEntity(redView, blue), "red viewer filters hidden blue unit");
+        Expect(failures, !SameStates(filtered.VisionStates, redView.VisionStates),
+            "different viewer teams carry different vision bitmaps");
+        var server = new SimulationServer(shared);
+        SnapshotFrame blueServer = server.Snapshot(0);
+        SnapshotFrame redServer = server.Snapshot(1);
+        Expect(failures, ContainsEntity(blueServer, blue) && !ContainsEntity(blueServer, red),
+            "server snapshot overload clips for team 0");
+        Expect(failures, ContainsEntity(redServer, red) && !ContainsEntity(redServer, blue),
+            "server snapshot overload clips for team 1");
         SnapshotFrame full = SnapshotFrame.Build(shared.World, shared.Lockstep.Turn, shared.Match);
         Expect(failures, ContainsEntity(full, blue) && ContainsEntity(full, red), "unfiltered snapshot keeps everyone");
         Expect(failures, filtered.VisionStates.Length == 24 * 24, "snapshot carries vision bitmap");
@@ -877,6 +889,22 @@ public static class KernelSelfTest
             }
         }
         return false;
+    }
+
+    private static bool SameStates(byte[] left, byte[] right)
+    {
+        if (left.Length != right.Length)
+        {
+            return false;
+        }
+        for (int index = 0; index < left.Length; index++)
+        {
+            if (left[index] != right[index])
+            {
+                return false;
+            }
+        }
+        return true;
     }
 
     private static void SetTile(GameSim sim, long id, int cellX, int cellY)
