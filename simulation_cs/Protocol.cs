@@ -240,6 +240,10 @@ public sealed class CommandFrame
                 writer.Write(command.TargetEntity);
                 writer.Write(command.DropEntity);
                 writer.Write(command.Stance);
+                writer.Write(command.Cell2X);
+                writer.Write(command.Cell2Y);
+                writer.Write(command.Aux);
+                writer.Write(command.Queue);
             }
         }
         return stream.ToArray();
@@ -255,6 +259,10 @@ public sealed class CommandFrame
         for (int index = 0; index < count; index++)
         {
             commands[index] = new LockstepCommand(
+                reader.ReadInt64(),
+                reader.ReadInt64(),
+                reader.ReadInt64(),
+                reader.ReadInt64(),
                 reader.ReadInt64(),
                 reader.ReadInt64(),
                 reader.ReadInt64(),

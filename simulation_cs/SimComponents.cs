@@ -24,6 +24,8 @@ public static class SimComponents
     public const string Relic = "relic";
     public const string Monk = "monk";
     public const string RelicSlot = "relic_slot";
+    public const string Order = "order";
+    public const string Rally = "rally";
 
     public const string X = "x";
     public const string Y = "y";
@@ -101,4 +103,25 @@ public static class SimComponents
     public const string GoldRate = "gold_rate";
     public const string GoldPeriod = "gold_period";
     public const string GoldProgress = "gold_progress";
+
+    public const string OrderType = "order_type";
+    public const string OrderState = "order_state";
+    public const string Aux = "aux";
+    public const string AuxX = "aux_x";
+    public const string AuxY = "aux_y";
+    public const string QueueCount = "queue_count";
+    public const string RallyX = "rally_x";
+    public const string RallyY = "rally_y";
+    public const string RallyTarget = "rally_target";
+
+    /// <summary>待执行指令队列固定深度：每槽存 type/target/x/y/aux_x/aux_y 六列。</summary>
+    public const int QueueDepth = 3;
+
+    public static readonly string[] QueueTypeColumns = { "q0_type", "q1_type", "q2_type" };
+    public static readonly string[] QueueTargetColumns = { "q0_target", "q1_target", "q2_target" };
+    public static readonly string[] QueueXColumns = { "q0_x", "q1_x", "q2_x" };
+    public static readonly string[] QueueYColumns = { "q0_y", "q1_y", "q2_y" };
+    public static readonly string[] QueueAuxXColumns = { "q0_aux_x", "q1_aux_x", "q2_aux_x" };
+    public static readonly string[] QueueAuxYColumns = { "q0_aux_y", "q1_aux_y", "q2_aux_y" };
+    public static readonly string[] QueueAuxColumns = { "q0_aux", "q1_aux", "q2_aux" };
 }
