@@ -15,7 +15,11 @@ public partial class SimulationBridge : Node
 
     public Godot.Collections.Array<string> OrderSelfTest() => ToGodotArray(AOE2Framework.OrderSelfTest.Run());
 
-    public Godot.Collections.Array<string> EconomySelfTest() => ToGodotArray(AOE2Framework.EconomySelfTest.Run());
+    public Godot.Collections.Array<string> EconomySelfTest() =>
+        ToGodotArray(AOE2Framework.EconomySelfTest.Run());
+
+    public Godot.Collections.Array<string> MarketSelfTest() =>
+        ToGodotArray(AOE2Framework.MarketSelfTest.Run());
 
     public Godot.Collections.Array<string> PopulationSelfTest() => ToGodotArray(AOE2Framework.PopulationSelfTest.Run());
 

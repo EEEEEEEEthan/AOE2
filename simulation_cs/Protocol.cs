@@ -14,12 +14,13 @@ public static class EntityKind
     public const long Relic = 6;
     public const long RelicSlot = 7;
     public const long Building = 8;
+    public const long TradeCart = 9;
 }
 
 /// <summary>网络协议版本：静态地图帧携带，握手时校验两端一致。</summary>
 public static class NetProtocol
 {
-    public const int Version = 4;
+    public const int Version = 5;
 }
 
 /// <summary>
@@ -182,6 +183,10 @@ public readonly struct PlayerSnapshot
     public readonly long Food;
     public readonly long Gold;
     public readonly long Stone;
+    public readonly long MarketWood;
+    public readonly long MarketFood;
+    public readonly long MarketGold;
+    public readonly long MarketStone;
 
     public PlayerSnapshot(
         long team,
@@ -198,7 +203,11 @@ public readonly struct PlayerSnapshot
         long wood,
         long food,
         long gold,
-        long stone)
+        long stone,
+        long marketWood,
+        long marketFood,
+        long marketGold,
+        long marketStone)
     {
         Team = team;
         Defeated = defeated;
@@ -215,6 +224,10 @@ public readonly struct PlayerSnapshot
         Food = food;
         Gold = gold;
         Stone = stone;
+        MarketWood = marketWood;
+        MarketFood = marketFood;
+        MarketGold = marketGold;
+        MarketStone = marketStone;
     }
 }
 
@@ -385,7 +398,11 @@ public sealed class SnapshotFrame
                     wood,
                     food,
                     gold,
-                    stone);
+                    stone,
+                    MarketSystem.Rate(world, team, GameSim.ResourceWood),
+                    MarketSystem.Rate(world, team, GameSim.ResourceFood),
+                    MarketSystem.Rate(world, team, GameSim.ResourceGold),
+                    MarketSystem.Rate(world, team, GameSim.ResourceStone));
             }
             frame.Players = players;
         }
@@ -422,6 +439,10 @@ public sealed class SnapshotFrame
         if (world.HasComponent(id, SimComponents.RelicSlot))
         {
             return EntityKind.RelicSlot;
+        }
+        if (world.HasComponent(id, SimComponents.Trade))
+        {
+            return EntityKind.TradeCart;
         }
         if (world.HasComponent(id, SimComponents.Combat))
         {
@@ -496,6 +517,10 @@ public sealed class SnapshotFrame
                 writer.Write(player.Food);
                 writer.Write(player.Gold);
                 writer.Write(player.Stone);
+                writer.Write(player.MarketWood);
+                writer.Write(player.MarketFood);
+                writer.Write(player.MarketGold);
+                writer.Write(player.MarketStone);
             }
             writer.Write(Entities.Length);
             foreach (EntitySnapshot entity in Entities)
@@ -608,6 +633,10 @@ public sealed class SnapshotFrame
         for (int index = 0; index < playerCount; index++)
         {
             players[index] = new PlayerSnapshot(
+                reader.ReadInt64(),
+                reader.ReadInt64(),
+                reader.ReadInt64(),
+                reader.ReadInt64(),
                 reader.ReadInt64(),
                 reader.ReadInt64(),
                 reader.ReadInt64(),

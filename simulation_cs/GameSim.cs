@@ -439,6 +439,61 @@ public sealed class GameSim
         return id;
     }
 
+    /// <summary>陆路贸易车：无战斗能力，靠市场路线指令往返产金，生产入口待单位训练合入后接入。</summary>
+    public long SpawnTradeCart(int cellX, int cellY, long team)
+    {
+        long id = World.Spawn();
+        World.Attach(id, SimComponents.Position);
+        World.Attach(id, SimComponents.Velocity);
+        World.Attach(id, SimComponents.Move);
+        World.Attach(id, SimComponents.Team);
+        World.Attach(id, SimComponents.Footprint);
+        World.Attach(id, SimComponents.Trade);
+        World.SetValue(id, SimComponents.Position, SimComponents.X, Fixed.Add(Fixed.FromInt(cellX), Fixed.Half));
+        World.SetValue(id, SimComponents.Position, SimComponents.Y, Fixed.Add(Fixed.FromInt(cellY), Fixed.Half));
+        World.SetValue(id, SimComponents.Velocity, SimComponents.X, 0);
+        World.SetValue(id, SimComponents.Velocity, SimComponents.Y, 0);
+        World.SetValue(id, SimComponents.Move, SimComponents.TargetX, cellX);
+        World.SetValue(id, SimComponents.Move, SimComponents.TargetY, cellY);
+        World.SetValue(id, SimComponents.Move, SimComponents.Speed, Fixed.FromFloat(TradeSystem.CartSpeedTilesPerTick));
+        World.SetValue(id, SimComponents.Move, SimComponents.Active, 0);
+        World.SetValue(id, SimComponents.Team, SimComponents.TeamId, team);
+        World.SetValue(id, SimComponents.Footprint, SimComponents.FootprintWidth, 1);
+        World.SetValue(id, SimComponents.Footprint, SimComponents.FootprintHeight, 1);
+        World.SetValue(id, SimComponents.Trade, SimComponents.TradeHome, -1);
+        World.SetValue(id, SimComponents.Trade, SimComponents.TradeTarget, -1);
+        return id;
+    }
+
+    /// <summary>
+    /// 设定贸易路线：起点必须是本玩家完工的市场，终点是任意完工市场，两端不可相同。
+    /// 车随后由 <see cref="TradeSystem"/> 自动往返，每次抵达按距离与价差产金。
+    /// </summary>
+    public bool IssueTradeRoute(long cart, long homeMarket, long targetMarket)
+    {
+        if (!World.IsAlive(cart) || !World.HasComponent(cart, SimComponents.Trade))
+        {
+            return false;
+        }
+        if (!TradeSystem.IsCompletedMarket(World, homeMarket)
+            || !TradeSystem.IsCompletedMarket(World, targetMarket))
+        {
+            return false;
+        }
+        if (homeMarket == targetMarket)
+        {
+            return false;
+        }
+        long team = World.GetValue(cart, SimComponents.Team, SimComponents.TeamId);
+        if (World.GetValue(homeMarket, SimComponents.Team, SimComponents.TeamId) != team)
+        {
+            return false;
+        }
+        World.SetValue(cart, SimComponents.Trade, SimComponents.TradeHome, homeMarket);
+        World.SetValue(cart, SimComponents.Trade, SimComponents.TradeTarget, targetMarket);
+        return true;
+    }
+
     public long SpawnKing(
         int cellX,
         int cellY,
@@ -663,6 +718,7 @@ public sealed class GameSim
         World.Detach(id, SimComponents.Engage);
         World.Detach(id, SimComponents.Order);
         World.Detach(id, SimComponents.Repair);
+        World.Detach(id, SimComponents.Trade);
         World.SetValue(id, SimComponents.Move, SimComponents.TargetX, cellX);
         World.SetValue(id, SimComponents.Move, SimComponents.TargetY, cellY);
         World.SetValue(id, SimComponents.Move, SimComponents.Active, 1);
@@ -921,6 +977,7 @@ public sealed class GameSim
         World.Detach(id, SimComponents.Engage);
         World.Detach(id, SimComponents.Order);
         World.Detach(id, SimComponents.Repair);
+        World.Detach(id, SimComponents.Trade);
         World.SetValue(id, SimComponents.Move, SimComponents.Active, 0);
         World.SetValue(id, SimComponents.Velocity, SimComponents.X, 0);
         World.SetValue(id, SimComponents.Velocity, SimComponents.Y, 0);
@@ -973,7 +1030,10 @@ public sealed class GameSim
         || kind == LockstepCommand.KindAgeUp
         || kind == LockstepCommand.KindResearch
         || kind == LockstepCommand.KindCancelResearch
-        || kind == LockstepCommand.KindPlaceBuilding;
+        || kind == LockstepCommand.KindPlaceBuilding
+        || kind == LockstepCommand.KindMarketBuy
+        || kind == LockstepCommand.KindMarketSell
+        || kind == LockstepCommand.KindTribute;
 
     private static bool IsEntityCommand(long kind) =>
         kind == LockstepCommand.KindMove
@@ -993,7 +1053,8 @@ public sealed class GameSim
         || kind == LockstepCommand.KindSetRally
         || kind == LockstepCommand.KindConstruct
         || kind == LockstepCommand.KindReseedFarm
-        || kind == LockstepCommand.KindRepair;
+        || kind == LockstepCommand.KindRepair
+        || kind == LockstepCommand.KindTradeRoute;
 
     public bool ApplyCommand(LockstepCommand command)
     {
@@ -1077,6 +1138,16 @@ public sealed class GameSim
             case LockstepCommand.KindRepair:
                 IssueRepair(command.Entity, command.TargetEntity, command.Player);
                 break;
+            case LockstepCommand.KindMarketBuy:
+                return MarketSystem.Buy(this, command.Player, command.Aux, command.CellX);
+            case LockstepCommand.KindMarketSell:
+                return MarketSystem.Sell(this, command.Player, command.Aux, command.CellX);
+            case LockstepCommand.KindTribute:
+                return MarketSystem.Tribute(
+                    this, command.Player, command.Aux, command.CellX, command.CellY);
+            case LockstepCommand.KindTradeRoute:
+                IssueTradeRoute(command.Entity, command.TargetEntity, command.DropEntity);
+                break;
         }
         return true;
     }
@@ -1098,6 +1169,7 @@ public sealed class GameSim
         OrderSystem.Step(World, Spatial);
         BuildingSystem.Step(World, Grid, Terrain);
         RepairSystem.Step(World, Grid, Terrain, this);
+        TradeSystem.Step(World, Grid, Terrain, this);
         MovementSystem.Step(World, Grid, Occupancy, FieldProvider, Terrain);
         Spatial.Rebuild(World);
         List<long> dead = ProjectileSystem.Step(World);
