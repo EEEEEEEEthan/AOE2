@@ -192,6 +192,15 @@ public static class SimComponents
     public const string CapMax = "cap_max";
     public const string PopCost = "pop_cost";
 
+    public const string Production = "production";
+    public const string ProdCurrent = "prod_current";
+    public const string ProdTicksLeft = "prod_ticks_left";
+    public const string ProdTicksTotal = "prod_ticks_total";
+    public const string ProdQueueCount = "prod_queue_count";
+    public const string ProdRepeat = "prod_repeat";
+    public const string ProdRepeatType = "prod_repeat_type";
+    public static readonly string[] ProdQueueColumns = { "prod_q0", "prod_q1", "prod_q2", "prod_q3", "prod_q4" };
+
 #if DEBUG
     /// <summary>
     /// 本类声明的全部组件名与列名。列按需惰性创建，缺失列不能直接判为拼错，

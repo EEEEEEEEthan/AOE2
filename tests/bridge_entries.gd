@@ -59,8 +59,9 @@ func _train_command_spawns_unit() -> void:
 		return
 	var before: int = bridge.Snapshot().size()
 	bridge.Train(int(town_center["id"]), -1)
-	bridge.FastForward(6)
-	check_true(bridge.Snapshot().size() > before, "training a villager spawns a new entity")
+	# 训练走生产队列：入队后需等计时结束才出生。
+	bridge.FastForward(60)
+	check_true(bridge.Snapshot().size() > before, "queued villager is produced after training time")
 	bridge.queue_free()
 
 

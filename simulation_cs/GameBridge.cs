@@ -120,6 +120,41 @@ public partial class GameBridge : Node
         _session.Step();
     }
 
+    /// <summary>生产队列演示局：一座完工兵营带排队单位，供截图与目视验证。</summary>
+    public void StartProductionDemo()
+    {
+        StopPlayback();
+        AoeSim.GameSim sim = new AoeSim.GameSim(
+            AoeSim.DemoScenario.BuildGrid(),
+            20261127,
+            2,
+            6,
+            null,
+            AoeSim.DemoScenario.BuildTerrain());
+        _grid = sim.Grid;
+        _terrain = sim.Terrain;
+        for (long kind = 0; kind < 4; kind++)
+        {
+            sim.AddResource(0, kind, 2000);
+        }
+        sim.AddPopulationCap(0, 40);
+        long barracks = sim.SpawnCompletedBuilding(
+            12, 12, 0, AoeSim.BuildingTypes.Barracks);
+        sim.IssueSetRally(barracks, 18, 16, -1);
+        sim.Train(barracks, AoeSim.UnitDefs.Spearman);
+        sim.Train(barracks, AoeSim.UnitDefs.Archer);
+        sim.Train(barracks, AoeSim.UnitDefs.Knight);
+        sim.SetRepeatProduction(barracks, true);
+        for (int tick = 0; tick < 8; tick++)
+        {
+            sim.SimulateTick();
+        }
+        _session = new AoeSim.LocalSession(sim);
+        _accumulator = 0.0;
+        ResetBatchCache();
+        _session.Step();
+    }
+
     private static void CompleteBuilding(AoeSim.GameSim sim, long id)
     {
         long type = sim.World.GetValue(
@@ -887,6 +922,11 @@ public partial class GameBridge : Node
                 { "repair_state", entity.RepairState },
                 { "repair_target", entity.RepairTarget },
                 { "gate_state", entity.GateState },
+                { "prod_unit", entity.ProdUnitType },
+                { "prod_ticks_left", entity.ProdTicksLeft },
+                { "prod_ticks_total", entity.ProdTicksTotal },
+                { "prod_queue", entity.ProdQueueCount },
+                { "prod_repeat", entity.ProdRepeat },
             });
         }
         return result;
@@ -937,6 +977,11 @@ public partial class GameBridge : Node
         var repairStates = new int[count];
         var repairTargets = new int[count];
         var gateStates = new int[count];
+        var prodUnits = new long[count];
+        var prodTicksLefts = new long[count];
+        var prodTicksTotals = new long[count];
+        var prodQueues = new long[count];
+        var prodRepeats = new long[count];
         for (int index = 0; index < count; index++)
         {
             AoeSim.EntitySnapshot entity = entities[index];
@@ -962,6 +1007,11 @@ public partial class GameBridge : Node
             repairStates[index] = (int)entity.RepairState;
             repairTargets[index] = (int)entity.RepairTarget;
             gateStates[index] = (int)entity.GateState;
+            prodUnits[index] = entity.ProdUnitType;
+            prodTicksLefts[index] = entity.ProdTicksLeft;
+            prodTicksTotals[index] = entity.ProdTicksTotal;
+            prodQueues[index] = entity.ProdQueueCount;
+            prodRepeats[index] = entity.ProdRepeat;
         }
         _batch = new Godot.Collections.Dictionary
         {
@@ -989,6 +1039,11 @@ public partial class GameBridge : Node
             { "repair_state", repairStates },
             { "repair_target", repairTargets },
             { "gate_state", gateStates },
+            { "prod_unit", prodUnits },
+            { "prod_ticks_left", prodTicksLefts },
+            { "prod_ticks_total", prodTicksTotals },
+            { "prod_queue", prodQueues },
+            { "prod_repeat", prodRepeats },
         };
         _batchTick = frame.Tick;
         return _batch;

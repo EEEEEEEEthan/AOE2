@@ -29,6 +29,7 @@ public sealed partial class GameSim
         List<long> dead = ProjectileSystem.Step(World);
         dead.AddRange(CombatSystem.Step(World, Spatial));
         ResolveDeaths(dead);
+        ProductionSystem.Step(World, this);
         HuntingSystem.Step(World);
         ResearchSystem.Step(this);
         RelicSystem.Step(World, InventoryForTeam);

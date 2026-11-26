@@ -201,6 +201,8 @@ public static class BuildingSystem
         world.Detach(id, SimComponents.DropSite);
         world.Detach(id, SimComponents.Combat);
         world.Detach(id, SimComponents.Garrison);
+        // 建筑被摧毁时生产队列随之丢失。
+        world.Detach(id, SimComponents.Production);
         SetBlock(world, grid, id, false);
     }
 
