@@ -87,6 +87,7 @@ public static class DemoScenario
         SpawnForces(sim);
         IssueOrders(sim);
         SpawnEconomy(sim);
+        SpawnBuildingDemo(sim);
         return sim;
     }
 
@@ -139,5 +140,13 @@ public static class DemoScenario
             long villager = sim.SpawnVillager(6 + index, 8, 0, 0.09, 20, 0.5);
             sim.IssueGather(villager, forest, townCenter);
         }
+    }
+
+    /// <summary>一期建筑演示：兵营地基 + 村民施工，完整走放置→施工→完工闭环。</summary>
+    private static void SpawnBuildingDemo(GameSim sim)
+    {
+        long building = sim.IssuePlaceBuilding(BuildingTypes.Barracks, 3, 3, 0);
+        long builder = sim.SpawnVillager(8, 4, 0, 0.09, 20, 0.5);
+        sim.IssueConstruct(builder, building);
     }
 }

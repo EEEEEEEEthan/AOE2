@@ -459,6 +459,12 @@ public sealed class GameSim
         World.SetValue(id, SimComponents.Team, SimComponents.TeamId, team);
         World.SetValue(id, SimComponents.Footprint, SimComponents.FootprintWidth, 1);
         World.SetValue(id, SimComponents.Footprint, SimComponents.FootprintHeight, 1);
+        World.SetValue(id, SimComponents.Building, SimComponents.BuildingType, BuildingTypes.None);
+        World.SetValue(id, SimComponents.Building, SimComponents.SizeWidth, 1);
+        World.SetValue(id, SimComponents.Building, SimComponents.SizeHeight, 1);
+        World.SetValue(id, SimComponents.Building, SimComponents.Progress, 1);
+        World.SetValue(id, SimComponents.Building, SimComponents.MaxProgress, 1);
+        World.SetValue(id, SimComponents.Building, SimComponents.State, BuildingSystem.StateComplete);
         return id;
     }
 
@@ -640,6 +646,41 @@ public sealed class GameSim
         World.SetValue(id, SimComponents.Move, SimComponents.TargetX, cellX);
         World.SetValue(id, SimComponents.Move, SimComponents.TargetY, cellY);
         World.SetValue(id, SimComponents.Move, SimComponents.Active, 1);
+    }
+
+    public long IssuePlaceBuilding(long type, int cellX, int cellY, long player)
+    {
+        long id = BuildingSystem.Place(World, Grid, Terrain, type, cellX, cellY, player);
+        if (id >= 0)
+        {
+            InvalidateFields();
+        }
+        return id;
+    }
+
+    public void IssueConstruct(long villager, long building)
+    {
+        if (!World.IsAlive(villager) || !World.HasComponent(villager, SimComponents.Move))
+        {
+            return;
+        }
+        if (!World.IsAlive(building) || !World.HasComponent(building, SimComponents.Building))
+        {
+            return;
+        }
+        if (World.GetValue(building, SimComponents.Building, SimComponents.State) != BuildingSystem.StateFoundation)
+        {
+            return;
+        }
+        if (World.HasComponent(villager, SimComponents.Gather))
+        {
+            World.SetValue(villager, SimComponents.Gather, SimComponents.GatherState, GatherSystem.GatherStateIdle);
+            World.SetValue(villager, SimComponents.Gather, SimComponents.NodeEntity, -1);
+            World.SetValue(villager, SimComponents.Gather, SimComponents.Progress, 0);
+        }
+        World.Attach(villager, SimComponents.Construct);
+        World.SetValue(villager, SimComponents.Construct, SimComponents.TargetBase, building);
+        World.SetValue(villager, SimComponents.Construct, SimComponents.State, BuildingSystem.ConstructActive);
     }
 
     public void IssueAttack(long attacker, long target)
@@ -863,6 +904,12 @@ public sealed class GameSim
             case LockstepCommand.KindResearch:
                 Research(command.Player, command.Aux);
                 break;
+            case LockstepCommand.KindPlaceBuilding:
+                IssuePlaceBuilding(command.Aux, (int)command.CellX, (int)command.CellY, command.Player);
+                break;
+            case LockstepCommand.KindConstruct:
+                IssueConstruct(command.Entity, command.TargetEntity);
+                break;
         }
     }
 
@@ -875,9 +922,11 @@ public sealed class GameSim
         GatherSystem.Step(World, InventoryForTeam);
         MonkSystem.Step(World);
         OrderSystem.Step(World, Spatial);
+        BuildingSystem.Step(World, Grid, Terrain);
         MovementSystem.Step(World, Grid, Occupancy, FieldProvider, Terrain);
-        ProjectileSystem.Step(World);
-        CombatSystem.Step(World, Spatial);
+        List<long> dead = ProjectileSystem.Step(World);
+        dead.AddRange(CombatSystem.Step(World, Spatial));
+        ResolveDeaths(dead);
         RelicSystem.Step(World, InventoryForTeam);
         if (Match != null)
         {
@@ -885,6 +934,30 @@ public sealed class GameSim
         }
         VisionSystem.Step(World, Vision, _sightRadius);
         World.Tick += 1;
+    }
+
+    private void ResolveDeaths(List<long> dead)
+    {
+        bool fieldsChanged = false;
+        foreach (long id in dead)
+        {
+            if (!World.IsAlive(id))
+            {
+                continue;
+            }
+            if (World.HasComponent(id, SimComponents.Building))
+            {
+                BuildingSystem.Ruin(World, Grid, id);
+                fieldsChanged = true;
+                continue;
+            }
+            PopulationSystem.Release(World, id);
+            World.Despawn(id);
+        }
+        if (fieldsChanged)
+        {
+            InvalidateFields();
+        }
     }
 
     public VisionGrid? VisionFor(long team) =>

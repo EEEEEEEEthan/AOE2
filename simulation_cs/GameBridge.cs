@@ -231,6 +231,12 @@ public partial class GameBridge : Node
                 { "gather_state", entity.GatherState },
                 { "carry_type", entity.CarryType },
                 { "carry_amount", entity.CarryAmount },
+                { "building_type", entity.BuildingType },
+                { "width", entity.Width },
+                { "height", entity.Height },
+                { "building_state", entity.BuildingState },
+                { "building_progress", entity.BuildingProgress },
+                { "building_max_progress", entity.BuildingMaxProgress },
             });
         }
         return result;

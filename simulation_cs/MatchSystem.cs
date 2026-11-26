@@ -222,9 +222,15 @@ public static class MatchSystem
             ? world.GetValue(id, SimComponents.Team, SimComponents.TeamId)
             : -1;
 
-    private static bool IsParticipant(SimWorld world, long id) =>
-        world.HasComponent(id, SimComponents.Combat)
-        || world.HasComponent(id, SimComponents.Gather)
-        || world.HasComponent(id, SimComponents.Building)
-        || world.HasComponent(id, SimComponents.King);
+    private static bool IsParticipant(SimWorld world, long id)
+    {
+        if (world.HasComponent(id, SimComponents.Building))
+        {
+            return world.GetValue(id, SimComponents.Building, SimComponents.State)
+                != BuildingSystem.StateRuins;
+        }
+        return world.HasComponent(id, SimComponents.Combat)
+            || world.HasComponent(id, SimComponents.Gather)
+            || world.HasComponent(id, SimComponents.King);
+    }
 }

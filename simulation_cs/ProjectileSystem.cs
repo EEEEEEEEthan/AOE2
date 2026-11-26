@@ -19,15 +19,15 @@ public static class ProjectileSystem
         return id;
     }
 
-    public static void Step(SimWorld world)
+    public static List<long> Step(SimWorld world)
     {
+        var dead = new List<long>();
         ComponentStore store = world.Store(SimComponents.Projectile);
         if (store.Count == 0)
         {
-            return;
+            return dead;
         }
         var spent = new List<long>();
-        var dead = new List<long>();
         foreach (long id in world.Entities())
         {
             if (!store.Has(id))
@@ -46,7 +46,7 @@ public static class ProjectileSystem
             {
                 long hp = world.GetValue(target, SimComponents.Health, SimComponents.Hp) - damage;
                 world.SetValue(target, SimComponents.Health, SimComponents.Hp, hp);
-                if (hp <= 0)
+                if (hp <= 0 && !dead.Contains(target))
                 {
                     dead.Add(target);
                 }
@@ -57,11 +57,7 @@ public static class ProjectileSystem
         {
             world.Despawn(id);
         }
-        foreach (long id in dead)
-        {
-            PopulationSystem.Release(world, id);
-            world.Despawn(id);
-        }
+        return dead;
     }
 
     private static long TravelTicks(SimWorld world, long attacker, long target)
