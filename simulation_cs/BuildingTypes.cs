@@ -12,6 +12,9 @@ public static class BuildingTypes
     public const long Market = 6;
     public const long Farm = 7;
     public const long Dock = 8;
+    public const long LumberCamp = 9;
+    public const long Mill = 10;
+    public const long MiningCamp = 11;
 
     /// <summary>一块农田完工后挂载的食物节点总量，耗尽后需重播。</summary>
     public const long FarmFoodAmount = 250;
@@ -19,7 +22,7 @@ public static class BuildingTypes
     /// <summary>空田手动重播消耗的木材。</summary>
     public const long FarmReseedCost = 60;
 
-    public static bool IsKnown(long type) => type >= TownCenter && type <= Dock;
+    public static bool IsKnown(long type) => type >= TownCenter && type <= MiningCamp;
 
     /// <summary>建筑所属时代：升城堡/帝国时统计上一时代的已完成建筑数量。</summary>
     public static long AgeOf(long type) => type switch
@@ -32,6 +35,9 @@ public static class BuildingTypes
         Market => TechCatalog.AgeFeudal,
         Farm => TechCatalog.AgeDark,
         Dock => TechCatalog.AgeDark,
+        LumberCamp => TechCatalog.AgeDark,
+        Mill => TechCatalog.AgeDark,
+        MiningCamp => TechCatalog.AgeDark,
         _ => TechCatalog.AgeDark,
     };
 
@@ -45,6 +51,9 @@ public static class BuildingTypes
         Market => 4,
         Farm => 3,
         Dock => 3,
+        LumberCamp => 2,
+        Mill => 2,
+        MiningCamp => 2,
         _ => 0,
     };
 
@@ -58,6 +67,9 @@ public static class BuildingTypes
         Market => 3,
         Farm => 3,
         Dock => 3,
+        LumberCamp => 2,
+        Mill => 2,
+        MiningCamp => 2,
         _ => 0,
     };
 
@@ -71,6 +83,9 @@ public static class BuildingTypes
         Market => 1500,
         Farm => 480,
         Dock => 1500,
+        LumberCamp => 600,
+        Mill => 600,
+        MiningCamp => 600,
         _ => 0,
     };
 
@@ -84,6 +99,9 @@ public static class BuildingTypes
         Market => 180,
         Farm => 90,
         Dock => 120,
+        LumberCamp => 60,
+        Mill => 60,
+        MiningCamp => 60,
         _ => 0,
     };
 
@@ -106,8 +124,27 @@ public static class BuildingTypes
         Market => new ResourceCost(wood: 175, food: 0, gold: 0, stone: 0),
         Farm => new ResourceCost(wood: 60, food: 0, gold: 0, stone: 0),
         Dock => new ResourceCost(wood: 150, food: 0, gold: 0, stone: 0),
+        LumberCamp => new ResourceCost(wood: 100, food: 0, gold: 0, stone: 0),
+        Mill => new ResourceCost(wood: 100, food: 0, gold: 0, stone: 0),
+        MiningCamp => new ResourceCost(wood: 100, food: 0, gold: 0, stone: 0),
         _ => default,
     };
+
+    /// <summary>
+    /// 完工后挂载的投放能力位掩码：城镇中心收全部资源，伐木场只收木材，磨坊只收食物，
+    /// 采矿营收金、石。0 表示该建筑不提供投放点。
+    /// </summary>
+    public static long DropMask(long type) => type switch
+    {
+        TownCenter => 0b1111,
+        Dock => 0b1111,
+        LumberCamp => 1L << (int)GameSim.ResourceWood,
+        Mill => 1L << (int)GameSim.ResourceFood,
+        MiningCamp => (1L << (int)GameSim.ResourceGold) | (1L << (int)GameSim.ResourceStone),
+        _ => 0,
+    };
+
+    public static bool ProvidesDropSite(long type) => DropMask(type) != 0;
 
     /// <summary>只有城镇中心与塔楼可驻军，后者也承担城镇警钟的召集目标。</summary>
     public static bool IsGarrisonable(long type) => type == TownCenter || type == Tower;

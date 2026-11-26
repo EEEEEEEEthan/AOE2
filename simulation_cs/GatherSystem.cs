@@ -84,8 +84,13 @@ public static class GatherSystem
         long drop = world.GetValue(id, SimComponents.Gather, SimComponents.DropEntity);
         if (!IsDropSite(world, drop))
         {
-            world.SetValue(id, SimComponents.Gather, SimComponents.GatherState, GatherStateIdle);
-            return;
+            drop = ReselectDropSite(world, id);
+            if (drop < 0)
+            {
+                world.SetValue(id, SimComponents.Gather, SimComponents.GatherState, GatherStateIdle);
+                return;
+            }
+            world.SetValue(id, SimComponents.Gather, SimComponents.DropEntity, drop);
         }
         if (!InRange(world, id, drop))
         {
@@ -135,7 +140,71 @@ public static class GatherSystem
         world.IsAlive(id) && world.HasComponent(id, SimComponents.ResourceNode);
 
     private static bool IsDropSite(SimWorld world, long id) =>
-        world.IsAlive(id) && world.HasComponent(id, SimComponents.DropSite);
+        world.IsAlive(id) && world.HasComponent(id, SimComponents.DropSite) && IsUsableDropSite(world, id);
+
+    /// <summary>建筑投放点须已完工；独立投放点没有 Building 组件，恒可用。</summary>
+    private static bool IsUsableDropSite(SimWorld world, long id) =>
+        !world.HasComponent(id, SimComponents.Building)
+        || world.GetValue(id, SimComponents.Building, SimComponents.State) == BuildingSystem.StateComplete;
+
+    /// <summary>投放点失效后按携带资源改投最近可用建筑，找不到则返回 -1。</summary>
+    private static long ReselectDropSite(SimWorld world, long id)
+    {
+        long resourceKind = world.GetValue(id, SimComponents.Gather, SimComponents.CarryType);
+        long team = world.GetValue(id, SimComponents.Team, SimComponents.TeamId);
+        long x = Fixed.ToInt(world.GetValue(id, SimComponents.Position, SimComponents.X));
+        long y = Fixed.ToInt(world.GetValue(id, SimComponents.Position, SimComponents.Y));
+        return NearestDropSite(world, team, resourceKind, x, y);
+    }
+
+    /// <summary>
+    /// 在己方已完工、且接收该资源的建筑中就近选点：按 footprint 最近格曼哈顿距离，
+    /// 平手取实体 id 较小者，保证确定性与跨端一致。
+    /// </summary>
+    public static long NearestDropSite(SimWorld world, long team, long resourceKind, long fromX, long fromY)
+    {
+        long bit = 1L << (int)resourceKind;
+        long bestId = -1;
+        long bestDistance = long.MaxValue;
+        ComponentStore drops = world.Store(SimComponents.DropSite);
+        foreach (long id in drops.ActiveIds())
+        {
+            if (!world.IsAlive(id) || !world.HasComponent(id, SimComponents.Building))
+            {
+                continue;
+            }
+            if (!IsUsableDropSite(world, id))
+            {
+                continue;
+            }
+            if (world.GetValue(id, SimComponents.Team, SimComponents.TeamId) != team)
+            {
+                continue;
+            }
+            if ((world.GetValue(id, SimComponents.DropSite, SimComponents.AcceptMask) & bit) == 0)
+            {
+                continue;
+            }
+            long distance = FootprintDistance(world, id, fromX, fromY);
+            if (distance < bestDistance || (distance == bestDistance && (bestId < 0 || id < bestId)))
+            {
+                bestDistance = distance;
+                bestId = id;
+            }
+        }
+        return bestId;
+    }
+
+    private static long FootprintDistance(SimWorld world, long building, long fromX, long fromY)
+    {
+        long originX = Fixed.ToInt(world.GetValue(building, SimComponents.Position, SimComponents.X));
+        long originY = Fixed.ToInt(world.GetValue(building, SimComponents.Position, SimComponents.Y));
+        long sizeWidth = world.GetValue(building, SimComponents.Building, SimComponents.SizeWidth);
+        long sizeHeight = world.GetValue(building, SimComponents.Building, SimComponents.SizeHeight);
+        long distanceX = System.Math.Max(0, System.Math.Max(originX - fromX, fromX - (originX + sizeWidth - 1)));
+        long distanceY = System.Math.Max(0, System.Math.Max(originY - fromY, fromY - (originY + sizeHeight - 1)));
+        return distanceX + distanceY;
+    }
 
     private static bool InRange(SimWorld world, long first, long second)
     {

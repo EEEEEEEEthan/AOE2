@@ -21,6 +21,7 @@ public static class BuildingSelfTest
         CheckFarmLifecycle(failures);
         CheckFarmReseed(failures);
         CheckFarmRuin(failures);
+        CheckDropBuildings(failures);
         CheckRepair(failures);
         CheckRepairResourceShortage(failures);
         CheckRepairRejects(failures);
@@ -314,6 +315,87 @@ public static class BuildingSelfTest
                 == BuildingSystem.StateRuins,
             "destroyed farm turns into ruins");
         Expect(failures, !sim.World.HasComponent(farm, SimComponents.ResourceNode), "ruined farm loses its food node");
+    }
+
+    private static void CheckDropBuildings(List<string> failures)
+    {
+        long woodBit = 1L << (int)GameSim.ResourceWood;
+        long foodBit = 1L << (int)GameSim.ResourceFood;
+        long goldBit = 1L << (int)GameSim.ResourceGold;
+        long stoneBit = 1L << (int)GameSim.ResourceStone;
+
+        var sim = new GameSim(new NavGrid(24, 24), 530);
+        sim.AddResource(0, GameSim.ResourceWood, 5000);
+        sim.AddResource(0, GameSim.ResourceStone, 1000);
+        long townCenter = sim.IssuePlaceBuilding(BuildingTypes.TownCenter, 1, 1, 0);
+        long lumber = sim.IssuePlaceBuilding(BuildingTypes.LumberCamp, 12, 12, 0);
+        long mill = sim.IssuePlaceBuilding(BuildingTypes.Mill, 12, 4, 0);
+        long mining = sim.IssuePlaceBuilding(BuildingTypes.MiningCamp, 4, 12, 0);
+        Expect(failures,
+            townCenter >= 0 && lumber >= 0 && mill >= 0 && mining >= 0,
+            "resource drop buildings can be placed");
+        Expect(failures,
+            !sim.World.HasComponent(lumber, SimComponents.DropSite),
+            "unfinished lumber camp provides no drop site");
+        BuildingSystem.Complete(sim.World, townCenter);
+        BuildingSystem.Complete(sim.World, lumber);
+        BuildingSystem.Complete(sim.World, mill);
+        BuildingSystem.Complete(sim.World, mining);
+        Expect(failures,
+            sim.World.GetValue(lumber, SimComponents.DropSite, SimComponents.AcceptMask) == woodBit,
+            "completed lumber camp only accepts wood");
+        Expect(failures,
+            sim.World.GetValue(mill, SimComponents.DropSite, SimComponents.AcceptMask) == foodBit,
+            "completed mill only accepts food");
+        Expect(failures,
+            sim.World.GetValue(mining, SimComponents.DropSite, SimComponents.AcceptMask) == (goldBit | stoneBit),
+            "completed mining camp accepts gold and stone");
+        Expect(failures,
+            sim.World.GetValue(townCenter, SimComponents.DropSite, SimComponents.AcceptMask) == 0b1111,
+            "completed town center accepts all resources");
+
+        long nearLumber = GatherSystem.NearestDropSite(sim.World, 0, GameSim.ResourceWood, 14, 13);
+        long nearMining = GatherSystem.NearestDropSite(sim.World, 0, GameSim.ResourceGold, 14, 13);
+        long nearMill = GatherSystem.NearestDropSite(sim.World, 0, GameSim.ResourceFood, 14, 13);
+        long nearMiningStone = GatherSystem.NearestDropSite(sim.World, 0, GameSim.ResourceStone, 14, 13);
+        Expect(failures, nearLumber == lumber, "wood pick selects the nearest lumber camp");
+        Expect(failures, nearMining == mining, "gold pick selects the nearest mining camp");
+        Expect(failures, nearMill == mill, "food pick selects the nearest mill");
+        Expect(failures, nearMiningStone == mining, "stone pick selects the nearest mining camp");
+
+        long woodNode = sim.SpawnResourceNode(14, 12, GameSim.ResourceWood, 50);
+        long villager = sim.SpawnVillager(14, 13, 0, 0.2, 10, 1.0);
+        sim.IssueGather(villager, woodNode, -1);
+        Expect(failures,
+            sim.World.GetValue(villager, SimComponents.Gather, SimComponents.DropEntity) == lumber,
+            "gather command without a drop site auto-selects by resource");
+
+        BuildingSystem.Ruin(sim.World, sim.Grid, lumber);
+        Expect(failures,
+            !sim.World.HasComponent(lumber, SimComponents.DropSite),
+            "ruined building loses its drop site");
+        Expect(failures,
+            GatherSystem.NearestDropSite(sim.World, 0, GameSim.ResourceWood, 14, 13) == townCenter,
+            "ruined lumber camp is skipped, town center takes over");
+
+        var mismatch = new GameSim(new NavGrid(16, 16), 531);
+        mismatch.AddResource(0, GameSim.ResourceWood, 500);
+        long mismatchMill = mismatch.IssuePlaceBuilding(BuildingTypes.Mill, 4, 4, 0);
+        BuildingSystem.Complete(mismatch.World, mismatchMill);
+        long carrier = mismatch.SpawnVillager(6, 4, 0, 0.2, 10, 1.0);
+        long mismatchWoodBefore = mismatch.Resource(0, GameSim.ResourceWood);
+        mismatch.World.SetValue(carrier, SimComponents.Gather, SimComponents.GatherState, GatherSystem.GatherStateReturning);
+        mismatch.World.SetValue(carrier, SimComponents.Gather, SimComponents.DropEntity, mismatchMill);
+        mismatch.World.SetValue(carrier, SimComponents.Gather, SimComponents.CarryType, GameSim.ResourceWood);
+        mismatch.World.SetValue(carrier, SimComponents.Gather, SimComponents.CarryAmount, 5);
+        mismatch.SimulateTick();
+        Expect(failures,
+            mismatch.Resource(0, GameSim.ResourceWood) == mismatchWoodBefore,
+            "mill rejects a wood delivery");
+        Expect(failures,
+            mismatch.World.GetValue(carrier, SimComponents.Gather, SimComponents.GatherState)
+                == GatherSystem.GatherStateIdle,
+            "rejected delivery drops the villager to idle");
     }
 
     private static void CheckRepair(List<string> failures)
