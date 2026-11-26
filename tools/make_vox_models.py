@@ -164,6 +164,18 @@ def build_market():
     return v
 
 
+def build_farm():
+    v = {}
+    box(v, 0, 23, 0, 23, 0, 0, 3)    # tilled soil (3x3 footprint)
+    for y in range(2, 23, 4):
+        box(v, 2, 21, y, y + 1, 1, 1, 10)  # golden wheat rows
+    for x in range(2, 23, 4):
+        box(v, x, x + 1, 2, 21, 1, 1, 5)  # green sprouts between rows
+    for x, y in ((0, 0), (23, 0), (0, 23), (23, 23)):
+        box(v, x, x, y, y, 1, 2, 1)  # team-colored corner stakes
+    return v
+
+
 def write_vox(path: Path, voxels: dict) -> None:
     xs = [p[0] for p in voxels]
     ys = [p[1] for p in voxels]
@@ -204,6 +216,7 @@ def main() -> None:
         "wall.vox": build_wall(),
         "tower.vox": build_tower(),
         "market.vox": build_market(),
+        "farm.vox": build_farm(),
     }
     for name, voxels in models.items():
         write_vox(OUT / name, voxels)

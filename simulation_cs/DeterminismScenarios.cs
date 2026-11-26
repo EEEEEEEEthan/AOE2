@@ -39,8 +39,27 @@ public static class DeterminismScenarios
             8 => AttackBattle(),
             9 => OrderBattle(),
             10 => TechProgressRun(),
+            11 => FarmCycle(),
             _ => -1,
         };
+    }
+
+    private static long FarmCycle()
+    {
+        var sim = new GameSim(new NavGrid(20, 20), 92, 2, 6);
+        sim.AddResource(0, GameSim.ResourceWood, 500);
+        long farm = sim.IssuePlaceBuilding(BuildingTypes.Farm, 4, 4, 0);
+        long builder = sim.SpawnVillager(10, 5, 0, 0.4, 20, 0.5);
+        sim.IssueConstruct(builder, farm);
+        Run(sim, 200);
+        sim.World.SetValue(farm, SimComponents.ResourceNode, SimComponents.Remaining, 5);
+        long drop = sim.SpawnDropSite(10, 10, 0b1111);
+        long villager = sim.SpawnVillager(9, 6, 0, 0.2, 10, 1.0);
+        sim.IssueGather(villager, farm, drop);
+        Run(sim, 120);
+        sim.IssueReseedFarm(farm, 0);
+        Run(sim, 40);
+        return sim.World.Checksum();
     }
 
     private static long TechProgressRun()
@@ -48,6 +67,7 @@ public static class DeterminismScenarios
         var sim = new GameSim(new NavGrid(20, 20), 88, 2, 6);
         sim.AddResource(0, GameSim.ResourceFood, 5000);
         sim.AddResource(0, GameSim.ResourceGold, 5000);
+        sim.AddResource(0, GameSim.ResourceWood, 5000);
         sim.SpawnUnit(2, 2, 0, 50, 5, 1.0, 1.0, 0.2);
         sim.SpawnUnit(2, 5, 1, 50, 5, 1.0, 1.0, 0.2);
         sim.AgeUp(0, TechCatalog.AgeFeudal);

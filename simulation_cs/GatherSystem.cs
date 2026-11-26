@@ -10,7 +10,7 @@ public static class GatherSystem
 
     public const long GatherRangeSq = 147456;
 
-    public static void Step(SimWorld world, Func<long, long> inventoryProvider)
+    public static void Step(SimWorld world, Func<long, long> inventoryProvider, NavGrid grid)
     {
         ComponentStore gatherStore = world.Store(SimComponents.Gather);
         if (gatherStore.Count == 0)
@@ -22,16 +22,16 @@ public static class GatherSystem
             long state = gatherStore.GetValue(id, SimComponents.GatherState);
             if (state == GatherStateGathering)
             {
-                StepGathering(world, id);
+                StepGathering(world, id, grid);
             }
             else if (state == GatherStateReturning)
             {
-                StepReturning(world, id, inventoryProvider);
+                StepReturning(world, id, inventoryProvider, grid);
             }
         }
     }
 
-    private static void StepGathering(SimWorld world, long id)
+    private static void StepGathering(SimWorld world, long id, NavGrid grid)
     {
         long node = world.GetValue(id, SimComponents.Gather, SimComponents.NodeEntity);
         long remaining = 0;
@@ -46,7 +46,7 @@ public static class GatherSystem
         }
         if (!InRange(world, id, node))
         {
-            MoveToCell(world, id, node);
+            MoveToCell(world, id, node, grid);
             return;
         }
         Stop(world, id);
@@ -77,7 +77,7 @@ public static class GatherSystem
         }
     }
 
-    private static void StepReturning(SimWorld world, long id, Func<long, long> inventoryProvider)
+    private static void StepReturning(SimWorld world, long id, Func<long, long> inventoryProvider, NavGrid grid)
     {
         long drop = world.GetValue(id, SimComponents.Gather, SimComponents.DropEntity);
         if (!IsDropSite(world, drop))
@@ -87,7 +87,7 @@ public static class GatherSystem
         }
         if (!InRange(world, id, drop))
         {
-            MoveToCell(world, id, drop);
+            MoveToCell(world, id, drop, grid);
             return;
         }
         Stop(world, id);
@@ -134,6 +134,10 @@ public static class GatherSystem
     {
         long firstX = world.GetValue(first, SimComponents.Position, SimComponents.X);
         long firstY = world.GetValue(first, SimComponents.Position, SimComponents.Y);
+        if (world.HasComponent(second, SimComponents.Building))
+        {
+            return InRangeOfFootprint(world, firstX, firstY, second);
+        }
         long secondX = world.GetValue(second, SimComponents.Position, SimComponents.X);
         long secondY = world.GetValue(second, SimComponents.Position, SimComponents.Y);
         long deltaX = Fixed.Sub(secondX, firstX);
@@ -142,19 +146,84 @@ public static class GatherSystem
         return distanceSq <= GatherRangeSq;
     }
 
-    private static void MoveToCell(SimWorld world, long id, long target)
+    /// <summary>农田等建筑节点：以 footprint 边缘判定，村民站在相邻格即可采集。</summary>
+    private static bool InRangeOfFootprint(SimWorld world, long firstX, long firstY, long building)
     {
-        world.SetValue(
-            id,
-            SimComponents.Move,
-            SimComponents.TargetX,
-            Fixed.ToInt(world.GetValue(target, SimComponents.Position, SimComponents.X)));
-        world.SetValue(
-            id,
-            SimComponents.Move,
-            SimComponents.TargetY,
-            Fixed.ToInt(world.GetValue(target, SimComponents.Position, SimComponents.Y)));
+        long originX = Fixed.ToInt(world.GetValue(building, SimComponents.Position, SimComponents.X));
+        long originY = Fixed.ToInt(world.GetValue(building, SimComponents.Position, SimComponents.Y));
+        long sizeWidth = world.GetValue(building, SimComponents.Building, SimComponents.SizeWidth);
+        long sizeHeight = world.GetValue(building, SimComponents.Building, SimComponents.SizeHeight);
+        long cellX = Fixed.ToInt(firstX);
+        long cellY = Fixed.ToInt(firstY);
+        long distanceX = System.Math.Max(0, System.Math.Max(originX - cellX, cellX - (originX + sizeWidth - 1)));
+        long distanceY = System.Math.Max(0, System.Math.Max(originY - cellY, cellY - (originY + sizeHeight - 1)));
+        return distanceX <= 1 && distanceY <= 1;
+    }
+
+    private static void MoveToCell(SimWorld world, long id, long target, NavGrid grid)
+    {
+        long targetX;
+        long targetY;
+        if (world.HasComponent(target, SimComponents.Building))
+        {
+            long workerX = Fixed.ToInt(world.GetValue(id, SimComponents.Position, SimComponents.X));
+            long workerY = Fixed.ToInt(world.GetValue(id, SimComponents.Position, SimComponents.Y));
+            (long approachX, long approachY) = BuildingApproachCell(world, grid, target, workerX, workerY);
+            if (approachX < 0)
+            {
+                return;
+            }
+            targetX = approachX;
+            targetY = approachY;
+        }
+        else
+        {
+            targetX = Fixed.ToInt(world.GetValue(target, SimComponents.Position, SimComponents.X));
+            targetY = Fixed.ToInt(world.GetValue(target, SimComponents.Position, SimComponents.Y));
+        }
+        world.SetValue(id, SimComponents.Move, SimComponents.TargetX, targetX);
+        world.SetValue(id, SimComponents.Move, SimComponents.TargetY, targetY);
         world.SetValue(id, SimComponents.Move, SimComponents.Active, 1);
+    }
+
+    private static (long, long) BuildingApproachCell(
+        SimWorld world, NavGrid grid, long building, long workerX, long workerY)
+    {
+        long originX = Fixed.ToInt(world.GetValue(building, SimComponents.Position, SimComponents.X));
+        long originY = Fixed.ToInt(world.GetValue(building, SimComponents.Position, SimComponents.Y));
+        long sizeWidth = world.GetValue(building, SimComponents.Building, SimComponents.SizeWidth);
+        long sizeHeight = world.GetValue(building, SimComponents.Building, SimComponents.SizeHeight);
+        long bestX = -1;
+        long bestY = -1;
+        long bestDistance = 0;
+        for (long cellY = originY - 1; cellY <= originY + sizeHeight; cellY++)
+        {
+            for (long cellX = originX - 1; cellX <= originX + sizeWidth; cellX++)
+            {
+                bool inside = cellX >= originX && cellX < originX + sizeWidth
+                    && cellY >= originY && cellY < originY + sizeHeight;
+                if (inside)
+                {
+                    continue;
+                }
+                if (!grid.InBounds((int)cellX, (int)cellY) || grid.IsBlocked((int)cellX, (int)cellY))
+                {
+                    continue;
+                }
+                long distance = System.Math.Abs(cellX - workerX) + System.Math.Abs(cellY - workerY);
+                bool better = bestX < 0
+                    || distance < bestDistance
+                    || (distance == bestDistance
+                        && (cellX < bestX || (cellX == bestX && cellY < bestY)));
+                if (better)
+                {
+                    bestX = cellX;
+                    bestY = cellY;
+                    bestDistance = distance;
+                }
+            }
+        }
+        return (bestX, bestY);
     }
 
     private static void Stop(SimWorld world, long id)

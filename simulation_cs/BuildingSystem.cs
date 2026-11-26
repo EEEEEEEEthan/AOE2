@@ -118,7 +118,50 @@ public static class BuildingSystem
         world.SetValue(id, SimComponents.Health, SimComponents.Hp, 0);
         world.Detach(id, SimComponents.Health);
         world.Detach(id, SimComponents.Footprint);
+        world.Detach(id, SimComponents.ResourceNode);
         SetBlock(world, grid, id, false);
+    }
+
+    /// <summary>
+    /// 空田重播：只对已完工且已耗尽的农田生效，重置食物节点剩余量。
+    /// 扣费与归属校验放在 <see cref="GameSim.IssueReseedFarm"/>。
+    /// </summary>
+    public static bool ReseedFarm(SimWorld world, long id)
+    {
+        if (!world.IsAlive(id) || !world.HasComponent(id, SimComponents.Building))
+        {
+            return false;
+        }
+        if (world.GetValue(id, SimComponents.Building, SimComponents.BuildingType) != BuildingTypes.Farm)
+        {
+            return false;
+        }
+        if (world.GetValue(id, SimComponents.Building, SimComponents.State) != StateComplete)
+        {
+            return false;
+        }
+        if (world.HasComponent(id, SimComponents.ResourceNode)
+            && world.GetValue(id, SimComponents.ResourceNode, SimComponents.Remaining) > 0)
+        {
+            return false;
+        }
+        AttachFoodNode(world, id);
+        return true;
+    }
+
+    private static void AttachFoodNode(SimWorld world, long id)
+    {
+        if (world.GetValue(id, SimComponents.Building, SimComponents.BuildingType) != BuildingTypes.Farm)
+        {
+            return;
+        }
+        if (!world.HasComponent(id, SimComponents.ResourceNode))
+        {
+            world.Attach(id, SimComponents.ResourceNode);
+        }
+        world.SetValue(id, SimComponents.ResourceNode, SimComponents.NodeType, GameSim.ResourceFood);
+        world.SetValue(
+            id, SimComponents.ResourceNode, SimComponents.Remaining, BuildingTypes.FarmFoodAmount);
     }
 
     private static void StepWorker(SimWorld world, NavGrid grid, TerrainGrid terrain, long id)
@@ -182,6 +225,7 @@ public static class BuildingSystem
             world.SetValue(buildingId, SimComponents.Building, SimComponents.Progress, maxProgress);
             world.SetValue(buildingId, SimComponents.Building, SimComponents.State, StateComplete);
             world.Detach(workerId, SimComponents.Construct);
+            AttachFoodNode(world, buildingId);
             return;
         }
         world.SetValue(buildingId, SimComponents.Building, SimComponents.Progress, progress);

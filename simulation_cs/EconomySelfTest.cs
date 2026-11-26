@@ -13,6 +13,7 @@ public static class EconomySelfTest
         CheckSnapshotExposesEconomy(failures);
         CheckSnapshotEconomyRoundtrip(failures);
         CheckDepletedNodeEndsCycle(failures);
+        CheckFarmSustainsFood(failures);
         CheckChecksumTracksEconomy(failures);
         CheckDeterministic(failures);
         return failures;
@@ -136,6 +137,57 @@ public static class EconomySelfTest
     {
         Expect(failures, EconomyChecksum(50) != EconomyChecksum(51), "resource node remaining participates in checksum");
         Expect(failures, EconomyChecksum(50) == EconomyChecksum(50), "economy checksum is reproducible");
+        Expect(failures, FarmChecksum(250) != FarmChecksum(100), "farm food remaining participates in checksum");
+    }
+
+    private static void CheckFarmSustainsFood(List<string> failures)
+    {
+        var sim = new GameSim(new NavGrid(20, 20), 907);
+        sim.AddResource(0, GameSim.ResourceWood, 500);
+        long farm = sim.IssuePlaceBuilding(BuildingTypes.Farm, 4, 4, 0);
+        long builder = sim.SpawnVillager(10, 5, 0, 0.5, 20, 0.5);
+        sim.IssueConstruct(builder, farm);
+        for (int tick = 0; tick < 400; tick++)
+        {
+            sim.SimulateTick();
+        }
+        Expect(failures,
+            sim.World.GetValue(farm, SimComponents.ResourceNode, SimComponents.NodeType)
+                == GameSim.ResourceFood,
+            "farm node feeds the harvest loop");
+        long drop = sim.SpawnDropSite(10, 10, 0b1111);
+        long villager = sim.SpawnVillager(7, 4, 0, 0.2, 10, 1.0);
+        sim.IssueGather(villager, farm, drop);
+        for (int tick = 0; tick < 60; tick++)
+        {
+            sim.SimulateTick();
+        }
+        Expect(failures, sim.Resource(0, GameSim.ResourceFood) > 0, "farm harvest reaches player inventory");
+        long remainingAfterHarvest =
+            sim.World.GetValue(farm, SimComponents.ResourceNode, SimComponents.Remaining);
+        Expect(failures, remainingAfterHarvest < BuildingTypes.FarmFoodAmount, "harvest drains farm food");
+        sim.World.SetValue(farm, SimComponents.ResourceNode, SimComponents.Remaining, 0);
+        long wood = sim.Resource(0, GameSim.ResourceWood);
+        Expect(failures, wood >= BuildingTypes.FarmReseedCost, "harvest leaves enough wood to reseed");
+        Expect(failures, sim.IssueReseedFarm(farm, 0), "empty farm reseeds");
+        Expect(failures,
+            sim.World.GetValue(farm, SimComponents.ResourceNode, SimComponents.Remaining)
+                == BuildingTypes.FarmFoodAmount,
+            "reseeded farm refills to full");
+    }
+
+    private static long FarmChecksum(long remaining)
+    {
+        var sim = new GameSim(new NavGrid(16, 16), 908);
+        sim.AddResource(0, GameSim.ResourceWood, 100);
+        long farm = sim.IssuePlaceBuilding(BuildingTypes.Farm, 4, 4, 0);
+        sim.World.SetValue(
+            farm, SimComponents.Building, SimComponents.Progress, BuildingTypes.BuildTicks(BuildingTypes.Farm));
+        sim.World.SetValue(
+            farm, SimComponents.Building, SimComponents.State, BuildingSystem.StateComplete);
+        BuildingSystem.ReseedFarm(sim.World, farm);
+        sim.World.SetValue(farm, SimComponents.ResourceNode, SimComponents.Remaining, remaining);
+        return sim.World.Checksum();
     }
 
     private static long EconomyChecksum(long nodeAmount)

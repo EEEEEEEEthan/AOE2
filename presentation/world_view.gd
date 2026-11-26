@@ -57,6 +57,7 @@ const BUILDING_MODEL_PATHS := {
 	4: "res://assets/vox/wall.vox",
 	5: "res://assets/vox/tower.vox",
 	6: "res://assets/vox/market.vox",
+	7: "res://assets/vox/farm.vox",
 }
 
 const FOG_UNEXPLORED_COLOR := Color(0.0, 0.0, 0.0, 1.0)

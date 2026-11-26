@@ -693,6 +693,47 @@ public sealed class GameSim
         return id;
     }
 
+    /// <summary>空田手动重播：仅本方已完工且耗尽的农田可用，扣木材后重填食物节点。</summary>
+    public bool IssueReseedFarm(long building, long player)
+    {
+        if (!World.IsAlive(building) || !World.HasComponent(building, SimComponents.Building))
+        {
+            return false;
+        }
+        if (World.GetValue(building, SimComponents.Building, SimComponents.BuildingType)
+            != BuildingTypes.Farm)
+        {
+            return false;
+        }
+        if (World.GetValue(building, SimComponents.Building, SimComponents.State)
+            != BuildingSystem.StateComplete)
+        {
+            return false;
+        }
+        if (World.GetValue(building, SimComponents.Team, SimComponents.TeamId) != player)
+        {
+            return false;
+        }
+        if (!World.HasComponent(building, SimComponents.ResourceNode))
+        {
+            return false;
+        }
+        if (World.GetValue(building, SimComponents.ResourceNode, SimComponents.Remaining) > 0)
+        {
+            return false;
+        }
+        if (Resource(player, ResourceWood) < BuildingTypes.FarmReseedCost)
+        {
+            return false;
+        }
+        if (!BuildingSystem.ReseedFarm(World, building))
+        {
+            return false;
+        }
+        AddResource(player, ResourceWood, -BuildingTypes.FarmReseedCost);
+        return true;
+    }
+
     public void IssueConstruct(long villager, long building)
     {
         if (!World.IsAlive(villager) || !World.HasComponent(villager, SimComponents.Move))
@@ -921,7 +962,8 @@ public sealed class GameSim
         || kind == LockstepCommand.KindFollow
         || kind == LockstepCommand.KindHold
         || kind == LockstepCommand.KindSetRally
-        || kind == LockstepCommand.KindConstruct;
+        || kind == LockstepCommand.KindConstruct
+        || kind == LockstepCommand.KindReseedFarm;
 
     public bool ApplyCommand(LockstepCommand command)
     {
@@ -999,6 +1041,9 @@ public sealed class GameSim
             case LockstepCommand.KindConstruct:
                 IssueConstruct(command.Entity, command.TargetEntity);
                 break;
+            case LockstepCommand.KindReseedFarm:
+                IssueReseedFarm(command.Entity, command.Player);
+                break;
         }
         return true;
     }
@@ -1015,7 +1060,7 @@ public sealed class GameSim
             Spatial.Rebuild(World);
             _spatialReady = true;
         }
-        GatherSystem.Step(World, InventoryForTeam);
+        GatherSystem.Step(World, InventoryForTeam, Grid);
         MonkSystem.Step(World);
         OrderSystem.Step(World, Spatial);
         BuildingSystem.Step(World, Grid, Terrain);

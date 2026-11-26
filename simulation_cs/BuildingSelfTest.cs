@@ -16,6 +16,9 @@ public static class BuildingSelfTest
         CheckDestroyRuins(failures);
         CheckInsufficientResources(failures);
         CheckPlaceDeductsCost(failures);
+        CheckFarmLifecycle(failures);
+        CheckFarmReseed(failures);
+        CheckFarmRuin(failures);
         CheckDeterminism(failures);
         CheckCommandRoundtrip(failures);
         return failures;
@@ -165,6 +168,99 @@ public static class BuildingSelfTest
         Expect(failures,
             sim.Resource(0, GameSim.ResourceWood) == before - cost,
             "placement deducts the building cost");
+    }
+
+    private static void CheckFarmLifecycle(List<string> failures)
+    {
+        var grid = new NavGrid(20, 20);
+        var sim = new GameSim(grid, 510);
+        sim.AddResource(0, GameSim.ResourceWood, 500);
+        long farm = sim.IssuePlaceBuilding(BuildingTypes.Farm, 4, 4, 0);
+        Expect(failures, farm >= 0, "farm placed on open ground");
+        Expect(failures, grid.IsBuildingBlocked(4, 4) && grid.IsBuildingBlocked(6, 6), "farm occupies its 3x3 footprint");
+        Expect(failures, grid.IsBuildingBlocked(4, 4) && !grid.IsBuildingBlocked(7, 4), "farm does not exceed its footprint");
+        Expect(failures,
+            !sim.World.HasComponent(farm, SimComponents.ResourceNode),
+            "farm carries no food node before completion");
+        long builder = sim.SpawnVillager(10, 5, 0, 0.5, 20, 0.5);
+        sim.IssueConstruct(builder, farm);
+        for (int tick = 0; tick < 400; tick++)
+        {
+            sim.SimulateTick();
+        }
+        Expect(failures,
+            sim.World.GetValue(farm, SimComponents.Building, SimComponents.State)
+                == BuildingSystem.StateComplete,
+            "farm construction completes");
+        Expect(failures, sim.World.HasComponent(farm, SimComponents.ResourceNode), "completed farm grows a food node");
+        Expect(failures,
+            sim.World.GetValue(farm, SimComponents.ResourceNode, SimComponents.NodeType)
+                == GameSim.ResourceFood,
+            "farm node holds food");
+        Expect(failures,
+            sim.World.GetValue(farm, SimComponents.ResourceNode, SimComponents.Remaining)
+                == BuildingTypes.FarmFoodAmount,
+            "farm node starts full");
+    }
+
+    private static void CheckFarmReseed(List<string> failures)
+    {
+        var sim = new GameSim(new NavGrid(20, 20), 511);
+        sim.AddResource(0, GameSim.ResourceWood, 500);
+        long farm = sim.IssuePlaceBuilding(BuildingTypes.Farm, 4, 4, 0);
+        long builder = sim.SpawnVillager(10, 5, 0, 0.5, 20, 0.5);
+        sim.IssueConstruct(builder, farm);
+        for (int tick = 0; tick < 400; tick++)
+        {
+            sim.SimulateTick();
+        }
+        Expect(failures, !sim.IssueReseedFarm(farm, 0), "half-full farm rejects reseed");
+        sim.World.SetValue(farm, SimComponents.ResourceNode, SimComponents.Remaining, 0);
+        long before = sim.Resource(0, GameSim.ResourceWood);
+        Expect(failures, sim.IssueReseedFarm(farm, 0), "empty farm accepts reseed");
+        Expect(failures,
+            sim.World.GetValue(farm, SimComponents.ResourceNode, SimComponents.Remaining)
+                == BuildingTypes.FarmFoodAmount,
+            "reseed refills the food node");
+        Expect(failures,
+            sim.Resource(0, GameSim.ResourceWood) == before - BuildingTypes.FarmReseedCost,
+            "reseed deducts wood");
+        sim.World.SetValue(farm, SimComponents.ResourceNode, SimComponents.Remaining, 0);
+        sim.AddResource(0, GameSim.ResourceWood, -sim.Resource(0, GameSim.ResourceWood));
+        Expect(failures, !sim.IssueReseedFarm(farm, 0), "reseed without wood is rejected");
+        long foodBefore = sim.Resource(0, GameSim.ResourceFood);
+        long drop = sim.SpawnDropSite(10, 10, 0b1111);
+        long villager = sim.SpawnVillager(7, 4, 0, 0.2, 10, 1.0);
+        sim.IssueGather(villager, farm, drop);
+        sim.World.SetValue(farm, SimComponents.ResourceNode, SimComponents.Remaining, 2);
+        for (int tick = 0; tick < 200; tick++)
+        {
+            sim.SimulateTick();
+        }
+        Expect(failures, sim.Resource(0, GameSim.ResourceFood) == foodBefore + 2, "villagers harvest food from the farm");
+    }
+
+    private static void CheckFarmRuin(List<string> failures)
+    {
+        var sim = new GameSim(new NavGrid(20, 20), 512);
+        sim.AddResource(0, GameSim.ResourceWood, 500);
+        long farm = sim.IssuePlaceBuilding(BuildingTypes.Farm, 4, 4, 0);
+        long builder = sim.SpawnVillager(10, 5, 0, 0.5, 20, 0.5);
+        sim.IssueConstruct(builder, farm);
+        for (int tick = 0; tick < 400; tick++)
+        {
+            sim.SimulateTick();
+        }
+        sim.SpawnUnit(9, 4, 1, 100, 600, 1.0, 6.0, 0.0);
+        for (int tick = 0; tick < 200; tick++)
+        {
+            sim.SimulateTick();
+        }
+        Expect(failures,
+            sim.World.GetValue(farm, SimComponents.Building, SimComponents.State)
+                == BuildingSystem.StateRuins,
+            "destroyed farm turns into ruins");
+        Expect(failures, !sim.World.HasComponent(farm, SimComponents.ResourceNode), "ruined farm loses its food node");
     }
 
     private static void CheckDeterminism(List<string> failures)
