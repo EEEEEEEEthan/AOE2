@@ -18,6 +18,7 @@ public static class KernelSelfTest
         CheckGridRange(failures);
         CheckProjectile(failures);
         CheckAttack(failures);
+        CheckStance(failures);
         CheckGather(failures);
         CheckMonk(failures);
         CheckRelic(failures);
@@ -211,7 +212,7 @@ public static class KernelSelfTest
     private static void CheckGridRange(List<string> failures)
     {
         var meleeFar = new GameSim(new NavGrid(16, 16), 62);
-        long meleeAttacker = meleeFar.SpawnUnit(5, 5, 0, 100, 10, 1.0, 1.0, 0.0);
+        long meleeAttacker = meleeFar.SpawnUnit(5, 5, 0, 100, 10, 1.0, 1.0, 0.0, CombatStance.StandGround);
         long meleeTarget = meleeFar.SpawnUnit(7, 5, 1, 10, 0, 0.0, 0.0, 0.0);
         for (int tick = 0; tick < 60; tick++)
         {
@@ -220,7 +221,7 @@ public static class KernelSelfTest
         Expect(failures, meleeFar.World.IsAlive(meleeAttacker) && meleeFar.World.IsAlive(meleeTarget), "melee misses two cells away");
 
         var meleeNear = new GameSim(new NavGrid(16, 16), 63);
-        meleeNear.SpawnUnit(5, 5, 0, 100, 10, 1.0, 1.0, 0.0);
+        meleeNear.SpawnUnit(5, 5, 0, 100, 10, 1.0, 1.0, 0.0, CombatStance.StandGround);
         long adjacent = meleeNear.SpawnUnit(6, 5, 1, 10, 0, 0.0, 0.0, 0.0);
         for (int tick = 0; tick < 20; tick++)
         {
@@ -229,7 +230,7 @@ public static class KernelSelfTest
         Expect(failures, !meleeNear.World.IsAlive(adjacent), "melee hits adjacent cell");
 
         var ranged = new GameSim(new NavGrid(16, 16), 64);
-        ranged.SpawnUnit(5, 5, 0, 100, 10, 2.0, 2.0, 0.0);
+        ranged.SpawnUnit(5, 5, 0, 100, 10, 2.0, 2.0, 0.0, CombatStance.StandGround);
         long tooClose = ranged.SpawnUnit(6, 5, 1, 10, 0, 0.0, 0.0, 0.0);
         long inBand = ranged.SpawnUnit(7, 5, 1, 10, 0, 0.0, 0.0, 0.0);
         for (int tick = 0; tick < 30; tick++)
@@ -309,6 +310,114 @@ public static class KernelSelfTest
             checksum = sim.World.Checksum();
         }
         return checksum;
+    }
+
+    private static void CheckStance(List<string> failures)
+    {
+        var silent = new GameSim(new NavGrid(12, 12), 71);
+        silent.SpawnUnit(5, 5, 0, 100, 10, 1.0, 1.0, 0.0, CombatStance.NoAttack);
+        long bystander = silent.SpawnUnit(6, 5, 1, 100, 0, 1.0, 1.0, 0.0, CombatStance.NoAttack);
+        for (int tick = 0; tick < 40; tick++)
+        {
+            silent.SimulateTick();
+        }
+        Expect(failures,
+            silent.World.GetValue(bystander, SimComponents.Health, SimComponents.Hp) == 100,
+            "no attack stance does not auto fire");
+
+        var standGround = new GameSim(new NavGrid(16, 16), 72);
+        long guard = standGround.SpawnUnit(2, 2, 0, 100, 10, 1.0, 1.0, 0.5, CombatStance.StandGround);
+        standGround.SpawnUnit(9, 2, 1, 100, 0, 1.0, 1.0, 0.0, CombatStance.NoAttack);
+        for (int tick = 0; tick < 40; tick++)
+        {
+            standGround.SimulateTick();
+        }
+        Expect(failures,
+            Fixed.ToInt(standGround.World.GetValue(guard, SimComponents.Position, SimComponents.X)) == 2
+            && Fixed.ToInt(standGround.World.GetValue(guard, SimComponents.Position, SimComponents.Y)) == 2,
+            "stand ground never chases");
+
+        var standFire = new GameSim(new NavGrid(16, 16), 73);
+        long sentry = standFire.SpawnUnit(5, 5, 0, 100, 10, 1.0, 1.0, 0.0, CombatStance.StandGround);
+        long intruder = standFire.SpawnUnit(6, 5, 1, 100, 0, 1.0, 1.0, 0.0, CombatStance.NoAttack);
+        for (int tick = 0; tick < 10; tick++)
+        {
+            standFire.SimulateTick();
+        }
+        Expect(failures,
+            standFire.World.GetValue(intruder, SimComponents.Health, SimComponents.Hp) < 100,
+            "stand ground fires at in-range target");
+        Expect(failures,
+            standFire.World.GetValue(sentry, SimComponents.Move, SimComponents.Active) == 0,
+            "stand ground does not move to engage");
+
+        var aggressive = new GameSim(new NavGrid(24, 24), 74);
+        long hunter = aggressive.SpawnUnit(2, 2, 0, 100, 10, 1.0, 1.0, 0.5, CombatStance.Aggressive);
+        aggressive.SpawnUnit(8, 2, 1, 100, 0, 1.0, 1.0, 0.0, CombatStance.NoAttack);
+        for (int tick = 0; tick < 40; tick++)
+        {
+            aggressive.SimulateTick();
+        }
+        Expect(failures,
+            Fixed.ToInt(aggressive.World.GetValue(hunter, SimComponents.Position, SimComponents.X)) > 2,
+            "aggressive stance chases into larger aggro radius");
+
+        var defensive = new GameSim(new NavGrid(24, 24), 75);
+        long defender = defensive.SpawnUnit(2, 2, 0, 100, 10, 1.0, 1.0, 0.5, CombatStance.Defensive);
+        defensive.SpawnUnit(8, 2, 1, 100, 0, 1.0, 1.0, 0.0, CombatStance.NoAttack);
+        for (int tick = 0; tick < 40; tick++)
+        {
+            defensive.SimulateTick();
+        }
+        Expect(failures,
+            Fixed.ToInt(defensive.World.GetValue(defender, SimComponents.Position, SimComponents.X)) == 2,
+            "defensive stance does not chase beyond its short aggro radius");
+
+        var marching = new GameSim(new NavGrid(20, 20), 76);
+        long marcher = marching.SpawnUnit(2, 5, 0, 100, 10, 1.0, 1.0, 0.5, CombatStance.Aggressive);
+        long roadblock = marching.SpawnUnit(6, 5, 1, 100, 0, 1.0, 1.0, 0.0, CombatStance.NoAttack);
+        marching.IssueMove(marcher, 15, 5);
+        for (int tick = 0; tick < 40; tick++)
+        {
+            marching.SimulateTick();
+        }
+        Expect(failures,
+            marching.World.GetValue(roadblock, SimComponents.Health, SimComponents.Hp) == 100,
+            "moving unit does not auto engage");
+
+        var ordered = new GameSim(new NavGrid(12, 12), 77);
+        long commanded = ordered.SpawnUnit(5, 5, 0, 100, 10, 1.0, 1.0, 0.0, CombatStance.NoAttack);
+        long victim = ordered.SpawnUnit(6, 5, 1, 30, 0, 1.0, 1.0, 0.0, CombatStance.NoAttack);
+        ordered.IssueAttack(commanded, victim);
+        ordered.SimulateTick();
+        Expect(failures,
+            ordered.World.GetValue(victim, SimComponents.Health, SimComponents.Hp) == 20,
+            "explicit attack overrides no attack stance");
+
+        var setter = new GameSim(new NavGrid(12, 12), 78);
+        long trooper = setter.SpawnUnit(5, 5, 0, 100, 10, 1.0, 1.0, 0.0);
+        Expect(failures,
+            setter.World.GetValue(trooper, SimComponents.Combat, SimComponents.Stance) == CombatStance.Aggressive,
+            "unit spawns with default stance");
+        setter.ApplyCommand(new LockstepCommand(0, LockstepCommand.KindStance, trooper, 0, 0, -1, -1, CombatStance.StandGround));
+        Expect(failures,
+            setter.World.GetValue(trooper, SimComponents.Combat, SimComponents.Stance) == CombatStance.StandGround,
+            "stance command updates stance");
+
+        Expect(failures,
+            StanceChecksum(CombatStance.Aggressive) != StanceChecksum(CombatStance.NoAttack),
+            "stance participates in checksum");
+        Expect(failures,
+            StanceChecksum(CombatStance.Defensive) == StanceChecksum(CombatStance.Defensive),
+            "stance checksum deterministic");
+    }
+
+    private static long StanceChecksum(long stance)
+    {
+        var sim = new GameSim(new NavGrid(12, 12), 79);
+        sim.SpawnUnit(5, 5, 0, 100, 10, 1.0, 1.0, 0.0, stance);
+        sim.SpawnUnit(6, 5, 1, 100, 10, 1.0, 1.0, 0.0, stance);
+        return sim.World.Checksum();
     }
 
     private static void CheckGather(List<string> failures)
@@ -516,11 +625,19 @@ public static class KernelSelfTest
             && restoredAttack.TargetEntity == 99,
             "lockstep attack command roundtrip");
 
+        var stanceCommand = new LockstepCommand(0, LockstepCommand.KindStance, 4, 0, 0, -1, -1, CombatStance.StandGround);
+        LockstepCommand restoredStance = LockstepCommand.FromArray(stanceCommand.ToArray());
         Expect(failures,
-            new LockstepCommand(0, LockstepCommand.KindHeal, 3, 0, 0, 8, -1).ToArray().Length == 7,
+            restoredStance.Kind == LockstepCommand.KindStance && restoredStance.Entity == 4
+            && restoredStance.Stance == CombatStance.StandGround,
+            "lockstep stance command roundtrip");
+
+        Expect(failures,
+            new LockstepCommand(0, LockstepCommand.KindHeal, 3, 0, 0, 8, -1).ToArray().Length == 8,
             "monk command serialized with fixed width");
         Expect(failures, LockstepCommand.KindHeal == 5 && LockstepCommand.KindConvert == 6
             && LockstepCommand.KindPickupRelic == 7 && LockstepCommand.KindDepositRelic == 8,
             "monk command kinds stable");
+        Expect(failures, LockstepCommand.KindStance == 9, "stance command kind avoids reserved ids");
     }
 }

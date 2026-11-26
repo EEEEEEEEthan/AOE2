@@ -24,7 +24,7 @@ public partial class SimulationBridge : Node
     public bool ProtocolSelfCheck()
     {
         var command = new AoeSim.LockstepCommand(1, AoeSim.LockstepCommand.KindGather, 12, 3, 4, 30, 31);
-        var attack = new AoeSim.LockstepCommand(0, AoeSim.LockstepCommand.KindAttack, 7, 0, 0, 21, -1);
+        var attack = new AoeSim.LockstepCommand(0, AoeSim.LockstepCommand.KindAttack, 7, 0, 0, 21, -1, AoeSim.CombatStance.Defensive);
         var frame = new AoeSim.CommandFrame
         {
             Player = 1,
@@ -42,7 +42,8 @@ public partial class SimulationBridge : Node
             return false;
         }
         AoeSim.LockstepCommand restoredAttack = decodedCommand.Commands[1];
-        if (restoredAttack.Entity != 7 || restoredAttack.TargetEntity != 21 || restoredAttack.Kind != AoeSim.LockstepCommand.KindAttack)
+        if (restoredAttack.Entity != 7 || restoredAttack.TargetEntity != 21 || restoredAttack.Kind != AoeSim.LockstepCommand.KindAttack
+            || restoredAttack.Stance != AoeSim.CombatStance.Defensive)
         {
             return false;
         }

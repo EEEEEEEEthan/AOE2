@@ -11,6 +11,7 @@ public sealed class LockstepCommand
     public const long KindConvert = 6;
     public const long KindPickupRelic = 7;
     public const long KindDepositRelic = 8;
+    public const long KindStance = 9;
 
     public long Player { get; set; }
     public long Kind { get; set; }
@@ -19,6 +20,7 @@ public sealed class LockstepCommand
     public long CellY { get; set; }
     public long TargetEntity { get; set; }
     public long DropEntity { get; set; }
+    public long Stance { get; set; }
 
     public LockstepCommand(
         long player = 0,
@@ -27,7 +29,8 @@ public sealed class LockstepCommand
         long cellX = 0,
         long cellY = 0,
         long targetEntity = -1,
-        long dropEntity = -1)
+        long dropEntity = -1,
+        long stance = -1)
     {
         Player = player;
         Kind = kind;
@@ -36,10 +39,11 @@ public sealed class LockstepCommand
         CellY = cellY;
         TargetEntity = targetEntity;
         DropEntity = dropEntity;
+        Stance = stance;
     }
 
     public long[] ToArray() =>
-        new[] { Player, Kind, Entity, CellX, CellY, TargetEntity, DropEntity };
+        new[] { Player, Kind, Entity, CellX, CellY, TargetEntity, DropEntity, Stance };
 
     public static LockstepCommand FromArray(long[] values)
     {
@@ -71,6 +75,10 @@ public sealed class LockstepCommand
         if (values.Length >= 7)
         {
             command.DropEntity = values[6];
+        }
+        if (values.Length >= 8)
+        {
+            command.Stance = values[7];
         }
         return command;
     }

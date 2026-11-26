@@ -8,6 +8,7 @@ public static class SimComponents
     public const string Health = "health";
     public const string Combat = "combat";
     public const string AttackTarget = "attack_target";
+    public const string Engage = "engage";
     public const string Team = "team";
     public const string Gather = "gather";
     public const string Footprint = "footprint";
@@ -40,6 +41,10 @@ public static class SimComponents
     public const string CooldownLeft = "cooldown_left";
     public const string TeamId = "team_id";
     public const string TargetEntity = "target_entity";
+    public const string Stance = "stance";
+    public const string AutoTarget = "auto_target";
+    public const string OriginX = "origin_x";
+    public const string OriginY = "origin_y";
     public const string FootprintWidth = "width";
     public const string FootprintHeight = "height";
     public const string ProjectileTarget = "projectile_target";
