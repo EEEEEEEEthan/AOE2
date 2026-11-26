@@ -30,6 +30,8 @@ const SWORDSMAN_UNIT := 0
 const SPEARMAN_UNIT := 1
 const ARCHER_UNIT := 2
 const KNIGHT_UNIT := 3
+const BATTERING_RAM_UNIT := 20
+const MANGONEL_UNIT := 21
 const TOWN_CENTER := 1
 const BARRACKS := 3
 const MARKET := 6
@@ -37,6 +39,7 @@ const DOCK := 8
 const KIND_TRANSPORT_SHIP := 11
 const ARCHERY_RANGE := 15
 const STABLE := 16
+const SIEGE_WORKSHOP := 21
 const RESOURCE_WOOD := 0
 const RESOURCE_FOOD := 1
 const RESOURCE_GOLD := 2
@@ -165,6 +168,8 @@ func _train_allowed(building_type: int, unit_type: int) -> bool:
 			return unit_type == ARCHER_UNIT
 		STABLE:
 			return unit_type == KNIGHT_UNIT
+		SIEGE_WORKSHOP:
+			return unit_type == BATTERING_RAM_UNIT or unit_type == MANGONEL_UNIT
 	return false
 
 

@@ -24,6 +24,10 @@ public static class BuildingTypes
     public const long Monastery = 18;
     public const long University = 19;
     public const long Castle = 20;
+    public const long SiegeWorkshop = 21;
+
+    /// <summary>已知建筑类型的上界，供放置菜单按区间枚举。</summary>
+    public const long MaxKnown = SiegeWorkshop;
 
     /// <summary>一块农田完工后挂载的食物节点总量，耗尽后需重播。</summary>
     public const long FarmFoodAmount = 250;
@@ -31,7 +35,7 @@ public static class BuildingTypes
     /// <summary>空田手动重播消耗的木材。</summary>
     public const long FarmReseedCost = 60;
 
-    public static bool IsKnown(long type) => type >= TownCenter && type <= Castle;
+    public static bool IsKnown(long type) => type >= TownCenter && type <= MaxKnown;
 
     /// <summary>建筑中文名，供科技树等只读界面展示分组；未知类型返回空串。</summary>
     public static string DisplayName(long type) => type switch
@@ -56,6 +60,7 @@ public static class BuildingTypes
         Monastery => "修道院",
         University => "大学",
         Castle => "城堡",
+        SiegeWorkshop => "攻城武器工厂",
         _ => "",
     };
 
@@ -88,6 +93,7 @@ public static class BuildingTypes
         Monastery => TechCatalog.AgeCastle,
         University => TechCatalog.AgeCastle,
         Castle => TechCatalog.AgeCastle,
+        SiegeWorkshop => TechCatalog.AgeCastle,
         _ => TechCatalog.AgeDark,
     };
 
@@ -113,6 +119,7 @@ public static class BuildingTypes
         Monastery => 4,
         University => 4,
         Castle => 5,
+        SiegeWorkshop => 3,
         _ => 0,
     };
 
@@ -138,6 +145,7 @@ public static class BuildingTypes
         Monastery => 4,
         University => 4,
         Castle => 5,
+        SiegeWorkshop => 3,
         _ => 0,
     };
 
@@ -163,6 +171,7 @@ public static class BuildingTypes
         Monastery => 2100,
         University => 2100,
         Castle => 4800,
+        SiegeWorkshop => 1500,
         _ => 0,
     };
 
@@ -188,6 +197,7 @@ public static class BuildingTypes
         Monastery => 180,
         University => 180,
         Castle => 300,
+        SiegeWorkshop => 150,
         _ => 0,
     };
 
@@ -222,6 +232,7 @@ public static class BuildingTypes
         Monastery => new ResourceCost(wood: 175, food: 0, gold: 0, stone: 0),
         University => new ResourceCost(wood: 200, food: 0, gold: 0, stone: 0),
         Castle => new ResourceCost(wood: 0, food: 0, gold: 0, stone: 650),
+        SiegeWorkshop => new ResourceCost(wood: 100, food: 0, gold: 0, stone: 0),
         _ => default,
     };
 

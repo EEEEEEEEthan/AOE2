@@ -108,6 +108,7 @@ public static class ProductionSelfTest
         long barracks = sim.SpawnCompletedBuilding(2, 2, 0, BuildingTypes.Barracks);
         long archery = sim.SpawnCompletedBuilding(6, 2, 0, BuildingTypes.ArcheryRange);
         long stable = sim.SpawnCompletedBuilding(10, 2, 0, BuildingTypes.Stable);
+        long siege = sim.SpawnCompletedBuilding(14, 2, 0, BuildingTypes.SiegeWorkshop);
         Expect(failures, sim.Train(barracks, UnitDefs.Swordsman), "barracks trains swordsman");
         Expect(failures, sim.Train(barracks, UnitDefs.Spearman), "barracks trains spearman");
         Expect(failures, !sim.Train(barracks, UnitDefs.Archer), "barracks cannot train archer");
@@ -115,6 +116,9 @@ public static class ProductionSelfTest
         Expect(failures, !sim.Train(archery, UnitDefs.Swordsman), "archery range cannot train swordsman");
         Expect(failures, sim.Train(stable, UnitDefs.Knight), "stable trains knight");
         Expect(failures, !sim.Train(stable, UnitDefs.Archer), "stable cannot train archer");
+        Expect(failures, sim.Train(siege, UnitDefs.BatteringRam), "siege workshop trains battering ram");
+        Expect(failures, sim.Train(siege, UnitDefs.Mangonel), "siege workshop trains mangonel");
+        Expect(failures, !sim.Train(siege, UnitDefs.Archer), "siege workshop cannot train archer");
     }
 
     private static void CheckInsufficientResources(List<string> failures)

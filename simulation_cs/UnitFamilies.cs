@@ -100,8 +100,9 @@ public static class UnitFamilies
         return resolved >= 0 ? resolved : unitType;
     }
 
-    /// <summary>训练入口只接受家族基础兵，升级后的单位由训练结算按等级解析。</summary>
-    public static bool IsTrainableBase(long unitType) => LevelOf(unitType) == 0;
+    /// <summary>训练入口只接受家族基础兵；不属于任何家族的独立兵种可直接训练。</summary>
+    public static bool IsTrainableBase(long unitType) =>
+        FamilyOf(unitType) < 0 || LevelOf(unitType) == 0;
 
     private static long[] BuildFamilyIndex()
     {

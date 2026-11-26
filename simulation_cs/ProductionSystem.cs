@@ -50,6 +50,7 @@ public static class ProductionSystem
         || type == BuildingTypes.Barracks
         || type == BuildingTypes.ArcheryRange
         || type == BuildingTypes.Stable
+        || type == BuildingTypes.SiegeWorkshop
         || type == BuildingTypes.Castle
         || type == BuildingTypes.Dock;
 
