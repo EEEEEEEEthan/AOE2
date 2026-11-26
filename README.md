@@ -45,7 +45,8 @@
 - 寻路接高度差：`FlowField` 与 `MovementSystem` 通过 `TerrainGrid.CanTraverse` 判定，高度差超过 1 层、水或崖面不可通行，悬崖上下自然不通。
 - 地图格式由 `MapData`（`simulation_cs/MapData.cs`）组合 TerrainGrid 与 NavGrid；`maps/voxel_demo.json` 是示例，行优先扁平数组 `types` / `heights` / `blocked`。
 - 表现层（`presentation/world_view.gd`）按高度场生成体素地形，`presentation/voxel_mesher.gd` 用贪心合并（greedy meshing）并只用顶点色；地形剔除下方面，单位保留全部六面（倒地时可看到底面）。
-- 自建体素模型在 `assets/vox/`（`.vox`），由 `tools/make_vox_models.py` 生成；`presentation/vox_model.gd` 解析 RIFF 的 `SIZE/XYZI/RGBA`，调色板索引 1 作阵营色。原作素材只放 `.reference/`（已 gitignore），不入库。
+- 自建体素模型在 `assets/vox/`（`.vox`），由 `tools/make_vox_models.py` 生成；`presentation/vox_model.gd` 解析 RIFF 的 `SIZE/XYZI/RGBA`，调色板索引 1 作阵营色。
+- 原作素材放在项目点开头的 `.reference/` 目录，**正常提交入库**（不加入 `.gitignore`），用于对照制作体素模型。
 
 ## 对局与胜负
 
