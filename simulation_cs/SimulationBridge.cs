@@ -13,6 +13,8 @@ public partial class SimulationBridge : Node
 
     public Godot.Collections.Array<string> OrderSelfTest() => ToGodotArray(AOE2Framework.OrderSelfTest.Run());
 
+    public Godot.Collections.Array<string> EconomySelfTest() => ToGodotArray(AOE2Framework.EconomySelfTest.Run());
+
     private static Godot.Collections.Array<string> ToGodotArray(System.Collections.Generic.List<string> failures)
     {
         var result = new Godot.Collections.Array<string>();

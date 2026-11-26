@@ -9,7 +9,12 @@ const VILLAGER_COLORS := {
 	0: Color(0.95, 0.58, 0.46),
 	1: Color(0.46, 0.66, 0.95),
 }
-const RESOURCE_NODE_COLOR := Color(0.36, 0.24, 0.12)
+const RESOURCE_NODE_COLORS := [
+	Color(0.36, 0.24, 0.12),
+	Color(0.25, 0.6, 0.25),
+	Color(0.86, 0.73, 0.16),
+	Color(0.52, 0.52, 0.55),
+]
 const DROP_SITE_COLOR := Color(0.25, 0.75, 0.8)
 
 const KIND_UNIT := 0
@@ -61,6 +66,7 @@ func refresh(bridge: GameBridge) -> void:
 			unit = _create_unit(entity)
 			_units[id] = unit
 		unit.position = Vector3(entity["x"], 0.4, entity["y"])
+		unit.visible = _is_visible_entity(entity)
 	for id in _units.keys():
 		if not alive.has(id):
 			var dead: MeshInstance3D = _units[id]
@@ -82,10 +88,16 @@ func _create_unit(entity: Dictionary) -> MeshInstance3D:
 	return unit
 
 
+func _is_visible_entity(entity: Dictionary) -> bool:
+	if entity["kind"] == KIND_RESOURCE_NODE:
+		return entity["node_remaining"] > 0
+	return true
+
+
 func _color_for(entity: Dictionary) -> Color:
 	var kind: int = entity["kind"]
 	if kind == KIND_RESOURCE_NODE:
-		return RESOURCE_NODE_COLOR
+		return RESOURCE_NODE_COLORS[entity["node_type"]]
 	if kind == KIND_DROP_SITE:
 		return DROP_SITE_COLOR
 	var team: int = entity["team"]

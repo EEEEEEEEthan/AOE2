@@ -73,10 +73,14 @@ func _result_stats() -> String:
 	for player: Dictionary in bridge.PlayerStates():
 		var team: int = player["team"]
 		var state := _player_state_text(player)
-		lines.append("%s　%d 分　单位/建筑 %d　%s" % [
+		lines.append("%s　%d 分　单位/建筑 %d　木%d 食%d 金%d 石%d　%s" % [
 			TEAM_NAMES.get(team, "玩家 %d" % team),
 			player["score"],
 			player["participants"],
+			player["wood"],
+			player["food"],
+			player["gold"],
+			player["stone"],
 			state,
 		])
 	return "\n".join(lines)
