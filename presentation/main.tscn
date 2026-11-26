@@ -1,16 +1,8 @@
-[gd_scene load_steps=7 format=3]
+[gd_scene load_steps=5 format=3]
 
 [ext_resource type="Script" path="res://presentation/main.gd" id="1_main"]
 [ext_resource type="Script" path="res://presentation/iso_camera.gd" id="2_camera"]
 [ext_resource type="Script" path="res://presentation/world_view.gd" id="3_world"]
-
-[sub_resource type="StandardMaterial3D" id="Mat_ground"]
-albedo_color = Color(0.34, 0.43, 0.28, 1)
-roughness = 1.0
-
-[sub_resource type="PlaneMesh" id="Plane_ground"]
-size = Vector2(32, 32)
-material = SubResource("Mat_ground")
 
 [sub_resource type="Environment" id="Env_main"]
 background_mode = 1
@@ -28,10 +20,6 @@ environment = SubResource("Env_main")
 [node name="DirectionalLight3D" type="DirectionalLight3D" parent="."]
 transform = Transform3D(1, 0, 0, 0, 0.5, -0.866, 0, 0.866, 0.5, 0, 20, 0)
 light_energy = 1.1
-
-[node name="Ground" type="MeshInstance3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 16, 0, 16)
-mesh = SubResource("Plane_ground")
 
 [node name="WorldView" type="Node3D" parent="."]
 unique_name_in_owner = true

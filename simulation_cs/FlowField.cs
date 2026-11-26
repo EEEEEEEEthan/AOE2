@@ -40,10 +40,13 @@ public sealed class FlowField
     public int[] DirX { get; }
     public int[] DirY { get; }
 
-    public FlowField(NavGrid grid)
+    private readonly TerrainGrid? _terrain;
+
+    public FlowField(NavGrid grid, TerrainGrid? terrain = null)
     {
         Width = grid.Width;
         Height = grid.Height;
+        _terrain = terrain;
         Cost = new int[Width * Height];
         DirX = new int[Width * Height];
         DirY = new int[Width * Height];
@@ -87,6 +90,10 @@ public sealed class FlowField
                     {
                         continue;
                     }
+                }
+                if (_terrain != null && !_terrain.CanTraverse(currentX, currentY, neighborX, neighborY))
+                {
+                    continue;
                 }
                 int neighbor = grid.Index(neighborX, neighborY);
                 if (Cost[neighbor] != -1)
@@ -153,6 +160,10 @@ public sealed class FlowField
                         {
                             continue;
                         }
+                    }
+                    if (_terrain != null && !_terrain.CanTraverse(x, y, neighborX, neighborY))
+                    {
+                        continue;
                     }
                     int neighborCost = Cost[neighborY * Width + neighborX];
                     if (neighborCost < 0 || neighborCost >= bestCost)

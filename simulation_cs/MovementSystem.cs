@@ -18,7 +18,12 @@ public static class MovementSystem
         { -1, -1 },
     };
 
-    public static void Step(SimWorld world, NavGrid grid, OccupancyMap occupancy, Func<int, int, FlowField> fieldProvider)
+    public static void Step(
+        SimWorld world,
+        NavGrid grid,
+        OccupancyMap occupancy,
+        Func<int, int, FlowField> fieldProvider,
+        TerrainGrid? terrain = null)
     {
         ComponentStore moveStore = world.Store(SimComponents.Move);
         if (moveStore.Count == 0)
@@ -36,11 +41,17 @@ public static class MovementSystem
             {
                 continue;
             }
-            StepEntity(world, id, grid, occupancy, fieldProvider);
+            StepEntity(world, id, grid, occupancy, fieldProvider, terrain);
         }
     }
 
-    private static void StepEntity(SimWorld world, long id, NavGrid grid, OccupancyMap occupancy, Func<int, int, FlowField> fieldProvider)
+    private static void StepEntity(
+        SimWorld world,
+        long id,
+        NavGrid grid,
+        OccupancyMap occupancy,
+        Func<int, int, FlowField> fieldProvider,
+        TerrainGrid? terrain)
     {
         long x = world.GetValue(id, SimComponents.Position, SimComponents.X);
         long y = world.GetValue(id, SimComponents.Position, SimComponents.Y);
@@ -61,7 +72,7 @@ public static class MovementSystem
             Stop(world, id);
             return;
         }
-        if (!ChooseNextCell(id, grid, occupancy, field, cellX, cellY, out int nextX, out int nextY))
+        if (!ChooseNextCell(id, grid, occupancy, field, cellX, cellY, terrain, out int nextX, out int nextY))
         {
             world.SetValue(id, SimComponents.Velocity, SimComponents.X, 0);
             world.SetValue(id, SimComponents.Velocity, SimComponents.Y, 0);
@@ -105,6 +116,7 @@ public static class MovementSystem
         FlowField field,
         int cellX,
         int cellY,
+        TerrainGrid? terrain,
         out int nextX,
         out int nextY)
     {
@@ -130,6 +142,10 @@ public static class MovementSystem
             }
             if (offsetX != 0 && offsetY != 0
                 && (grid.IsBlocked(cellX + offsetX, cellY) || grid.IsBlocked(cellX, cellY + offsetY)))
+            {
+                continue;
+            }
+            if (terrain != null && !terrain.CanTraverse(cellX, cellY, candidateX, candidateY))
             {
                 continue;
             }

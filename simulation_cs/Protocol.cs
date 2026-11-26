@@ -108,10 +108,20 @@ public sealed class SnapshotFrame
     public long VisionWidth;
     public long VisionHeight;
     public byte[] VisionStates = System.Array.Empty<byte>();
+    public long TerrainWidth;
+    public long TerrainHeight;
+    public byte[] TerrainTypes = System.Array.Empty<byte>();
+    public byte[] TerrainHeights = System.Array.Empty<byte>();
     public PlayerSnapshot[] Players = System.Array.Empty<PlayerSnapshot>();
     public EntitySnapshot[] Entities = System.Array.Empty<EntitySnapshot>();
 
-    public static SnapshotFrame Build(SimWorld world, long turn, MatchState? match = null, VisionGrid? vision = null, long viewerTeam = -1)
+    public static SnapshotFrame Build(
+        SimWorld world,
+        long turn,
+        MatchState? match = null,
+        VisionGrid? vision = null,
+        long viewerTeam = -1,
+        TerrainGrid? terrain = null)
     {
         var entities = new List<EntitySnapshot>();
         var inventories = new Dictionary<long, long>();
@@ -167,6 +177,13 @@ public sealed class SnapshotFrame
             frame.VisionWidth = vision.Width;
             frame.VisionHeight = vision.Height;
             frame.VisionStates = vision.States();
+        }
+        if (terrain != null)
+        {
+            frame.TerrainWidth = terrain.Width;
+            frame.TerrainHeight = terrain.Height;
+            frame.TerrainTypes = (byte[])terrain.Types.Clone();
+            frame.TerrainHeights = (byte[])terrain.Heights.Clone();
         }
         if (match != null)
         {
@@ -318,6 +335,12 @@ public sealed class SnapshotFrame
             writer.Write(VisionHeight);
             writer.Write(VisionStates.Length);
             writer.Write(VisionStates);
+            writer.Write(TerrainWidth);
+            writer.Write(TerrainHeight);
+            writer.Write(TerrainTypes.Length);
+            writer.Write(TerrainTypes);
+            writer.Write(TerrainHeights.Length);
+            writer.Write(TerrainHeights);
         }
         return stream.ToArray();
     }
@@ -375,6 +398,12 @@ public sealed class SnapshotFrame
         frame.VisionHeight = reader.ReadInt64();
         int visionCount = reader.ReadInt32();
         frame.VisionStates = reader.ReadBytes(visionCount);
+        frame.TerrainWidth = reader.ReadInt64();
+        frame.TerrainHeight = reader.ReadInt64();
+        int terrainTypeCount = reader.ReadInt32();
+        frame.TerrainTypes = reader.ReadBytes(terrainTypeCount);
+        int terrainHeightCount = reader.ReadInt32();
+        frame.TerrainHeights = reader.ReadBytes(terrainHeightCount);
         return frame;
     }
 }

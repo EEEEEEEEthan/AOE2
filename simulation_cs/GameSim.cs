@@ -13,6 +13,7 @@ public sealed class GameSim
 
     public SimWorld World { get; }
     public NavGrid Grid { get; }
+    public TerrainGrid Terrain { get; }
     public SpatialHash Spatial { get; }
     public OccupancyMap Occupancy { get; }
     public Lockstep Lockstep { get; }
@@ -24,9 +25,20 @@ public sealed class GameSim
     private readonly Dictionary<long, long> _inventoryEntities = new();
     private readonly Dictionary<long, long> _progressEntities = new();
 
-    public GameSim(NavGrid grid, long seed = 1, int playerCount = 2, int ticksPerTurn = 6, MatchConfig? matchConfig = null)
+    public GameSim(
+        NavGrid grid,
+        long seed = 1,
+        int playerCount = 2,
+        int ticksPerTurn = 6,
+        MatchConfig? matchConfig = null,
+        TerrainGrid? terrain = null)
     {
         Grid = grid;
+        Terrain = terrain ?? TerrainGrid.Flat(grid.Width, grid.Height);
+        if (Terrain.Width != grid.Width || Terrain.Height != grid.Height)
+        {
+            throw new System.ArgumentException("terrain dimensions must match nav grid");
+        }
         World = new SimWorld(seed);
         Spatial = new SpatialHash(4);
         Occupancy = new OccupancyMap(grid.Width, grid.Height);
@@ -750,7 +762,7 @@ public sealed class GameSim
         GatherSystem.Step(World, InventoryForTeam);
         MonkSystem.Step(World);
         OrderSystem.Step(World, Spatial);
-        MovementSystem.Step(World, Grid, Occupancy, FieldProvider);
+        MovementSystem.Step(World, Grid, Occupancy, FieldProvider, Terrain);
         ProjectileSystem.Step(World);
         CombatSystem.Step(World, Spatial);
         RelicSystem.Step(World, InventoryForTeam);
@@ -769,6 +781,8 @@ public sealed class GameSim
     public long Checksum()
     {
         long hash = World.Checksum();
+        hash = (hash ^ Terrain.Checksum()) & SimWorld.Mask32;
+        hash = (hash * SimWorld.FnvPrime) & SimWorld.Mask32;
         foreach (VisionGrid grid in Vision)
         {
             hash = (hash ^ grid.Checksum()) & SimWorld.Mask32;
@@ -830,7 +844,7 @@ public sealed class GameSim
         {
             return field;
         }
-        field = new FlowField(Grid);
+        field = new FlowField(Grid, Terrain);
         field.Compute(Grid, targetX, targetY);
         _fields[key] = field;
         return field;
