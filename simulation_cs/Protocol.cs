@@ -23,8 +23,24 @@ public readonly struct EntitySnapshot
     public readonly long Team;
     public readonly long Kind;
     public readonly long Hp;
+    public readonly long NodeType;
+    public readonly long NodeRemaining;
+    public readonly long GatherState;
+    public readonly long CarryType;
+    public readonly long CarryAmount;
 
-    public EntitySnapshot(long id, long x, long y, long team, long kind, long hp)
+    public EntitySnapshot(
+        long id,
+        long x,
+        long y,
+        long team,
+        long kind,
+        long hp,
+        long nodeType,
+        long nodeRemaining,
+        long gatherState,
+        long carryType,
+        long carryAmount)
     {
         Id = id;
         X = x;
@@ -32,6 +48,11 @@ public readonly struct EntitySnapshot
         Team = team;
         Kind = kind;
         Hp = hp;
+        NodeType = nodeType;
+        NodeRemaining = nodeRemaining;
+        GatherState = gatherState;
+        CarryType = carryType;
+        CarryAmount = carryAmount;
     }
 }
 
@@ -42,14 +63,37 @@ public readonly struct PlayerSnapshot
     public readonly long Winner;
     public readonly long Score;
     public readonly long Participants;
+    public readonly long Age;
+    public readonly long Research;
+    public readonly long Wood;
+    public readonly long Food;
+    public readonly long Gold;
+    public readonly long Stone;
 
-    public PlayerSnapshot(long team, long defeated, long winner, long score, long participants)
+    public PlayerSnapshot(
+        long team,
+        long defeated,
+        long winner,
+        long score,
+        long participants,
+        long age,
+        long research,
+        long wood,
+        long food,
+        long gold,
+        long stone)
     {
         Team = team;
         Defeated = defeated;
         Winner = winner;
         Score = score;
         Participants = participants;
+        Age = age;
+        Research = research;
+        Wood = wood;
+        Food = food;
+        Gold = gold;
+        Stone = stone;
     }
 }
 
@@ -70,8 +114,13 @@ public sealed class SnapshotFrame
     public static SnapshotFrame Build(SimWorld world, long turn, MatchState? match = null, VisionGrid? vision = null, long viewerTeam = -1)
     {
         var entities = new List<EntitySnapshot>();
+        var inventories = new Dictionary<long, long>();
         foreach (long id in world.Entities())
         {
+            if (world.HasComponent(id, SimComponents.Resource) && world.HasComponent(id, SimComponents.Team))
+            {
+                inventories[world.GetValue(id, SimComponents.Team, SimComponents.TeamId)] = id;
+            }
             if (!world.HasComponent(id, SimComponents.Position))
             {
                 continue;
@@ -83,13 +132,34 @@ public sealed class SnapshotFrame
             long kind = ClassifyEntity(world, id);
             long team = world.GetValue(id, SimComponents.Team, SimComponents.TeamId);
             long hp = world.GetValue(id, SimComponents.Health, SimComponents.Hp);
+            long nodeType = 0;
+            long nodeRemaining = 0;
+            if (kind == EntityKind.ResourceNode)
+            {
+                nodeType = world.GetValue(id, SimComponents.ResourceNode, SimComponents.NodeType);
+                nodeRemaining = world.GetValue(id, SimComponents.ResourceNode, SimComponents.Remaining);
+            }
+            long gatherState = 0;
+            long carryType = 0;
+            long carryAmount = 0;
+            if (kind == EntityKind.Villager)
+            {
+                gatherState = world.GetValue(id, SimComponents.Gather, SimComponents.GatherState);
+                carryType = world.GetValue(id, SimComponents.Gather, SimComponents.CarryType);
+                carryAmount = world.GetValue(id, SimComponents.Gather, SimComponents.CarryAmount);
+            }
             entities.Add(new EntitySnapshot(
                 id,
                 world.GetValue(id, SimComponents.Position, SimComponents.X),
                 world.GetValue(id, SimComponents.Position, SimComponents.Y),
                 team,
                 kind,
-                hp));
+                hp,
+                nodeType,
+                nodeRemaining,
+                gatherState,
+                carryType,
+                carryAmount));
         }
         var frame = new SnapshotFrame { Tick = world.Tick, Turn = turn, Entities = entities.ToArray() };
         if (vision != null)
@@ -108,12 +178,36 @@ public sealed class SnapshotFrame
             for (long team = 0; team < match.PlayerCount; team++)
             {
                 PlayerState player = match.Player(team);
+                long progressEntity = PlayerProgress.FindEntity(world, team);
+                long age = progressEntity >= 0
+                    ? world.GetValue(progressEntity, SimComponents.PlayerProgress, SimComponents.Age)
+                    : TechCatalog.AgeDark;
+                long research = progressEntity >= 0
+                    ? world.GetValue(progressEntity, SimComponents.PlayerProgress, SimComponents.Research)
+                    : 0;
+                long wood = 0;
+                long food = 0;
+                long gold = 0;
+                long stone = 0;
+                if (inventories.TryGetValue(team, out long inventory))
+                {
+                    wood = world.GetValue(inventory, SimComponents.Resource, SimComponents.Wood);
+                    food = world.GetValue(inventory, SimComponents.Resource, SimComponents.Food);
+                    gold = world.GetValue(inventory, SimComponents.Resource, SimComponents.Gold);
+                    stone = world.GetValue(inventory, SimComponents.Resource, SimComponents.Stone);
+                }
                 players[team] = new PlayerSnapshot(
                     team,
                     player.Defeated ? 1 : 0,
                     player.Winner ? 1 : 0,
                     player.Score,
-                    player.Participants);
+                    player.Participants,
+                    age,
+                    research,
+                    wood,
+                    food,
+                    gold,
+                    stone);
             }
             frame.Players = players;
         }
@@ -198,6 +292,12 @@ public sealed class SnapshotFrame
                 writer.Write(player.Winner);
                 writer.Write(player.Score);
                 writer.Write(player.Participants);
+                writer.Write(player.Age);
+                writer.Write(player.Research);
+                writer.Write(player.Wood);
+                writer.Write(player.Food);
+                writer.Write(player.Gold);
+                writer.Write(player.Stone);
             }
             writer.Write(Entities.Length);
             foreach (EntitySnapshot entity in Entities)
@@ -208,6 +308,11 @@ public sealed class SnapshotFrame
                 writer.Write(entity.Team);
                 writer.Write(entity.Kind);
                 writer.Write(entity.Hp);
+                writer.Write(entity.NodeType);
+                writer.Write(entity.NodeRemaining);
+                writer.Write(entity.GatherState);
+                writer.Write(entity.CarryType);
+                writer.Write(entity.CarryAmount);
             }
             writer.Write(VisionWidth);
             writer.Write(VisionHeight);
@@ -239,6 +344,12 @@ public sealed class SnapshotFrame
                 reader.ReadInt64(),
                 reader.ReadInt64(),
                 reader.ReadInt64(),
+                reader.ReadInt64(),
+                reader.ReadInt64(),
+                reader.ReadInt64(),
+                reader.ReadInt64(),
+                reader.ReadInt64(),
+                reader.ReadInt64(),
                 reader.ReadInt64());
         }
         frame.Players = players;
@@ -247,6 +358,11 @@ public sealed class SnapshotFrame
         for (int index = 0; index < count; index++)
         {
             entities[index] = new EntitySnapshot(
+                reader.ReadInt64(),
+                reader.ReadInt64(),
+                reader.ReadInt64(),
+                reader.ReadInt64(),
+                reader.ReadInt64(),
                 reader.ReadInt64(),
                 reader.ReadInt64(),
                 reader.ReadInt64(),

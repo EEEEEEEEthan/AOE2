@@ -90,6 +90,12 @@ public partial class GameBridge : Node
                 { "winner", player.Winner },
                 { "score", player.Score },
                 { "participants", player.Participants },
+                { "age", player.Age },
+                { "research", player.Research },
+                { "wood", player.Wood },
+                { "food", player.Food },
+                { "gold", player.Gold },
+                { "stone", player.Stone },
             });
         }
         return result;
@@ -174,6 +180,11 @@ public partial class GameBridge : Node
                 { "team", entity.Team },
                 { "kind", entity.Kind },
                 { "hp", entity.Hp },
+                { "node_type", entity.NodeType },
+                { "node_remaining", entity.NodeRemaining },
+                { "gather_state", entity.GatherState },
+                { "carry_type", entity.CarryType },
+                { "carry_amount", entity.CarryAmount },
             });
         }
         return result;

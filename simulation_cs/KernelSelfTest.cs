@@ -25,6 +25,7 @@ public static class KernelSelfTest
         CheckRelic(failures);
         CheckLockstep(failures);
         CheckVision(failures);
+        CheckTech(failures);
         return failures;
     }
 
@@ -825,6 +826,124 @@ public static class KernelSelfTest
             sim.SimulateTick();
         }
         return sim.Checksum();
+    }
+
+    private static void CheckTech(List<string> failures)
+    {
+        var sim = new GameSim(new NavGrid(16, 16), 401, 2, 6);
+        Expect(failures, sim.PlayerAge(0) == TechCatalog.AgeDark, "players start in dark age");
+        Expect(failures, sim.PlayerResearch(0) == 0, "players start with no research");
+        long darkUnit = sim.SpawnUnit(2, 2, 0, 50, 5, 1.0, 1.0, 0.0);
+        Expect(failures,
+            sim.World.GetValue(darkUnit, SimComponents.Health, SimComponents.MaxHp) == 50
+            && sim.World.GetValue(darkUnit, SimComponents.Combat, SimComponents.Damage) == 5,
+            "dark age spawn uses base stats");
+
+        Expect(failures, sim.AgeUp(0, TechCatalog.AgeFeudal), "age up to feudal accepted");
+        Expect(failures, !sim.AgeUp(0, TechCatalog.AgeFeudal), "duplicate age up rejected");
+        Expect(failures, !sim.AgeUp(0, TechCatalog.AgeImperial), "age up cannot skip an age");
+        Expect(failures, sim.PlayerAge(0) == TechCatalog.AgeFeudal, "player age advances");
+
+        long feudalMaxHp = TechCatalog.EffectiveStat(
+            TechCatalog.AgeFeudal, 0, TechCatalog.StatMaxHp, 50);
+        long feudalDamage = TechCatalog.EffectiveStat(
+            TechCatalog.AgeFeudal, 0, TechCatalog.StatDamage, 5);
+        long feudalUnit = sim.SpawnUnit(3, 2, 0, 50, 5, 1.0, 1.0, 0.0);
+        Expect(failures,
+            sim.World.GetValue(feudalUnit, SimComponents.Health, SimComponents.MaxHp) == feudalMaxHp
+            && sim.World.GetValue(feudalUnit, SimComponents.Combat, SimComponents.Damage) == feudalDamage,
+            "new spawn applies age bonus");
+        Expect(failures,
+            sim.World.GetValue(darkUnit, SimComponents.Health, SimComponents.MaxHp) == feudalMaxHp
+            && sim.World.GetValue(darkUnit, SimComponents.Combat, SimComponents.Damage) == feudalDamage,
+            "existing unit recomputed on age up");
+
+        Expect(failures, sim.Research(0, TechCatalog.TechForging), "feudal research accepted");
+        Expect(failures, !sim.Research(0, TechCatalog.TechForging), "duplicate research rejected");
+        Expect(failures, sim.IsResearched(0, TechCatalog.TechForging), "research bit set");
+        long researchedDamage = feudalDamage + 2;
+        Expect(failures,
+            sim.World.GetValue(darkUnit, SimComponents.Combat, SimComponents.Damage) == researchedDamage,
+            "research recomputes existing unit damage");
+        Expect(failures,
+            sim.World.GetValue(
+                sim.SpawnUnit(4, 2, 0, 50, 5, 1.0, 1.0, 0.0),
+                SimComponents.Combat,
+                SimComponents.Damage) == researchedDamage,
+            "research applies to new spawn");
+        Expect(failures, !sim.Research(0, TechCatalog.TechFletching), "age gated research rejected");
+        Expect(failures, !sim.Research(0, 999), "unknown tech rejected");
+        Expect(failures, !sim.Research(5, TechCatalog.TechForging), "unknown player rejected");
+
+        Expect(failures, sim.AgeUp(0, TechCatalog.AgeCastle), "age up to castle accepted");
+        Expect(failures, sim.Research(0, TechCatalog.TechFletching), "castle research accepted");
+        long expectedRange = TechCatalog.EffectiveStat(
+            TechCatalog.AgeCastle,
+            sim.PlayerResearch(0),
+            TechCatalog.StatRangeMax,
+            ToRangeCellsForTest(1.0));
+        Expect(failures,
+            sim.World.GetValue(darkUnit, SimComponents.Combat, SimComponents.RangeMax) == expectedRange,
+            "range bonus recomputes existing unit");
+
+        var dispatch = new GameSim(new NavGrid(12, 12), 405, 2, 6);
+        dispatch.ApplyCommand(new LockstepCommand(
+            player: 0, kind: LockstepCommand.KindAgeUp, aux: TechCatalog.AgeFeudal));
+        Expect(failures, dispatch.PlayerAge(0) == TechCatalog.AgeFeudal, "age up command dispatched");
+        dispatch.ApplyCommand(new LockstepCommand(
+            player: 0, kind: LockstepCommand.KindResearch, aux: TechCatalog.TechForging));
+        Expect(failures, dispatch.IsResearched(0, TechCatalog.TechForging), "research command dispatched");
+
+        var snapshotSim = new GameSim(new NavGrid(12, 12), 406, 2, 6, MatchConfig.Standard);
+        snapshotSim.AgeUp(0, TechCatalog.AgeFeudal);
+        snapshotSim.Research(0, TechCatalog.TechForging);
+        SnapshotFrame frame = SnapshotFrame.Build(
+            snapshotSim.World, snapshotSim.Lockstep.Turn, snapshotSim.Match);
+        Expect(failures, frame.Players.Length == 2, "snapshot carries players");
+        Expect(failures,
+            frame.Players[0].Age == TechCatalog.AgeFeudal
+            && frame.Players[0].Research == TechCatalog.ResearchBit(TechCatalog.TechForging)
+            && frame.Players[1].Age == TechCatalog.AgeDark,
+            "snapshot carries age and research");
+        SnapshotFrame decoded = SnapshotFrame.Decode(frame.Encode());
+        Expect(failures,
+            decoded.Players[0].Age == TechCatalog.AgeFeudal
+            && decoded.Players[0].Research == TechCatalog.ResearchBit(TechCatalog.TechForging),
+            "snapshot roundtrip keeps age and research");
+
+        var affordable = new GameSim(new NavGrid(12, 12), 407, 2, 6);
+        long woodBefore = affordable.Resource(0, GameSim.ResourceWood);
+        Expect(failures, affordable.AgeUp(0, TechCatalog.AgeFeudal), "affordability hook allows age up");
+        Expect(failures,
+            affordable.Resource(0, GameSim.ResourceWood) == woodBefore,
+            "age up dry run does not deduct resources");
+
+        Expect(failures,
+            TechProgressionChecksum(true) == TechProgressionChecksum(true),
+            "tech progression deterministic");
+        Expect(failures,
+            TechProgressionChecksum(true) != TechProgressionChecksum(false),
+            "tech progression participates in checksum");
+    }
+
+    private static long ToRangeCellsForTest(double tiles) =>
+        (long)System.Math.Round(tiles, System.MidpointRounding.AwayFromZero);
+
+    private static long TechProgressionChecksum(bool advanced)
+    {
+        var sim = new GameSim(new NavGrid(16, 16), 408, 2, 6);
+        sim.SpawnUnit(2, 2, 0, 50, 5, 1.0, 1.0, 0.1);
+        if (advanced)
+        {
+            sim.AgeUp(0, TechCatalog.AgeFeudal);
+            sim.Research(0, TechCatalog.TechForging);
+        }
+        sim.SpawnUnit(4, 2, 0, 50, 5, 1.0, 2.0, 0.1);
+        for (int tick = 0; tick < 30; tick++)
+        {
+            sim.SimulateTick();
+        }
+        return sim.World.Checksum();
     }
 }
 
