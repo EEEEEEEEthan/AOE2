@@ -1,0 +1,45 @@
+# 属性 setter 内的自赋值（`value = v`）
+
+## 结论
+
+在 GDScript 中，**在属性的 setter 里对同名属性赋值**（例如 `value` 的 setter 里写 `value = v`）由引擎写入该属性的**隐式后备存储**，**不会**再次进入 setter、**不会**因此形成无限递归。这是语言规定的可靠写法，可视为**绝对正确**的语法。
+
+## 典型形态
+
+只写 setter 即可：读属性时走隐式后备，**getter 可省略**，也**不必**再声明 `var _hp`——与同名赋值共用一套存储。
+
+```gdscript
+var hp: int:
+	set(v):
+		hp = v
+		_refresh_ui()
+```
+
+默认值写在属性上即可：
+
+```gdscript
+var active: bool = true:
+	set(value):
+		if active == value:
+			return
+		active = value
+		if not is_node_ready():
+			await ready
+		_refresh_active()
+```
+
+（若 `_refresh_active` 会写子节点，setter 内 `await ready` 后用 `%`，见 [scene-property-setter-bridge.md](scene-property-setter-bridge.md)。）
+
+setter 里读 `active` 仍是赋值前的当前值；`active = value` 写入隐式后备，不会递归进 setter。
+
+若需要自定义读取逻辑再补 `get`；不必为此单独搞 `_hp`，除非团队规范或构造期要绕开 `emit` 等另有考虑。
+
+场景脚本同步子控件时，常与 `await ready` 组合，见 [scene-property-setter-bridge.md](scene-property-setter-bridge.md)。
+
+## 与显式 `_backing` 的关系
+
+Node 与 `Resource` / `RefCounted` **默认都不要**显式 `_backing`。仅当必须绕过 setter（如 `_init` 少 `emit`）时才用，见 [refcounted-backing-properties.md](refcounted-backing-properties.md)——**不是因为**「setter 里写 `hp = v` 不可靠」。
+
+## 排查问题时
+
+若数值异常，应从**初始化顺序**、**谁持有引用**、**是否在 `_ready` 前改 export** 等方向查，**不要**把 setter 自赋值误判为非法或易错语法。

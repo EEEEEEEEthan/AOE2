@@ -1,0 +1,18 @@
+config_version=5
+
+[autoload]
+
+TestEntry="*res://tests/tools/_test_entry.gd"
+
+[engine_host]
+
+version="4.8"
+flavor="beta2"
+install_directory="~/godots"
+dotnet="false"
+
+[test]
+
+; 匹配上的 WARNING / USER WARNING 不判红；ERROR 不受影响。空串表示不额外忽略。
+ignore_warning_pattern=""
+

@@ -1,0 +1,37 @@
+---
+name: godot-best-practice
+description: Godot 最佳实践。编写、审查或改 Godot 项目时使用。
+---
+
+# Godot 开发
+
+仍是同一个技能。先读本文件，再读与手头问题对应的一层；落到具体问题时再读该层里的条目。两层都要读完再动手，不要停在分类文件。
+
+## 初始化godot工程
+
+godot环境初始化,覆盖配置本机的godot,部署自动化测试流程(含可选 C#/.NET)
+[setup.md](setup.md)
+
+## 引擎最佳实践
+
+资源管理、tscn 结构、场景边界、节点生命周期与引擎行为。
+[engine.md](engine.md)
+
+## 编码最佳实践
+
+GDScript 与 C# 的写法、属性桥接、场景内节点访问。
+[coding.md](coding.md)
+
+## 自动化测试最佳实践
+
+冒烟、专项与逐项耗时；测试分三档（点名自测 / CI / 全量），不设单项 / 整轮时间上限，工具脚本统一放 `tests/tools/`，全量档只给定时任务。`.engine_test.py` 终端输出已极简，跑的时候不要 `| tail` / `| grep`。
+[testing.md](testing.md)
+
+## 审核指引
+
+编写完成或代码审查时，必须逐项对照检查清单进行审核。
+[entries/review-checklist.md](entries/review-checklist.md)
+
+# 维护此文档
+
+安装直接改 `setup.md`。引擎和编码：在 `engine.md` 或 `coding.md` 增加一句话摘要和 `entries/` 链接，并在 `entries/` 下新增详述。自动化测试直接改 `testing.md`。条目保持短小可检索，不扩成替代官方文档的教程。
