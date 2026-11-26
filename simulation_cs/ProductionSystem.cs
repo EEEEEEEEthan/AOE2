@@ -50,6 +50,7 @@ public static class ProductionSystem
         || type == BuildingTypes.Barracks
         || type == BuildingTypes.ArcheryRange
         || type == BuildingTypes.Stable
+        || type == BuildingTypes.SiegeWorkshop
         || type == BuildingTypes.Castle;
 
     /// <summary>入队：校验建筑完工、兵种可造、队列未满、资源足够，立刻扣费后排队或直接开工。</summary>

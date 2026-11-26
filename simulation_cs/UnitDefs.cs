@@ -74,8 +74,12 @@ public static class UnitDefs
 
     public const long Camel = 19;
 
+    /// <summary>攻城武器：独立兵种，编号接在既有兵种之后，避免打乱既有存档与快照编号。</summary>
+    public const long BatteringRam = 20;
+    public const long Mangonel = 21;
+
     /// <summary>兵种表总条目数，供家族索引与快照校验使用。</summary>
-    public const long Count = 20;
+    public const long Count = 22;
 
     private static readonly UnitDef[] Table =
     {
@@ -199,6 +203,18 @@ public static class UnitDefs
             IsRanged = false, MinRangeTiles = 1.0, MaxRangeTiles = 1.0, SpeedTilesPerTick = 0.12, Cooldown = 6,
             ArmorMelee = 1, ArmorPierce = 1, ArmorSiege = 0,
         },
+        new UnitDef
+        {
+            MaxHp = 175, AttackDamage = 5, AttackClass = UnitAttackClass.Siege, ArmorClass = UnitArmorClass.Infantry,
+            IsRanged = false, MinRangeTiles = 1.0, MaxRangeTiles = 1.0, SpeedTilesPerTick = 0.07, Cooldown = 8,
+            ArmorMelee = 0, ArmorPierce = 0, ArmorSiege = 2,
+        },
+        new UnitDef
+        {
+            MaxHp = 50, AttackDamage = 25, AttackClass = UnitAttackClass.Siege, ArmorClass = UnitArmorClass.Infantry,
+            IsRanged = true, MinRangeTiles = 3.0, MaxRangeTiles = 7.0, SpeedTilesPerTick = 0.06, Cooldown = 10,
+            ArmorMelee = 0, ArmorPierce = 0, ArmorSiege = 0,
+        },
     };
 
     public const long Villager = -1;
@@ -232,6 +248,8 @@ public static class UnitDefs
         Cavalier => "重装骑士",
         Paladin => "圣骑士",
         Camel => "骆驼兵",
+        BatteringRam => "冲车",
+        Mangonel => "投石机",
         _ => "单位",
     };
 
@@ -252,6 +270,8 @@ public static class UnitDefs
             new ResourceCost(wood: 0, food: 80, gold: 0, stone: 0),
         Camel => new ResourceCost(wood: 0, food: 55, gold: 60, stone: 0),
         Longbowman => new ResourceCost(wood: 35, food: 0, gold: 40, stone: 0),
+        BatteringRam => new ResourceCost(wood: 160, food: 0, gold: 75, stone: 0),
+        Mangonel => new ResourceCost(wood: 160, food: 0, gold: 135, stone: 0),
         _ => default,
     };
 
@@ -269,10 +289,18 @@ public static class UnitDefs
 
     /// <summary>
     /// 攻击方兵种对目标护甲类型的附加伤害。克制按家族与等级取值：
-    /// 长枪/长戟/戟兵克骑兵，骆驼克骑兵，散兵克弓兵，弓兵系克步兵。
+    /// 长枪/长戟/戟兵克骑兵，骆驼克骑兵，散兵克弓兵，弓兵系克步兵；攻城武器对建筑高额加成。
     /// </summary>
     public static long BonusDamage(long attackerType, long targetArmorClass)
     {
+        if (attackerType == BatteringRam && targetArmorClass == UnitArmorClass.Building)
+        {
+            return 90;
+        }
+        if (attackerType == Mangonel && targetArmorClass == UnitArmorClass.Building)
+        {
+            return 40;
+        }
         long family = UnitFamilies.FamilyOf(attackerType);
         long level = UnitFamilies.LevelOf(attackerType);
         if (level < 0)

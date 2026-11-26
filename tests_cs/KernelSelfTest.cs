@@ -21,6 +21,7 @@ public static partial class KernelSelfTest
         CheckFlowFieldCache(failures);
         CheckCombat(failures);
         CheckUnitTypes(failures);
+        CheckSiege(failures);
         CheckOccupancy(failures);
         CheckIncrementalSpatial(failures);
         CheckGridRange(failures);

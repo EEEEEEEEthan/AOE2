@@ -68,6 +68,7 @@ const BUILDING_MODEL_PATHS := {
 	12: "res://assets/vox/palisade_wall.vox",
 	13: "res://assets/vox/gate.vox",
 	14: "res://assets/vox/fortified_wall.vox",
+	21: "res://assets/vox/barracks.vox",
 }
 
 # 快照降频到 10~15Hz 后，单位按相邻快照间隔插值移动；间隔夹在 30Hz~4Hz 之间，
@@ -542,6 +543,10 @@ func _unit_name(unit_type: int) -> String:
 			return "骑士"
 		4:
 			return "长弓兵"
+		20:
+			return "冲车"
+		21:
+			return "投石机"
 		_:
 			return "单位"
 

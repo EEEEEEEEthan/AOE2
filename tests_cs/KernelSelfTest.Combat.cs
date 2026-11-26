@@ -112,6 +112,28 @@ public static partial class KernelSelfTest
         Expect(failures, UnitTypeChecksum() != 0, "unit type checksum populated");
     }
 
+    private static void CheckSiege(List<string> failures)
+    {
+        var vsBuilding = new GameSim(new NavGrid(16, 16), 408);
+        long ram = vsBuilding.SpawnUnit(5, 5, 0, UnitDefs.BatteringRam, CombatStance.NoAttack);
+        Expect(failures, ram >= 0, "battering ram is available to every civilization");
+        long hall = vsBuilding.SpawnBuilding(6, 5, 1, 1000);
+        vsBuilding.IssueAttack(ram, hall);
+        vsBuilding.SimulateTick();
+        long buildingDamage = 1000 - vsBuilding.World.GetValue(hall, SimComponents.Health, SimComponents.Hp);
+        Expect(failures, buildingDamage == 95, "battering ram applies siege bonus to buildings");
+
+        var vsUnit = new GameSim(new NavGrid(16, 16), 409);
+        long ramUnit = vsUnit.SpawnUnit(5, 5, 0, UnitDefs.BatteringRam, CombatStance.NoAttack);
+        long soldier = vsUnit.SpawnUnit(6, 5, 1, UnitDefs.Swordsman, CombatStance.NoAttack);
+        long soldierFull = vsUnit.World.GetValue(soldier, SimComponents.Health, SimComponents.Hp);
+        vsUnit.IssueAttack(ramUnit, soldier);
+        vsUnit.SimulateTick();
+        long unitDamage = soldierFull - vsUnit.World.GetValue(soldier, SimComponents.Health, SimComponents.Hp);
+        Expect(failures, unitDamage == 5, "battering ram keeps low damage against units");
+        Expect(failures, unitDamage < buildingDamage, "siege bonus only applies to buildings");
+    }
+
     private static void SetStat(GameSim sim, long id, string column, long value) =>
         sim.World.SetValue(id, SimComponents.Combat, column, value);
 
