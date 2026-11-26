@@ -29,9 +29,13 @@ func _ready() -> void:
 		%SurrenderButton.hide()
 		bridge.StartDedicatedServer(_server_port())
 		return
-	bridge.StartLocalDemo()
+	_start_session()
 	%WorldView.build_terrain(bridge.GridWidth, bridge.GridHeight, bridge.GridBlocked())
 	%WorldView.refresh(bridge)
+
+
+func _start_session() -> void:
+	bridge.StartLocalMatch()
 
 
 func _process(delta: float) -> void:

@@ -22,6 +22,11 @@ public partial class GameBridge : Node
         _dedicated = null;
     }
 
+    public void StartLocalMatch()
+    {
+        _grid = AoeSim.DemoScenario.BuildGrid();
+    }
+
     public void StartLocalDemo()
     {
         AoeSim.GameSim sim = AoeSim.DemoScenario.Build();
