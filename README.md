@@ -57,6 +57,14 @@
 - 存读走 `simulation_cs/MapEditorBridge.cs`，与运行期共用同一 `MapData`：默认 `res://maps/editor_map.json`，格式含 `types` / `heights` / `blocked` / `placements`。
 - 校验用 `TerrainGrid` + `NavGrid` + `FlowField`：出生点须彼此连通，资源点须能从出生点到达。
 
+## 地图生成与起始资源
+
+- `MapGenerator`（`simulation_cs/MapGenerator.cs`）提供 `IMapGenerator.Generate(seed, playerCount) -> MapData`，地图类型做脚本化枚举，先落地阿拉伯（Arabia），后续按同一接口扩展黑森林/岛屿。
+- 生成器只用整数与 `SimRng`：同种子逐格一致；阿拉伯地图草地打底、四周悬崖封边，双方起始点沿地图中轴镜像，起始资源（木材、浆果/羊、金、石）同样镜像成簇。
+- `MapData` 在原有的地形与阻塞之外携带资源点列表与玩家起始位置，JSON 存读与 `Checksum()` 一并覆盖这些布局数据。
+- `MapSetup`（`simulation_cs/MapSetup.cs`）把地图落进模拟层：静态阻塞随 `NavGrid` 进入寻路，资源点生成资源实体，起始位置由建筑/经济系统摆放已完工城镇中心、投放点与初始村民。
+- `MapSelfTest` 覆盖同种子一致、双方资源镜像、地形与阻塞一致、起点可建、资源点合法、JSON 往返与生成对局落地；`tests/tools/_map_preview.gd` 抓取全景与起始基地截图。
+
 ## 对局与胜负
 
 `MatchState` / `PlayerState` 与其它状态一样存放在 ECS 世界里，随校验和与快照一起推进，表现层只经快照读取：
@@ -89,3 +97,4 @@ dotnet build AOE2Framework.sln           # 单独编译 C# 内核
 - [x] 战争迷雾与视野：C# 视距网格、快照按玩家裁剪、瘦客户端迷雾渲染
 - [x] 体素地形与单位：TerrainGrid/MapData、高度差寻路、贪心合并体素渲染与自建 `.vox` 资产
 - [x] 地图编辑器：高度/地形/悬崖笔刷、出生点与资源放置、撤销重做、MapData 存读与连通校验
+- [x] 地图生成与起始资源：确定性阿拉伯生成器、镜像起始资源、TC/村民/资源点落地与自测

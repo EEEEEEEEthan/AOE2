@@ -40,6 +40,17 @@ public partial class GameBridge : Node
         _session.Step();
     }
 
+    public void StartGeneratedMatch(long seed = 20261127, int playerCount = 2)
+    {
+        AoeSim.GameSim sim = AoeSim.MapSetup.BuildGeneratedMatch(
+            AoeSim.MapType.Arabia, seed, playerCount);
+        _grid = sim.Grid;
+        _terrain = sim.Terrain;
+        _session = new AoeSim.LocalSession(sim);
+        _accumulator = 0.0;
+        _session.Step();
+    }
+
     public void StartDedicatedServer(int port)
     {
         AoeSim.GameSim sim = AoeSim.DemoScenario.Build();
@@ -207,6 +218,28 @@ public partial class GameBridge : Node
     }
 
     public string DemoMapJson() => AoeSim.DemoScenario.BuildMap().ToJson();
+
+    public string GeneratedMapJson(long seed = 20261127, int playerCount = 2) =>
+        AoeSim.MapGenerator.Generate(AoeSim.MapType.Arabia, seed, playerCount).ToJson();
+
+    /// <summary>预览/截图专用：把观察方视野整张揭示后推一帧快照，便于一次看到完整地图。</summary>
+    public void RevealAllVision()
+    {
+        if (_session == null || _grid == null)
+        {
+            return;
+        }
+        AoeSim.VisionGrid? vision = _session.Server.Sim.VisionFor(_session.Server.ViewTeam);
+        if (vision == null)
+        {
+            return;
+        }
+        vision.RevealCircle(
+            AoeSim.Fixed.FromInt(_grid.Width / 2),
+            AoeSim.Fixed.FromInt(_grid.Height / 2),
+            AoeSim.Fixed.FromInt(System.Math.Max(_grid.Width, _grid.Height) * 2));
+        _session.Step();
+    }
 
     public Godot.Collections.Array<Godot.Collections.Dictionary> Snapshot()
     {
