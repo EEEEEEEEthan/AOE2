@@ -5,6 +5,7 @@ const MATCH_SCENE := "res://presentation/main.tscn"
 const MAP_EDITOR_SCENE := "res://tools/map_editor.tscn"
 const REPLAY_SCENE := "res://presentation/replay.tscn"
 const LOBBY_SCENE := "res://presentation/lobby.tscn"
+const OPTIONS_SCENE := "res://presentation/options.tscn"
 const DEDICATED_FEATURE := "dedicated_server"
 const SERVER_ARGUMENT := "--server"
 
@@ -48,6 +49,11 @@ func _on_multiplayer_pressed() -> void:
 
 func _on_unavailable_pressed() -> void:
 	%UnavailableDialog.popup_centered()
+
+
+func _on_options_pressed() -> void:
+	var options: Node = load(OPTIONS_SCENE).instantiate()
+	add_child(options)
 
 
 func _on_quit_pressed() -> void:

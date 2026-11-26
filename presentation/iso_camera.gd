@@ -5,6 +5,12 @@ const PAN_SPEED := 14.0
 const ZOOM_STEP := 2.0
 const MIN_ORTHO_SIZE := 8.0
 const MAX_ORTHO_SIZE := 24.0
+const ACTION_PAN_FORWARD := "camera_pan_forward"
+const ACTION_PAN_BACK := "camera_pan_back"
+const ACTION_PAN_LEFT := "camera_pan_left"
+const ACTION_PAN_RIGHT := "camera_pan_right"
+const ACTION_ZOOM_IN := "camera_zoom_in"
+const ACTION_ZOOM_OUT := "camera_zoom_out"
 
 @export var focus := Vector3(16.0, 0.0, 16.0)
 @export var distance := 40.0
@@ -25,13 +31,13 @@ func _process(delta: float) -> void:
 	var right := basis.x
 	right.y = 0.0
 	right = right.normalized()
-	if Input.is_physical_key_pressed(KEY_W) or Input.is_physical_key_pressed(KEY_UP):
+	if _action_pressed(ACTION_PAN_FORWARD):
 		pan += forward
-	if Input.is_physical_key_pressed(KEY_S) or Input.is_physical_key_pressed(KEY_DOWN):
+	if _action_pressed(ACTION_PAN_BACK):
 		pan -= forward
-	if Input.is_physical_key_pressed(KEY_A) or Input.is_physical_key_pressed(KEY_LEFT):
+	if _action_pressed(ACTION_PAN_LEFT):
 		pan -= right
-	if Input.is_physical_key_pressed(KEY_D) or Input.is_physical_key_pressed(KEY_RIGHT):
+	if _action_pressed(ACTION_PAN_RIGHT):
 		pan += right
 	if pan == Vector3.ZERO:
 		return
@@ -39,15 +45,13 @@ func _process(delta: float) -> void:
 	refresh_view()
 
 func _unhandled_input(event: InputEvent) -> void:
-	if not event is InputEventMouseButton:
-		return
-	var mouse_button := event as InputEventMouseButton
-	if not mouse_button.pressed:
-		return
-	if mouse_button.button_index == MOUSE_BUTTON_WHEEL_UP:
+	if InputMap.has_action(ACTION_ZOOM_IN) and event.is_action_pressed(ACTION_ZOOM_IN):
 		_zoom_by(-ZOOM_STEP)
-	elif mouse_button.button_index == MOUSE_BUTTON_WHEEL_DOWN:
+	elif InputMap.has_action(ACTION_ZOOM_OUT) and event.is_action_pressed(ACTION_ZOOM_OUT):
 		_zoom_by(ZOOM_STEP)
+
+func _action_pressed(action: String) -> bool:
+	return InputMap.has_action(action) and Input.is_action_pressed(action)
 
 func _zoom_by(amount: float) -> void:
 	ortho_size = clampf(ortho_size + amount, MIN_ORTHO_SIZE, MAX_ORTHO_SIZE)
