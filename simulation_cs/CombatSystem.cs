@@ -39,12 +39,7 @@ public static class CombatSystem
                 }
                 continue;
             }
-            long target = NearestEnemy(world, spatial, id);
-            if (target < 0)
-            {
-                continue;
-            }
-            Attack(world, id, target, dead);
+            AutoEngage(world, spatial, id, dead);
         }
         foreach (long id in dead)
         {
@@ -54,8 +49,8 @@ public static class CombatSystem
     }
 
     /// <summary>
-    /// 读取显式攻击目标并推进追击；目标非法或已死亡时清除锁定并停止移动，回落自动索敌。
-    /// 返回有效的锁定目标 id，无锁定时返回 -1。
+    /// 读取显式攻击目标并推进追击；目标非法或已死亡时清除锁定并停止移动。
+    /// 返回有效的锁定目标 id，无锁定时返回 -1。显式指令优先级高于姿态自动索敌。
     /// </summary>
     private static long LockedTarget(SimWorld world, long attacker)
     {
@@ -81,6 +76,115 @@ public static class CombatSystem
         return target;
     }
 
+    /// <summary>
+    /// 按姿态决定是否自主索敌与追击：禁止还击不索敌；驻守只打射程内；防御短距离追击；
+    /// 进攻在较大仇恨半径内追击。玩家移动中的单位不主动接战。
+    /// </summary>
+    private static void AutoEngage(SimWorld world, SpatialHash spatial, long attacker, List<long> dead)
+    {
+        if (world.GetValue(attacker, SimComponents.Combat, SimComponents.RangeMax) <= 0)
+        {
+            return;
+        }
+        long stance = world.GetValue(attacker, SimComponents.Combat, SimComponents.Stance);
+        if (!CombatStance.AutoAcquires(stance))
+        {
+            ClearEngagement(world, attacker);
+            return;
+        }
+        long target = EngagedTarget(world, attacker);
+        if (target >= 0 && (!IsValidTarget(world, attacker, target) || !WithinLeash(world, attacker, stance)))
+        {
+            ClearEngagement(world, attacker);
+            target = -1;
+        }
+        if (target < 0)
+        {
+            if (IsMoving(world, attacker))
+            {
+                return;
+            }
+            target = AcquireTarget(world, spatial, attacker, stance);
+            if (target < 0)
+            {
+                return;
+            }
+            BeginEngagement(world, attacker, target);
+        }
+        if (InRange(world, attacker, target))
+        {
+            StopMoving(world, attacker);
+            Attack(world, attacker, target, dead);
+            return;
+        }
+        if (CombatStance.LeashTiles(stance) == 0)
+        {
+            ClearEngagement(world, attacker);
+            return;
+        }
+        Chase(world, attacker, target);
+    }
+
+    private static long EngagedTarget(SimWorld world, long attacker)
+    {
+        if (!world.HasComponent(attacker, SimComponents.Engage))
+        {
+            return -1;
+        }
+        return world.GetValue(attacker, SimComponents.Engage, SimComponents.AutoTarget);
+    }
+
+    private static void BeginEngagement(SimWorld world, long attacker, long target)
+    {
+        world.Attach(attacker, SimComponents.Engage);
+        world.SetValue(attacker, SimComponents.Engage, SimComponents.AutoTarget, target);
+        world.SetValue(
+            attacker,
+            SimComponents.Engage,
+            SimComponents.OriginX,
+            world.GetValue(attacker, SimComponents.Position, SimComponents.X));
+        world.SetValue(
+            attacker,
+            SimComponents.Engage,
+            SimComponents.OriginY,
+            world.GetValue(attacker, SimComponents.Position, SimComponents.Y));
+    }
+
+    private static void ClearEngagement(SimWorld world, long attacker)
+    {
+        if (!world.HasComponent(attacker, SimComponents.Engage))
+        {
+            return;
+        }
+        world.Detach(attacker, SimComponents.Engage);
+        StopMoving(world, attacker);
+    }
+
+    /// <summary>以接战起点衡量是否仍在 leash 内；超出即放弃追击。</summary>
+    private static bool WithinLeash(SimWorld world, long attacker, long stance)
+    {
+        long leashTiles = CombatStance.LeashTiles(stance);
+        if (leashTiles == 0)
+        {
+            return true;
+        }
+        long distance = CellDistanceBetween(
+            world.GetValue(attacker, SimComponents.Position, SimComponents.X),
+            world.GetValue(attacker, SimComponents.Position, SimComponents.Y),
+            world.GetValue(attacker, SimComponents.Engage, SimComponents.OriginX),
+            world.GetValue(attacker, SimComponents.Engage, SimComponents.OriginY));
+        return distance <= leashTiles;
+    }
+
+    private static bool IsMoving(SimWorld world, long id)
+    {
+        if (!world.HasComponent(id, SimComponents.Move))
+        {
+            return false;
+        }
+        return world.GetValue(id, SimComponents.Move, SimComponents.Active) != 0;
+    }
+
     private static bool IsValidTarget(SimWorld world, long attacker, long target)
     {
         if (target == attacker || !world.IsAlive(target))
@@ -104,14 +208,17 @@ public static class CombatSystem
         return distance >= rangeMin && distance <= rangeMax;
     }
 
-    private static long CellDistance(SimWorld world, long first, long second)
-    {
-        int firstX = (int)Fixed.ToInt(world.GetValue(first, SimComponents.Position, SimComponents.X));
-        int firstY = (int)Fixed.ToInt(world.GetValue(first, SimComponents.Position, SimComponents.Y));
-        int secondX = (int)Fixed.ToInt(world.GetValue(second, SimComponents.Position, SimComponents.X));
-        int secondY = (int)Fixed.ToInt(world.GetValue(second, SimComponents.Position, SimComponents.Y));
-        return Math.Max(Math.Abs(secondX - firstX), Math.Abs(secondY - firstY));
-    }
+    private static long CellDistance(SimWorld world, long first, long second) =>
+        CellDistanceBetween(
+            world.GetValue(first, SimComponents.Position, SimComponents.X),
+            world.GetValue(first, SimComponents.Position, SimComponents.Y),
+            world.GetValue(second, SimComponents.Position, SimComponents.X),
+            world.GetValue(second, SimComponents.Position, SimComponents.Y));
+
+    private static long CellDistanceBetween(long firstX, long firstY, long secondX, long secondY) =>
+        Math.Max(
+            Math.Abs((int)Fixed.ToInt(secondX) - (int)Fixed.ToInt(firstX)),
+            Math.Abs((int)Fixed.ToInt(secondY) - (int)Fixed.ToInt(firstY)));
 
     private static void Chase(SimWorld world, long attacker, long target)
     {
@@ -143,19 +250,16 @@ public static class CombatSystem
         world.SetValue(id, SimComponents.Velocity, SimComponents.Y, 0);
     }
 
-    /// <summary>格子制射程：切比雪夫距离落在 [RANGE_MIN, RANGE_MAX] 内才算可攻击。</summary>
-    private static long NearestEnemy(SimWorld world, SpatialHash spatial, long attacker)
+    /// <summary>按姿态索敌：驻守只看射程内，防御/进攻在射程外再放宽若干格。</summary>
+    private static long AcquireTarget(SimWorld world, SpatialHash spatial, long attacker, long stance)
     {
         long team = world.GetValue(attacker, SimComponents.Team, SimComponents.TeamId);
         long rangeMin = world.GetValue(attacker, SimComponents.Combat, SimComponents.RangeMin);
         long rangeMax = world.GetValue(attacker, SimComponents.Combat, SimComponents.RangeMax);
-        if (rangeMax <= 0)
-        {
-            return -1;
-        }
+        long acquireMax = rangeMax + CombatStance.AcquireTiles(stance);
         long x = world.GetValue(attacker, SimComponents.Position, SimComponents.X);
         long y = world.GetValue(attacker, SimComponents.Position, SimComponents.Y);
-        long queryRadius = Fixed.Add(Fixed.FromInt(rangeMax * 2), Fixed.Half);
+        long queryRadius = Fixed.Add(Fixed.FromInt(acquireMax * 2), Fixed.Half);
         List<long> candidates = spatial.QueryRadius(x, y, queryRadius);
         int attackerCellX = (int)Fixed.ToInt(x);
         int attackerCellY = (int)Fixed.ToInt(y);
@@ -182,10 +286,8 @@ public static class CombatSystem
             }
             long candidateX = world.GetValue(candidate, SimComponents.Position, SimComponents.X);
             long candidateY = world.GetValue(candidate, SimComponents.Position, SimComponents.Y);
-            int cellDistance = Math.Max(
-                Math.Abs((int)Fixed.ToInt(candidateX) - attackerCellX),
-                Math.Abs((int)Fixed.ToInt(candidateY) - attackerCellY));
-            if (cellDistance < rangeMin || cellDistance > rangeMax)
+            long cellDistance = CellDistanceBetween(x, y, candidateX, candidateY);
+            if (cellDistance < rangeMin || cellDistance > acquireMax)
             {
                 continue;
             }

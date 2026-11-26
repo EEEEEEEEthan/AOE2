@@ -41,7 +41,8 @@ public sealed class GameSim
         long damage,
         double rangeMinTiles,
         double rangeMaxTiles,
-        double speedTilesPerTick)
+        double speedTilesPerTick,
+        long stance = CombatStance.Aggressive)
     {
         long id = World.Spawn();
         World.Attach(id, SimComponents.Position);
@@ -72,6 +73,7 @@ public sealed class GameSim
         World.SetValue(id, SimComponents.Combat, SimComponents.RangeMax, rangeMax);
         World.SetValue(id, SimComponents.Combat, SimComponents.Cooldown, 6);
         World.SetValue(id, SimComponents.Combat, SimComponents.CooldownLeft, 0);
+        World.SetValue(id, SimComponents.Combat, SimComponents.Stance, stance);
         World.SetValue(id, SimComponents.Team, SimComponents.TeamId, team);
         World.SetValue(id, SimComponents.Footprint, SimComponents.FootprintWidth, 1);
         World.SetValue(id, SimComponents.Footprint, SimComponents.FootprintHeight, 1);
@@ -80,6 +82,26 @@ public sealed class GameSim
 
     private static long ToRangeCells(double tiles) =>
         (long)System.Math.Round(tiles, System.MidpointRounding.AwayFromZero);
+
+    public void SetStance(long id, long stance)
+    {
+        if (!World.IsAlive(id) || !World.HasComponent(id, SimComponents.Combat))
+        {
+            return;
+        }
+        if (!CombatStance.IsValid(stance))
+        {
+            return;
+        }
+        World.SetValue(id, SimComponents.Combat, SimComponents.Stance, stance);
+        if (World.HasComponent(id, SimComponents.Engage))
+        {
+            World.Detach(id, SimComponents.Engage);
+            World.SetValue(id, SimComponents.Move, SimComponents.Active, 0);
+            World.SetValue(id, SimComponents.Velocity, SimComponents.X, 0);
+            World.SetValue(id, SimComponents.Velocity, SimComponents.Y, 0);
+        }
+    }
 
     public long SpawnResourceNode(int cellX, int cellY, long nodeType, long amount)
     {
@@ -345,6 +367,7 @@ public sealed class GameSim
             return;
         }
         World.Detach(id, SimComponents.AttackTarget);
+        World.Detach(id, SimComponents.Engage);
         World.SetValue(id, SimComponents.Move, SimComponents.TargetX, cellX);
         World.SetValue(id, SimComponents.Move, SimComponents.TargetY, cellY);
         World.SetValue(id, SimComponents.Move, SimComponents.Active, 1);
@@ -371,6 +394,7 @@ public sealed class GameSim
             World.SetValue(attacker, SimComponents.Velocity, SimComponents.X, 0);
             World.SetValue(attacker, SimComponents.Velocity, SimComponents.Y, 0);
         }
+        World.Detach(attacker, SimComponents.Engage);
         World.Attach(attacker, SimComponents.AttackTarget);
         World.SetValue(attacker, SimComponents.AttackTarget, SimComponents.TargetEntity, target);
     }
@@ -479,6 +503,7 @@ public sealed class GameSim
             return;
         }
         World.Detach(id, SimComponents.AttackTarget);
+        World.Detach(id, SimComponents.Engage);
         World.SetValue(id, SimComponents.Move, SimComponents.Active, 0);
         World.SetValue(id, SimComponents.Velocity, SimComponents.X, 0);
         World.SetValue(id, SimComponents.Velocity, SimComponents.Y, 0);
@@ -514,6 +539,9 @@ public sealed class GameSim
                 break;
             case LockstepCommand.KindDepositRelic:
                 IssueDepositRelic(command.Entity, command.TargetEntity);
+                break;
+            case LockstepCommand.KindStance:
+                SetStance(command.Entity, command.Stance);
                 break;
         }
     }
