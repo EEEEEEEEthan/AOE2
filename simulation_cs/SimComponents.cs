@@ -36,6 +36,13 @@ public static class SimComponents
     public const string Hp = "hp";
     public const string MaxHp = "max_hp";
     public const string Damage = "damage";
+    public const string UnitType = "unit_type";
+    public const string AttackClass = "attack_class";
+    public const string ArmorClass = "armor_class";
+    public const string IsRanged = "is_ranged";
+    public const string ArmorMelee = "armor_melee";
+    public const string ArmorPierce = "armor_pierce";
+    public const string ArmorSiege = "armor_siege";
     public const string RangeSq = "range_sq";
     public const string RangeMin = "range_min";
     public const string RangeMax = "range_max";

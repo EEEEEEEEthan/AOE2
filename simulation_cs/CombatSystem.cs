@@ -308,11 +308,10 @@ public static class CombatSystem
 
     private static void Attack(SimWorld world, long attacker, long target, List<long> dead)
     {
-        long damage = world.GetValue(attacker, SimComponents.Combat, SimComponents.Damage);
+        long damage = ResolveDamage(world, attacker, target);
         long cooldown = world.GetValue(attacker, SimComponents.Combat, SimComponents.Cooldown);
         world.SetValue(attacker, SimComponents.Combat, SimComponents.CooldownLeft, Math.Max(1, cooldown));
-        long rangeMax = world.GetValue(attacker, SimComponents.Combat, SimComponents.RangeMax);
-        if (rangeMax <= 1)
+        if (world.GetValue(attacker, SimComponents.Combat, SimComponents.IsRanged) == 0)
         {
             ApplyDamage(world, target, damage, dead);
         }
@@ -321,6 +320,37 @@ public static class CombatSystem
             ProjectileSystem.Launch(world, attacker, target, damage);
         }
     }
+
+    /// <summary>
+    /// 原作式伤害：按攻击类型扣目标对应护甲，最少 1，再叠加兵种克制附加伤害。
+    /// 全程整数，保证跨端确定性。
+    /// </summary>
+    private static long ResolveDamage(SimWorld world, long attacker, long target)
+    {
+        long attackClass = world.GetValue(attacker, SimComponents.Combat, SimComponents.AttackClass);
+        long baseDamage = world.GetValue(attacker, SimComponents.Combat, SimComponents.Damage);
+        long damage = Math.Max(baseDamage - ArmorValue(world, target, attackClass), 1);
+        long attackerType = world.GetValue(attacker, SimComponents.Combat, SimComponents.UnitType);
+        damage += UnitDefs.BonusDamage(attackerType, TargetArmorClass(world, target));
+        return Math.Max(damage, 1);
+    }
+
+    private static long ArmorValue(SimWorld world, long target, long attackClass)
+    {
+        string column = attackClass switch
+        {
+            UnitAttackClass.Pierce => SimComponents.ArmorPierce,
+            UnitAttackClass.Siege => SimComponents.ArmorSiege,
+            _ => SimComponents.ArmorMelee,
+        };
+        return world.GetValue(target, SimComponents.Combat, column);
+    }
+
+    /// <summary>建筑没有 Combat 组件，按建筑护甲类型结算，才能吃到攻城单位的克制加成。</summary>
+    private static long TargetArmorClass(SimWorld world, long target) =>
+        world.HasComponent(target, SimComponents.Building)
+            ? UnitArmorClass.Building
+            : world.GetValue(target, SimComponents.Combat, SimComponents.ArmorClass);
 
     private static void ApplyDamage(SimWorld world, long target, long damage, List<long> dead)
     {

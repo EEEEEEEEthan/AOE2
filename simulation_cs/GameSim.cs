@@ -40,6 +40,34 @@ public sealed class GameSim
         }
     }
 
+    /// <summary>
+    /// 按兵种生成单位：HP/攻击/射程/护甲/克制全部取自 <see cref="UnitDefs"/>，
+    /// 写进 Combat 列随校验和同步。旧签名继续可用，内部转调同一套底层生成逻辑。
+    /// </summary>
+    public long SpawnUnit(int cellX, int cellY, long team, long unitType, long stance = CombatStance.Aggressive)
+    {
+        UnitDef def = UnitDefs.Get(unitType);
+        long id = SpawnUnitCore(
+            cellX,
+            cellY,
+            team,
+            def.MaxHp,
+            def.AttackDamage,
+            def.MinRangeTiles,
+            def.MaxRangeTiles,
+            def.SpeedTilesPerTick,
+            stance);
+        World.SetValue(id, SimComponents.Combat, SimComponents.Cooldown, def.Cooldown);
+        World.SetValue(id, SimComponents.Combat, SimComponents.UnitType, unitType);
+        World.SetValue(id, SimComponents.Combat, SimComponents.AttackClass, def.AttackClass);
+        World.SetValue(id, SimComponents.Combat, SimComponents.ArmorClass, def.ArmorClass);
+        World.SetValue(id, SimComponents.Combat, SimComponents.IsRanged, def.IsRanged ? 1 : 0);
+        World.SetValue(id, SimComponents.Combat, SimComponents.ArmorMelee, def.ArmorMelee);
+        World.SetValue(id, SimComponents.Combat, SimComponents.ArmorPierce, def.ArmorPierce);
+        World.SetValue(id, SimComponents.Combat, SimComponents.ArmorSiege, def.ArmorSiege);
+        return id;
+    }
+
     /// <summary>射程按格子配置：rangeMinTiles/rangeMaxTiles 只在生成边界转成格数，相邻格即为近战。</summary>
     public long SpawnUnit(
         int cellX,
@@ -51,6 +79,42 @@ public sealed class GameSim
         double rangeMaxTiles,
         double speedTilesPerTick,
         long stance = CombatStance.Aggressive)
+    {
+        long id = SpawnUnitCore(
+            cellX,
+            cellY,
+            team,
+            maxHp,
+            damage,
+            rangeMinTiles,
+            rangeMaxTiles,
+            speedTilesPerTick,
+            stance);
+        bool ranged = World.GetValue(id, SimComponents.Combat, SimComponents.RangeMax) > 1;
+        World.SetValue(id, SimComponents.Combat, SimComponents.UnitType, UnitDefs.Swordsman);
+        World.SetValue(
+            id,
+            SimComponents.Combat,
+            SimComponents.AttackClass,
+            ranged ? UnitAttackClass.Pierce : UnitAttackClass.Melee);
+        World.SetValue(id, SimComponents.Combat, SimComponents.ArmorClass, UnitArmorClass.Infantry);
+        World.SetValue(id, SimComponents.Combat, SimComponents.IsRanged, ranged ? 1 : 0);
+        World.SetValue(id, SimComponents.Combat, SimComponents.ArmorMelee, 0);
+        World.SetValue(id, SimComponents.Combat, SimComponents.ArmorPierce, 0);
+        World.SetValue(id, SimComponents.Combat, SimComponents.ArmorSiege, 0);
+        return id;
+    }
+
+    private long SpawnUnitCore(
+        int cellX,
+        int cellY,
+        long team,
+        long maxHp,
+        long damage,
+        double rangeMinTiles,
+        double rangeMaxTiles,
+        double speedTilesPerTick,
+        long stance)
     {
         long id = World.Spawn();
         World.Attach(id, SimComponents.Position);

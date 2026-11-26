@@ -14,6 +14,7 @@ public static class KernelSelfTest
         CheckEcs(failures);
         CheckPathfinding(failures);
         CheckCombat(failures);
+        CheckUnitTypes(failures);
         CheckOccupancy(failures);
         CheckGridRange(failures);
         CheckProjectile(failures);
@@ -189,6 +190,100 @@ public static class KernelSelfTest
             }
         }
         Expect(failures, aliveCount == 2, "combat friendly fire disabled");
+    }
+
+    private static void CheckUnitTypes(List<string> failures)
+    {
+        var armored = new GameSim(new NavGrid(12, 12), 401);
+        long armoredAttacker = armored.SpawnUnit(5, 5, 0, UnitDefs.Swordsman, CombatStance.NoAttack);
+        long armoredTarget = armored.SpawnUnit(6, 5, 1, UnitDefs.Swordsman, CombatStance.NoAttack);
+        SetStat(armored, armoredAttacker, SimComponents.Damage, 10);
+        SetStat(armored, armoredAttacker, SimComponents.AttackClass, UnitAttackClass.Melee);
+        SetStat(armored, armoredTarget, SimComponents.ArmorMelee, 3);
+        long armoredFull = armored.World.GetValue(armoredTarget, SimComponents.Health, SimComponents.MaxHp);
+        armored.IssueAttack(armoredAttacker, armoredTarget);
+        armored.SimulateTick();
+        Expect(failures,
+            armored.World.GetValue(armoredTarget, SimComponents.Health, SimComponents.Hp) == armoredFull - 7,
+            "armor reduces matching attack class");
+
+        var piercing = new GameSim(new NavGrid(12, 12), 402);
+        long piercer = piercing.SpawnUnit(5, 5, 0, UnitDefs.Swordsman, CombatStance.NoAttack);
+        long drilled = piercing.SpawnUnit(6, 5, 1, UnitDefs.Swordsman, CombatStance.NoAttack);
+        SetStat(piercing, piercer, SimComponents.Damage, 10);
+        SetStat(piercing, piercer, SimComponents.AttackClass, UnitAttackClass.Pierce);
+        SetStat(piercing, drilled, SimComponents.ArmorPierce, 4);
+        SetStat(piercing, drilled, SimComponents.ArmorMelee, 0);
+        long drilledFull = piercing.World.GetValue(drilled, SimComponents.Health, SimComponents.MaxHp);
+        piercing.IssueAttack(piercer, drilled);
+        piercing.SimulateTick();
+        Expect(failures,
+            piercing.World.GetValue(drilled, SimComponents.Health, SimComponents.Hp) == drilledFull - 6,
+            "only the matching armor column applies");
+
+        var minimum = new GameSim(new NavGrid(12, 12), 403);
+        long weak = minimum.SpawnUnit(5, 5, 0, UnitDefs.Swordsman, CombatStance.NoAttack);
+        long wall = minimum.SpawnUnit(6, 5, 1, UnitDefs.Swordsman, CombatStance.NoAttack);
+        SetStat(minimum, weak, SimComponents.Damage, 2);
+        SetStat(minimum, weak, SimComponents.AttackClass, UnitAttackClass.Melee);
+        SetStat(minimum, wall, SimComponents.ArmorMelee, 50);
+        long wallFull = minimum.World.GetValue(wall, SimComponents.Health, SimComponents.MaxHp);
+        minimum.IssueAttack(weak, wall);
+        minimum.SimulateTick();
+        Expect(failures,
+            minimum.World.GetValue(wall, SimComponents.Health, SimComponents.Hp) == wallFull - 1,
+            "damage never drops below one");
+
+        var counter = new GameSim(new NavGrid(12, 12), 404);
+        long spearman = counter.SpawnUnit(5, 5, 0, UnitDefs.Spearman, CombatStance.NoAttack);
+        long knight = counter.SpawnUnit(6, 5, 1, UnitDefs.Knight, CombatStance.NoAttack);
+        counter.IssueAttack(spearman, knight);
+        counter.SimulateTick();
+        long spearDamage = 100 - counter.World.GetValue(knight, SimComponents.Health, SimComponents.Hp);
+        Expect(failures, spearDamage == 19, "spearman bonus vs cavalry");
+
+        var plain = new GameSim(new NavGrid(12, 12), 405);
+        long swordsman = plain.SpawnUnit(5, 5, 0, UnitDefs.Swordsman, CombatStance.NoAttack);
+        long plainKnight = plain.SpawnUnit(6, 5, 1, UnitDefs.Knight, CombatStance.NoAttack);
+        plain.IssueAttack(swordsman, plainKnight);
+        plain.SimulateTick();
+        long swordDamage = 100 - plain.World.GetValue(plainKnight, SimComponents.Health, SimComponents.Hp);
+        Expect(failures, spearDamage > swordDamage, "counter unit outdamages plain unit");
+
+        var archerSim = new GameSim(new NavGrid(16, 16), 406);
+        long archer = archerSim.SpawnUnit(5, 5, 0, UnitDefs.Archer, CombatStance.NoAttack);
+        long prey = archerSim.SpawnUnit(6, 5, 1, UnitDefs.Knight, CombatStance.NoAttack);
+        Expect(failures, archerSim.World.GetValue(archer, SimComponents.Combat, SimComponents.IsRanged) == 1, "archer marked ranged");
+        archerSim.IssueAttack(archer, prey);
+        archerSim.SimulateTick();
+        Expect(failures,
+            archerSim.World.GetValue(prey, SimComponents.Health, SimComponents.Hp) == 100,
+            "ranged damage travels as projectile");
+        archerSim.SimulateTick();
+        Expect(failures,
+            archerSim.World.GetValue(prey, SimComponents.Health, SimComponents.Hp) < 100,
+            "projectile lands on later tick");
+
+        Expect(failures, UnitTypeChecksum() == UnitTypeChecksum(), "unit types deterministic");
+        Expect(failures, UnitTypeChecksum() != 0, "unit type checksum populated");
+    }
+
+    private static void SetStat(GameSim sim, long id, string column, long value) =>
+        sim.World.SetValue(id, SimComponents.Combat, column, value);
+
+    private static long UnitTypeChecksum()
+    {
+        var sim = new GameSim(new NavGrid(20, 20), 407, 2, 6);
+        for (long type = 0; type < 4; type++)
+        {
+            sim.SpawnUnit(3 + (int)type, 4, 0, type);
+            sim.SpawnUnit(3 + (int)type, 16, 1, type);
+        }
+        for (int tick = 0; tick < 40; tick++)
+        {
+            sim.SimulateTick();
+        }
+        return sim.World.Checksum();
     }
 
     private static void CheckOccupancy(List<string> failures)
