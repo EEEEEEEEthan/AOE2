@@ -13,6 +13,43 @@ const FACE_DIRS := [
 ]
 
 
+## 由共享顶点高度场生成地形顶面：每格四角取各自顶点高度，逐格拼四边形。
+## 相邻格共享边顶点，表面连续；陡坡表现为接近垂直的格子面，无需额外侧墙。
+static func heightfield_mesh(
+	vertex_heights: PackedInt32Array,
+	width: int,
+	height: int,
+	layer: float,
+	cell_colors: PackedColorArray) -> ArrayMesh:
+	var st := SurfaceTool.new()
+	st.begin(Mesh.PRIMITIVE_TRIANGLES)
+	var stride := width + 1
+	for cell_y in height:
+		for cell_x in width:
+			var base := cell_y * stride + cell_x
+			var p00 := Vector3(cell_x, vertex_heights[base] * layer, cell_y)
+			var p10 := Vector3(cell_x + 1, vertex_heights[base + 1] * layer, cell_y)
+			var p01 := Vector3(cell_x, vertex_heights[base + stride] * layer, cell_y + 1)
+			var p11 := Vector3(
+				cell_x + 1, vertex_heights[base + stride + 1] * layer, cell_y + 1)
+			var normal := _surface_normal(p00, p10, p01)
+			var color: Color = cell_colors[cell_y * width + cell_x]
+			_vertex(st, p00, normal, color)
+			_vertex(st, p01, normal, color)
+			_vertex(st, p11, normal, color)
+			_vertex(st, p00, normal, color)
+			_vertex(st, p11, normal, color)
+			_vertex(st, p10, normal, color)
+	return st.commit()
+
+
+static func _surface_normal(p00: Vector3, p10: Vector3, p01: Vector3) -> Vector3:
+	var normal := (p10 - p00).cross(p01 - p00)
+	if normal.length_squared() < 0.000001:
+		return Vector3.UP
+	return normal.normalized()
+
+
 static func greedy_mesh(voxels: Dictionary, scale: Vector3, skip_bottom: bool) -> ArrayMesh:
 	var st := SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)

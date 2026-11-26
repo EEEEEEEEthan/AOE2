@@ -3,9 +3,10 @@ using System;
 namespace AoeSim;
 
 /// <summary>
-/// 带高度层的地形数据，刻意与 NavGrid 解耦：NavGrid 只描述建筑/障碍占位，
-/// TerrainGrid 只描述每格的类型与高度，两者由 MapData 组合。
-/// 高度以 1/8 格为单位的体素层数表示（1 格 = 8 层），整数存储，确定性。
+/// 带四顶点高度的地形：每格 4 个角各有一个高度，相邻格共享边上的顶点，
+/// 整体是一张 (宽 + 1) × (高 + 1) 的顶点高度场，格内高度由四角派生。
+/// 悬崖/陡坡由顶点高差形成；高度以 1/8 格为单位的体素层数表示，整数存储，确定性。
+/// 与 NavGrid 解耦：NavGrid 只描述建筑/障碍占位。
 /// </summary>
 public sealed class TerrainGrid
 {
@@ -14,26 +15,95 @@ public sealed class TerrainGrid
     public const byte TypeWater = 2;
     public const byte TypeCliff = 3;
 
+    /// <summary>可通行/可建造的最大坡度，按 1/8 格高度层计；超过即视为悬崖或陡坡。</summary>
+    public const int MaxWalkableSlope = 2;
+
     public int Width { get; }
     public int Height { get; }
+    public int VertexWidth => Width + 1;
+    public int VertexHeight => Height + 1;
     public byte[] Types { get; private set; }
-    public byte[] Heights { get; private set; }
+    public byte[] VertexHeights { get; private set; }
 
     public TerrainGrid(int width, int height)
     {
         Width = width;
         Height = height;
         Types = new byte[width * height];
-        Heights = new byte[width * height];
+        VertexHeights = new byte[(width + 1) * (height + 1)];
     }
 
     public bool InBounds(int x, int y) => x >= 0 && y >= 0 && x < Width && y < Height;
 
+    public bool InVertexBounds(int x, int y) =>
+        x >= 0 && y >= 0 && x <= Width && y <= Height;
+
     public int Index(int x, int y) => y * Width + x;
+
+    public int VertexIndex(int x, int y) => y * VertexWidth + x;
 
     public byte TypeAt(int x, int y) => InBounds(x, y) ? Types[Index(x, y)] : TypeCliff;
 
-    public byte HeightAt(int x, int y) => InBounds(x, y) ? Heights[Index(x, y)] : (byte)0;
+    public byte VertexHeightAt(int x, int y) =>
+        InVertexBounds(x, y) ? VertexHeights[VertexIndex(x, y)] : (byte)0;
+
+    public void SetVertexHeight(int x, int y, byte height)
+    {
+        if (InVertexBounds(x, y))
+        {
+            VertexHeights[VertexIndex(x, y)] = height;
+        }
+    }
+
+    public void SetCellHeight(int x, int y, byte height)
+    {
+        if (!InBounds(x, y))
+        {
+            return;
+        }
+        SetVertexHeight(x, y, height);
+        SetVertexHeight(x + 1, y, height);
+        SetVertexHeight(x, y + 1, height);
+        SetVertexHeight(x + 1, y + 1, height);
+    }
+
+    public int CellMinHeight(int x, int y)
+    {
+        if (!InBounds(x, y))
+        {
+            return 0;
+        }
+        int minimum = byte.MaxValue;
+        minimum = Math.Min(minimum, VertexHeightAt(x, y));
+        minimum = Math.Min(minimum, VertexHeightAt(x + 1, y));
+        minimum = Math.Min(minimum, VertexHeightAt(x, y + 1));
+        minimum = Math.Min(minimum, VertexHeightAt(x + 1, y + 1));
+        return minimum;
+    }
+
+    public int CellMaxHeight(int x, int y)
+    {
+        if (!InBounds(x, y))
+        {
+            return 0;
+        }
+        int maximum = 0;
+        maximum = Math.Max(maximum, VertexHeightAt(x, y));
+        maximum = Math.Max(maximum, VertexHeightAt(x + 1, y));
+        maximum = Math.Max(maximum, VertexHeightAt(x, y + 1));
+        maximum = Math.Max(maximum, VertexHeightAt(x + 1, y + 1));
+        return maximum;
+    }
+
+    /// <summary>格代表高度：四角最小与最大的中点，用于相邻格高差判定。</summary>
+    public int CellLevel(int x, int y) => (CellMinHeight(x, y) + CellMaxHeight(x, y)) / 2;
+
+    /// <summary>单格四角高差超过可通行坡度即为陡坡/悬崖面。</summary>
+    public bool IsSteep(int x, int y) =>
+        CellMaxHeight(x, y) - CellMinHeight(x, y) > MaxWalkableSlope;
+
+    /// <summary>兼容旧接口：返回该格最高角的高度。</summary>
+    public byte HeightAt(int x, int y) => (byte)CellMaxHeight(x, y);
 
     public void Set(int x, int y, byte type, byte height)
     {
@@ -41,18 +111,11 @@ public sealed class TerrainGrid
         {
             return;
         }
-        int index = Index(x, y);
-        Types[index] = type;
-        Heights[index] = height;
+        Types[Index(x, y)] = type;
+        SetCellHeight(x, y, height);
     }
 
-    public void SetHeight(int x, int y, byte height)
-    {
-        if (InBounds(x, y))
-        {
-            Heights[Index(x, y)] = height;
-        }
-    }
+    public void SetHeight(int x, int y, byte height) => SetCellHeight(x, y, height);
 
     public void SetType(int x, int y, byte type)
     {
@@ -66,9 +129,12 @@ public sealed class TerrainGrid
 
     public bool IsCliff(int x, int y) => TypeAt(x, y) == TypeCliff;
 
+    private static bool IsWalkableType(byte type) =>
+        type != TypeWater && type != TypeCliff;
+
     /// <summary>
-    /// 能否从一格走到相邻格：只看终点地形类型（水/崖不可通行）与越界。
-    /// 高度仅作表现，不参与通行判定，与复刻原作一致。
+    /// 能否从一格走到相邻格：终点是水/崖、任一端格为陡坡，或两端代表高度差超过可通行坡度，均不可走。
+    /// 缓坡可通行；视觉断崖由陡坡格本身阻断，不会出现可穿行的悬崖。
     /// </summary>
     public bool CanTraverse(int fromX, int fromY, int toX, int toY)
     {
@@ -76,8 +142,25 @@ public sealed class TerrainGrid
         {
             return false;
         }
-        byte type = Types[Index(toX, toY)];
-        return type != TypeWater && type != TypeCliff;
+        if (!IsWalkableType(TypeAt(fromX, fromY)) || !IsWalkableType(TypeAt(toX, toY)))
+        {
+            return false;
+        }
+        if (IsSteep(fromX, fromY) || IsSteep(toX, toY))
+        {
+            return false;
+        }
+        return Math.Abs(CellLevel(toX, toY) - CellLevel(fromX, fromY)) <= MaxWalkableSlope;
+    }
+
+    /// <summary>旧地图兼容：把逐格高度展开到四角，后写覆盖共享顶点。</summary>
+    public void ExpandCellHeights(int[] cellHeights)
+    {
+        int cells = Width * Height;
+        for (int index = 0; index < cells; index++)
+        {
+            SetCellHeight(index % Width, index / Width, (byte)cellHeights[index]);
+        }
     }
 
     public TerrainGrid Clone()
@@ -85,7 +168,7 @@ public sealed class TerrainGrid
         var other = new TerrainGrid(Width, Height)
         {
             Types = (byte[])Types.Clone(),
-            Heights = (byte[])Heights.Clone(),
+            VertexHeights = (byte[])VertexHeights.Clone(),
         };
         return other;
     }
@@ -106,7 +189,7 @@ public sealed class TerrainGrid
         {
             hash = ((hash ^ value) * SimWorld.FnvPrime) & SimWorld.Mask32;
         }
-        foreach (byte value in Heights)
+        foreach (byte value in VertexHeights)
         {
             hash = ((hash ^ value) * SimWorld.FnvPrime) & SimWorld.Mask32;
         }

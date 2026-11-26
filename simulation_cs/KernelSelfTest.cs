@@ -1232,12 +1232,25 @@ public static class KernelSelfTest
     {
         var terrain = new TerrainGrid(8, 8);
         Expect(failures, terrain.CanTraverse(2, 3, 3, 3), "flat terrain traversable");
-        terrain.SetHeight(3, 3, 1);
-        Expect(failures, terrain.CanTraverse(2, 3, 3, 3), "one level step traversable");
-        terrain.SetHeight(3, 3, 2);
-        Expect(failures, terrain.CanTraverse(2, 3, 3, 3), "height difference stays traversable");
-        terrain.SetHeight(3, 3, 8);
-        Expect(failures, terrain.CanTraverse(2, 3, 3, 3), "large height difference stays traversable");
+        terrain.SetVertexHeight(3, 3, 1);
+        Expect(failures, terrain.CanTraverse(2, 3, 3, 3), "gentle vertex slope traversable");
+        terrain.SetVertexHeight(3, 3, 8);
+        Expect(failures, !terrain.CanTraverse(2, 3, 3, 3), "steep vertex slope blocks traversal");
+        Expect(failures, terrain.IsSteep(3, 3), "cell spanning a cliff is steep");
+
+        var buildingTerrain = TerrainGrid.Flat(8, 8);
+        buildingTerrain.SetVertexHeight(3, 3, 8);
+        Expect(failures,
+            !BuildingSystem.CanPlace(
+                new NavGrid(8, 8), buildingTerrain, BuildingTypes.House, 3, 3),
+            "building cannot straddle a cliff");
+        var gentleTerrain = TerrainGrid.Flat(8, 8);
+        gentleTerrain.SetVertexHeight(3, 3, 1);
+        Expect(failures,
+            BuildingSystem.CanPlace(
+                new NavGrid(8, 8), gentleTerrain, BuildingTypes.House, 3, 3),
+            "building fits on a gentle slope");
+
         terrain.Set(4, 4, TerrainGrid.TypeWater, 0);
         Expect(failures, !terrain.CanTraverse(4, 3, 4, 4), "water blocks traversal");
         terrain.Set(5, 4, TerrainGrid.TypeCliff, 0);

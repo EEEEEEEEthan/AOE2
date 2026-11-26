@@ -81,24 +81,28 @@ var _terrain_levels: PackedInt32Array = PackedInt32Array()
 func build_terrain(bridge: GameBridge) -> void:
 	_terrain_width = bridge.TerrainWidth
 	_terrain_height = bridge.TerrainHeight
-	var types := bridge.TerrainTypes()
-	var heights := bridge.TerrainHeights()
 	if _terrain_width == 0 or _terrain_height == 0:
 		return
-	_terrain_levels = PackedInt32Array(heights)
-	var voxels := {}
+	var types := bridge.TerrainTypes()
+	var vertex_heights := PackedInt32Array(bridge.TerrainVertexHeights())
+	if vertex_heights.size() != (_terrain_width + 1) * (_terrain_height + 1):
+		return
+	var stride := _terrain_width + 1
+	var cells := _terrain_width * _terrain_height
+	var cell_colors := PackedColorArray()
+	cell_colors.resize(cells)
+	_terrain_levels.resize(cells)
 	for tile_y in _terrain_height:
 		for tile_x in _terrain_width:
 			var index := tile_y * _terrain_width + tile_x
-			var level: int = heights[index]
-			var type: int = types[index]
-			if type == 2 and level == 0:
-				level = 1
-			# 高度 0 的平地也铺一层地基体素（y = -1），顶面正好落在 y = 0。
-			for voxel_y in range(-1, level):
-				voxels[Vector3i(tile_x, voxel_y, tile_y)] = _terrain_color(type, voxel_y == level - 1)
-	var mesh: ArrayMesh = VOXEL_MESHER.greedy_mesh(
-		voxels, Vector3(1.0, TERRAIN_LAYER, 1.0), true)
+			var base := tile_y * stride + tile_x
+			var level := maxi(
+				maxi(vertex_heights[base], vertex_heights[base + 1]),
+				maxi(vertex_heights[base + stride], vertex_heights[base + stride + 1]))
+			_terrain_levels[index] = level
+			cell_colors[index] = _terrain_color(types[index], true)
+	var mesh: ArrayMesh = VOXEL_MESHER.heightfield_mesh(
+		vertex_heights, _terrain_width, _terrain_height, TERRAIN_LAYER, cell_colors)
 	var terrain := MeshInstance3D.new()
 	terrain.name = "VoxelTerrain"
 	terrain.mesh = mesh

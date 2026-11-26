@@ -22,7 +22,7 @@ public partial class MapEditorBridge : Node
             result["width"] = map.Width;
             result["height"] = map.Height;
             result["types"] = ToInts(map.Terrain.Types);
-            result["heights"] = ToInts(map.Terrain.Heights);
+            result["vertex_heights"] = ToInts(map.Terrain.VertexHeights);
             result["blocked"] = ToBlockedFlags(map.Nav.Blocked);
             result["placements"] = ToGodotPlacements(map.Placements);
         }
@@ -40,7 +40,7 @@ public partial class MapEditorBridge : Node
         int width,
         int height,
         int[] types,
-        int[] heights,
+        int[] vertexHeights,
         int[] blocked,
         Godot.Collections.Array placements)
     {
@@ -48,7 +48,7 @@ public partial class MapEditorBridge : Node
         try
         {
             AoeSim.MapData map = BuildMap(
-                name, seed, width, height, types, heights, blocked, placements);
+                name, seed, width, height, types, vertexHeights, blocked, placements);
             string resolved = ResolvePath(path);
             string? directory = System.IO.Path.GetDirectoryName(resolved);
             if (!string.IsNullOrEmpty(directory))
@@ -70,12 +70,12 @@ public partial class MapEditorBridge : Node
         int width,
         int height,
         int[] types,
-        int[] heights,
+        int[] vertexHeights,
         int[] blocked,
         Godot.Collections.Array placements)
     {
         AoeSim.MapData map = BuildMap(
-            "validation", 0, width, height, types, heights, blocked, placements);
+            "validation", 0, width, height, types, vertexHeights, blocked, placements);
         var spawns = new List<AoeSim.MapPlacement>();
         var resources = new List<AoeSim.MapPlacement>();
         foreach (AoeSim.MapPlacement placement in map.Placements)
@@ -157,21 +157,25 @@ public partial class MapEditorBridge : Node
         int width,
         int height,
         int[] types,
-        int[] heights,
+        int[] vertexHeights,
         int[] blocked,
         Godot.Collections.Array placements)
     {
         int cells = width * height;
-        if (types.Length != cells || heights.Length != cells)
+        int vertexCells = (width + 1) * (height + 1);
+        if (types.Length != cells || vertexHeights.Length != vertexCells)
         {
             throw new ArgumentException("terrain array size mismatch");
         }
         var terrain = new AoeSim.TerrainGrid(width, height);
         var nav = new AoeSim.NavGrid(width, height);
+        for (int index = 0; index < vertexCells; index++)
+        {
+            terrain.VertexHeights[index] = (byte)vertexHeights[index];
+        }
         for (int index = 0; index < cells; index++)
         {
             terrain.Types[index] = (byte)types[index];
-            terrain.Heights[index] = (byte)heights[index];
             if (index < blocked.Length)
             {
                 nav.Blocked[index] = blocked[index] != 0 ? AoeSim.NavGrid.CostBlocked : (byte)0;

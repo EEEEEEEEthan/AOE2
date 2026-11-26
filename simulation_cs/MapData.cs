@@ -40,8 +40,9 @@ public sealed class PlayerStart
 /// <summary>
 /// 地图数据：把 TerrainGrid（高度/类型）与 NavGrid（建筑与障碍占位）打包成可存读的格式，
 /// 并附带生成器产出、由起始布置系统消费的资源点与玩家起始位置。
-/// JSON 里 terrain 的 types / heights / blocked 都是按行优先展开的扁平数组，
-/// 一份地图既有渲染用的高度，也有模拟用的可走性，但两个网格仍然互相独立。
+/// JSON 里 types / blocked 是按行优先的逐格数组，vertexHeights 是 (宽 + 1) × (高 + 1)
+/// 的共享顶点高度场；heights 为逐格最高角高度，用于兼容旧地图与外部读取。
+/// 一份地图既有渲染用的顶点高度，也有模拟用的可走性，但两个网格仍然互相独立。
 /// placements 是出生点/资源点/建筑等编辑器放置元数据，缺省为空且向后兼容。
 /// </summary>
 public sealed class MapData
@@ -86,14 +87,20 @@ public sealed class MapData
     public string ToJson()
     {
         int cells = Width * Height;
+        int vertexCells = Terrain.VertexWidth * Terrain.VertexHeight;
         var types = new int[cells];
         var heights = new int[cells];
+        var vertexHeights = new int[vertexCells];
         var blocked = new int[cells];
         for (int index = 0; index < cells; index++)
         {
             types[index] = Terrain.Types[index];
-            heights[index] = Terrain.Heights[index];
+            heights[index] = Terrain.HeightAt(index % Width, index / Width);
             blocked[index] = Nav.Blocked[index] == NavGrid.CostBlocked ? 1 : 0;
+        }
+        for (int index = 0; index < vertexCells; index++)
+        {
+            vertexHeights[index] = Terrain.VertexHeights[index];
         }
         var resources = new ResourceDto[Resources.Count];
         for (int index = 0; index < Resources.Count; index++)
@@ -121,6 +128,7 @@ public sealed class MapData
             Height = Height,
             Types = types,
             Heights = heights,
+            VertexHeights = vertexHeights,
             Blocked = blocked,
             Placements = _placements.ConvertAll(placement => placement.Clone()).ToArray(),
             Resources = resources,
@@ -137,16 +145,31 @@ public sealed class MapData
             throw new ArgumentException("invalid map json");
         }
         int cells = dto.Width * dto.Height;
-        if (dto.Types.Length != cells || dto.Heights.Length != cells)
+        int vertexCells = (dto.Width + 1) * (dto.Height + 1);
+        if (dto.Types.Length != cells)
         {
             throw new ArgumentException("terrain array size mismatch");
         }
         var terrain = new TerrainGrid(dto.Width, dto.Height);
         var nav = new NavGrid(dto.Width, dto.Height);
+        if (dto.VertexHeights.Length == vertexCells)
+        {
+            for (int index = 0; index < vertexCells; index++)
+            {
+                terrain.VertexHeights[index] = (byte)dto.VertexHeights[index];
+            }
+        }
+        else if (dto.Heights.Length == cells)
+        {
+            terrain.ExpandCellHeights(dto.Heights);
+        }
+        else
+        {
+            throw new ArgumentException("terrain height array size mismatch");
+        }
         for (int index = 0; index < cells; index++)
         {
             terrain.Types[index] = (byte)dto.Types[index];
-            terrain.Heights[index] = (byte)dto.Heights[index];
             if (dto.Blocked.Length == cells)
             {
                 nav.Blocked[index] = dto.Blocked[index] != 0 ? NavGrid.CostBlocked : (byte)0;
@@ -233,6 +256,7 @@ public sealed class MapData
         public int Height { get; set; }
         public int[] Types { get; set; } = Array.Empty<int>();
         public int[] Heights { get; set; } = Array.Empty<int>();
+        public int[] VertexHeights { get; set; } = Array.Empty<int>();
         public int[] Blocked { get; set; } = Array.Empty<int>();
         public MapPlacement[]? Placements { get; set; } = Array.Empty<MapPlacement>();
         public ResourceDto[]? Resources { get; set; }

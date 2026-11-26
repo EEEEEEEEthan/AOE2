@@ -21,6 +21,8 @@ public static class BuildingSystem
         }
         int sizeWidth = BuildingTypes.SizeWidth(type);
         int sizeHeight = BuildingTypes.SizeHeight(type);
+        int footprintMinHeight = int.MaxValue;
+        int footprintMaxHeight = int.MinValue;
         for (int cellY = originY; cellY < originY + sizeHeight; cellY++)
         {
             for (int cellX = originX; cellX < originX + sizeWidth; cellX++)
@@ -37,9 +39,11 @@ public static class BuildingSystem
                 {
                     return false;
                 }
+                footprintMinHeight = System.Math.Min(footprintMinHeight, terrain.CellMinHeight(cellX, cellY));
+                footprintMaxHeight = System.Math.Max(footprintMaxHeight, terrain.CellMaxHeight(cellX, cellY));
             }
         }
-        return true;
+        return footprintMaxHeight - footprintMinHeight <= TerrainGrid.MaxWalkableSlope;
     }
 
     private static bool IsBuildableGround(TerrainGrid terrain, int cellX, int cellY)
@@ -49,7 +53,9 @@ public static class BuildingSystem
             return false;
         }
         byte type = terrain.TypeAt(cellX, cellY);
-        return type != TerrainGrid.TypeWater && type != TerrainGrid.TypeCliff;
+        return type != TerrainGrid.TypeWater
+            && type != TerrainGrid.TypeCliff
+            && !terrain.IsSteep(cellX, cellY);
     }
 
     public static long Place(SimWorld world, NavGrid grid, TerrainGrid terrain, long type, int originX, int originY, long team)

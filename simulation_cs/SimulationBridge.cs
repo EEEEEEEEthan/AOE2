@@ -97,7 +97,7 @@ public partial class SimulationBridge : Node
             sim.World, sim.Lockstep.Turn, sim.Match, sim.VisionFor(0), 0);
         AoeSim.StaticMapFrame map = AoeSim.StaticMapFrame.FromTerrain(sim.Terrain);
         return map.TerrainTypes.Length == 64 * 64
-            && map.TerrainHeights.Length == 64 * 64
+            && map.TerrainVertexHeights.Length == 65 * 65
             && snapshot.Encode().Length < 64 * 64 * 2;
     }
 
@@ -109,14 +109,20 @@ public partial class SimulationBridge : Node
             AoeSim.StaticMapFrame.FromTerrain(terrain).Encode());
         if (decoded.Width != 9 || decoded.Height != 7
             || decoded.TerrainTypes.Length != terrain.Types.Length
-            || decoded.TerrainHeights.Length != terrain.Heights.Length)
+            || decoded.TerrainVertexHeights.Length != terrain.VertexHeights.Length)
         {
             return false;
         }
         for (int index = 0; index < terrain.Types.Length; index++)
         {
-            if (decoded.TerrainTypes[index] != terrain.Types[index]
-                || decoded.TerrainHeights[index] != terrain.Heights[index])
+            if (decoded.TerrainTypes[index] != terrain.Types[index])
+            {
+                return false;
+            }
+        }
+        for (int index = 0; index < terrain.VertexHeights.Length; index++)
+        {
+            if (decoded.TerrainVertexHeights[index] != terrain.VertexHeights[index])
             {
                 return false;
             }

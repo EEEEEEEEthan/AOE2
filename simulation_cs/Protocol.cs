@@ -20,7 +20,7 @@ public static class EntityKind
 /// <summary>网络协议版本：静态地图帧携带，握手时校验两端一致。</summary>
 public static class NetProtocol
 {
-    public const int Version = 5;
+    public const int Version = 6;
 }
 
 /// <summary>
@@ -32,14 +32,14 @@ public sealed class StaticMapFrame
     public long Width;
     public long Height;
     public byte[] TerrainTypes = System.Array.Empty<byte>();
-    public byte[] TerrainHeights = System.Array.Empty<byte>();
+    public byte[] TerrainVertexHeights = System.Array.Empty<byte>();
 
     public static StaticMapFrame FromTerrain(TerrainGrid terrain) => new()
     {
         Width = terrain.Width,
         Height = terrain.Height,
         TerrainTypes = (byte[])terrain.Types.Clone(),
-        TerrainHeights = (byte[])terrain.Heights.Clone(),
+        TerrainVertexHeights = (byte[])terrain.VertexHeights.Clone(),
     };
 
     public byte[] Encode()
@@ -52,8 +52,8 @@ public sealed class StaticMapFrame
             writer.Write(Height);
             writer.Write(TerrainTypes.Length);
             writer.Write(TerrainTypes);
-            writer.Write(TerrainHeights.Length);
-            writer.Write(TerrainHeights);
+            writer.Write(TerrainVertexHeights.Length);
+            writer.Write(TerrainVertexHeights);
         }
         return stream.ToArray();
     }
@@ -73,7 +73,7 @@ public sealed class StaticMapFrame
             Width = reader.ReadInt64(),
             Height = reader.ReadInt64(),
             TerrainTypes = reader.ReadBytes(reader.ReadInt32()),
-            TerrainHeights = reader.ReadBytes(reader.ReadInt32()),
+            TerrainVertexHeights = reader.ReadBytes(reader.ReadInt32()),
         };
     }
 }
