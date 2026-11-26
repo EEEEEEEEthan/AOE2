@@ -73,7 +73,7 @@ public sealed partial class GameSim
         {
             Match = MatchState.Create(World, Lockstep.PlayerCount, matchConfig);
         }
-        if (civIds != null)
+        if (civIds != null && civIds.Length > 0)
         {
             for (int player = 0; player < Lockstep.PlayerCount; player++)
             {

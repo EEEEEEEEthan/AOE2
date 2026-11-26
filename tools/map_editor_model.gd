@@ -11,6 +11,8 @@ const MAX_HEIGHT := 16
 const KIND_SPAWN := "spawn"
 const KIND_RESOURCE := "resource"
 const KIND_BUILDING := "building"
+const KIND_UNIT := "unit"
+const KIND_ANIMAL := "animal"
 
 var width := 0
 var height := 0
@@ -245,7 +247,7 @@ func paint_blocked(center_x: int, center_y: int, radius: int, value: bool) -> vo
 
 func add_placement(
 	kind: String, cell_x: int, cell_y: int, team: int, node_type: int, amount: int,
-	subtype: int = 0) -> bool:
+	subtype: int = 0, building_type: int = 0, unit_type: int = 0) -> bool:
 	if not in_bounds(cell_x, cell_y):
 		return false
 	placements = placements.filter(func(entry: Dictionary) -> bool:
@@ -258,6 +260,8 @@ func add_placement(
 		"node_type": node_type,
 		"subtype": subtype,
 		"amount": amount,
+		"building_type": building_type,
+		"unit_type": unit_type,
 	})
 	_stroke_placements_touched = true
 	return true
@@ -271,6 +275,21 @@ func remove_placement_at(cell_x: int, cell_y: int) -> bool:
 	placements = remaining
 	_stroke_placements_touched = true
 	return true
+
+
+func clear_placements() -> void:
+	if placements.is_empty():
+		return
+	placements = []
+	_stroke_placements_touched = true
+
+
+func clear_blocked() -> void:
+	for index in blocked.size():
+		if blocked[index] == 0:
+			continue
+		_record_cell(index)
+		blocked[index] = 0
 
 
 func placement_at(cell_x: int, cell_y: int) -> Dictionary:

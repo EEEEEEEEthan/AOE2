@@ -26,6 +26,17 @@ func _on_map_editor_pressed() -> void:
 	get_tree().change_scene_to_file(MAP_EDITOR_SCENE)
 
 
+func _on_custom_map_pressed() -> void:
+	%CustomMapDialog.popup_centered_ratio(0.7)
+
+
+func _on_custom_map_selected(path: String) -> void:
+	MatchSetup.reset_config()
+	MatchSetup.config["map_path"] = path
+	MatchSetup.config["map_name"] = path.get_file().get_basename()
+	get_tree().change_scene_to_file(LOADING_SCENE)
+
+
 func _on_replay_pressed() -> void:
 	get_tree().change_scene_to_file(REPLAY_SCENE)
 
