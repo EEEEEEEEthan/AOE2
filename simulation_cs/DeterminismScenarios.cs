@@ -38,8 +38,27 @@ public static class DeterminismScenarios
             7 => GatherDeplete(),
             8 => AttackBattle(),
             9 => OrderBattle(),
+            10 => TechProgressRun(),
             _ => -1,
         };
+    }
+
+    private static long TechProgressRun()
+    {
+        var sim = new GameSim(new NavGrid(20, 20), 88, 2, 6);
+        sim.SpawnUnit(2, 2, 0, 50, 5, 1.0, 1.0, 0.2);
+        sim.SpawnUnit(2, 5, 1, 50, 5, 1.0, 1.0, 0.2);
+        sim.AgeUp(0, TechCatalog.AgeFeudal);
+        sim.Research(0, TechCatalog.TechForging);
+        sim.SpawnUnit(4, 2, 0, 50, 5, 1.0, 2.0, 0.2);
+        sim.AgeUp(0, TechCatalog.AgeCastle);
+        sim.Research(0, TechCatalog.TechFletching);
+        sim.Research(1, TechCatalog.TechScaleMail);
+        for (int tick = 0; tick < 40; tick++)
+        {
+            sim.SimulateTick();
+        }
+        return sim.World.Checksum();
     }
 
     private static long OrderBattle()

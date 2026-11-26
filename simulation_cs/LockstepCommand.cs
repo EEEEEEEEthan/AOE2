@@ -18,6 +18,8 @@ public sealed class LockstepCommand
     public const long KindFollow = 13;
     public const long KindHold = 14;
     public const long KindSetRally = 15;
+    public const long KindAgeUp = 16;
+    public const long KindResearch = 17;
 
     public const int FieldCount = 12;
 

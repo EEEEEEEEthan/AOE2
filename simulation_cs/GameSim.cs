@@ -22,6 +22,7 @@ public sealed class GameSim
     private readonly long _sightRadius = Fixed.FromFloat(DefaultSightTiles);
     private readonly Dictionary<long, FlowField> _fields = new();
     private readonly Dictionary<long, long> _inventoryEntities = new();
+    private readonly Dictionary<long, long> _progressEntities = new();
 
     public GameSim(NavGrid grid, long seed = 1, int playerCount = 2, int ticksPerTurn = 6, MatchConfig? matchConfig = null)
     {
@@ -68,18 +69,24 @@ public sealed class GameSim
         World.SetValue(id, SimComponents.Move, SimComponents.TargetY, cellY);
         World.SetValue(id, SimComponents.Move, SimComponents.Speed, Fixed.FromFloat(speedTilesPerTick));
         World.SetValue(id, SimComponents.Move, SimComponents.Active, 0);
-        World.SetValue(id, SimComponents.Health, SimComponents.Hp, maxHp);
-        World.SetValue(id, SimComponents.Health, SimComponents.MaxHp, maxHp);
+        long age = PlayerAge(team);
+        long research = PlayerResearch(team);
+        long effectiveMaxHp = TechCatalog.EffectiveStat(age, research, TechCatalog.StatMaxHp, maxHp);
+        long effectiveDamage = TechCatalog.EffectiveStat(age, research, TechCatalog.StatDamage, damage);
         long rangeMin = ToRangeCells(rangeMinTiles);
-        long rangeMax = ToRangeCells(rangeMaxTiles);
+        long rangeMax = TechCatalog.EffectiveStat(
+            age, research, TechCatalog.StatRangeMax, ToRangeCells(rangeMaxTiles));
         if (rangeMax < rangeMin)
         {
             rangeMax = rangeMin;
         }
-        World.SetValue(id, SimComponents.Combat, SimComponents.Damage, damage);
+        long cooldown = TechCatalog.EffectiveStat(age, research, TechCatalog.StatCooldown, 6);
+        World.SetValue(id, SimComponents.Health, SimComponents.Hp, effectiveMaxHp);
+        World.SetValue(id, SimComponents.Health, SimComponents.MaxHp, effectiveMaxHp);
+        World.SetValue(id, SimComponents.Combat, SimComponents.Damage, effectiveDamage);
         World.SetValue(id, SimComponents.Combat, SimComponents.RangeMin, rangeMin);
         World.SetValue(id, SimComponents.Combat, SimComponents.RangeMax, rangeMax);
-        World.SetValue(id, SimComponents.Combat, SimComponents.Cooldown, 6);
+        World.SetValue(id, SimComponents.Combat, SimComponents.Cooldown, cooldown);
         World.SetValue(id, SimComponents.Combat, SimComponents.CooldownLeft, 0);
         World.SetValue(id, SimComponents.Combat, SimComponents.Stance, stance);
         World.SetValue(id, SimComponents.Team, SimComponents.TeamId, team);
@@ -90,6 +97,133 @@ public sealed class GameSim
 
     private static long ToRangeCells(double tiles) =>
         (long)System.Math.Round(tiles, System.MidpointRounding.AwayFromZero);
+
+    public PlayerProgress Progress(long team)
+    {
+        if (!_progressEntities.TryGetValue(team, out long entity))
+        {
+            entity = World.Spawn();
+            World.Attach(entity, SimComponents.PlayerProgress);
+            World.Attach(entity, SimComponents.Team);
+            World.SetValue(entity, SimComponents.Team, SimComponents.TeamId, team);
+            World.SetValue(entity, SimComponents.PlayerProgress, SimComponents.Age, TechCatalog.AgeDark);
+            World.SetValue(entity, SimComponents.PlayerProgress, SimComponents.Research, 0);
+            _progressEntities[team] = entity;
+        }
+        return new PlayerProgress(World, entity, team);
+    }
+
+    public long PlayerAge(long team) =>
+        _progressEntities.TryGetValue(team, out long entity)
+            ? World.GetValue(entity, SimComponents.PlayerProgress, SimComponents.Age)
+            : TechCatalog.AgeDark;
+
+    public long PlayerResearch(long team) =>
+        _progressEntities.TryGetValue(team, out long entity)
+            ? World.GetValue(entity, SimComponents.PlayerProgress, SimComponents.Research)
+            : 0;
+
+    public bool IsResearched(long team, long techId) =>
+        TechCatalog.IsResearched(PlayerResearch(team), techId);
+
+    public bool AgeUp(long team, long targetAge)
+    {
+        if (team < 0 || team >= Lockstep.PlayerCount || !TechCatalog.IsValidAge(targetAge))
+        {
+            return false;
+        }
+        long currentAge = PlayerAge(team);
+        if (targetAge != currentAge + 1 || !TechCatalog.TryPayAgeUp(team, targetAge))
+        {
+            return false;
+        }
+        long research = PlayerResearch(team);
+        ApplyProgressDelta(team, currentAge, research, targetAge, research);
+        Progress(team).Age = targetAge;
+        return true;
+    }
+
+    public bool Research(long team, long techId)
+    {
+        if (team < 0 || team >= Lockstep.PlayerCount || !TechCatalog.IsValidTech(techId))
+        {
+            return false;
+        }
+        long age = PlayerAge(team);
+        long research = PlayerResearch(team);
+        if (TechCatalog.IsResearched(research, techId)
+            || age < TechCatalog.RequiredAge(techId)
+            || !TechCatalog.HasPrerequisites(team, techId)
+            || !TechCatalog.TryPayResearch(team, techId))
+        {
+            return false;
+        }
+        long nextResearch = research | TechCatalog.ResearchBit(techId);
+        ApplyProgressDelta(team, age, research, age, nextResearch);
+        Progress(team).Research = nextResearch;
+        return true;
+    }
+
+    private void ApplyProgressDelta(
+        long team, long oldAge, long oldResearch, long newAge, long newResearch)
+    {
+        ApplyStatDelta(
+            team,
+            ProgressDelta(oldAge, oldResearch, newAge, newResearch, TechCatalog.StatMaxHp),
+            ProgressDelta(oldAge, oldResearch, newAge, newResearch, TechCatalog.StatDamage),
+            ProgressDelta(oldAge, oldResearch, newAge, newResearch, TechCatalog.StatRangeMax),
+            ProgressDelta(oldAge, oldResearch, newAge, newResearch, TechCatalog.StatCooldown));
+    }
+
+    private static long ProgressDelta(
+        long oldAge, long oldResearch, long newAge, long newResearch, long stat) =>
+        TechCatalog.AgeBonus(newAge, stat) + TechCatalog.TechBonus(newResearch, stat)
+        - TechCatalog.AgeBonus(oldAge, stat) - TechCatalog.TechBonus(oldResearch, stat);
+
+    private void ApplyStatDelta(
+        long team, long maxHpDelta, long damageDelta, long rangeMaxDelta, long cooldownDelta)
+    {
+        ComponentStore combatStore = World.Store(SimComponents.Combat);
+        if (combatStore.Count == 0)
+        {
+            return;
+        }
+        foreach (long id in World.Entities())
+        {
+            if (!World.IsAlive(id) || !combatStore.Has(id))
+            {
+                continue;
+            }
+            if (World.GetValue(id, SimComponents.Team, SimComponents.TeamId) != team)
+            {
+                continue;
+            }
+            if (maxHpDelta != 0)
+            {
+                long maxHp = World.GetValue(id, SimComponents.Health, SimComponents.MaxHp) + maxHpDelta;
+                long hp = World.GetValue(id, SimComponents.Health, SimComponents.Hp) + maxHpDelta;
+                World.SetValue(id, SimComponents.Health, SimComponents.MaxHp, maxHp);
+                World.SetValue(id, SimComponents.Health, SimComponents.Hp, System.Math.Max(0, hp));
+            }
+            if (damageDelta != 0)
+            {
+                long damage = World.GetValue(id, SimComponents.Combat, SimComponents.Damage) + damageDelta;
+                World.SetValue(id, SimComponents.Combat, SimComponents.Damage, System.Math.Max(0, damage));
+            }
+            if (rangeMaxDelta != 0)
+            {
+                long rangeMin = World.GetValue(id, SimComponents.Combat, SimComponents.RangeMin);
+                long rangeMax = World.GetValue(id, SimComponents.Combat, SimComponents.RangeMax) + rangeMaxDelta;
+                World.SetValue(
+                    id, SimComponents.Combat, SimComponents.RangeMax, System.Math.Max(rangeMin, rangeMax));
+            }
+            if (cooldownDelta != 0)
+            {
+                long cooldown = World.GetValue(id, SimComponents.Combat, SimComponents.Cooldown) + cooldownDelta;
+                World.SetValue(id, SimComponents.Combat, SimComponents.Cooldown, System.Math.Max(1, cooldown));
+            }
+        }
+    }
 
     public void SetStance(long id, long stance)
     {
@@ -597,6 +731,12 @@ public sealed class GameSim
                 break;
             case LockstepCommand.KindSetRally:
                 OrderSystem.SetRally(World, command.Entity, command.CellX, command.CellY, command.TargetEntity);
+                break;
+            case LockstepCommand.KindAgeUp:
+                AgeUp(command.Player, command.Aux);
+                break;
+            case LockstepCommand.KindResearch:
+                Research(command.Player, command.Aux);
                 break;
         }
     }
