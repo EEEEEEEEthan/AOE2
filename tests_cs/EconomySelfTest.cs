@@ -1,6 +1,8 @@
 using System.Collections.Generic;
 using AoeSim;
 
+using static AOE2Framework.SelfTestBase;
+
 namespace AOE2Framework;
 
 /// <summary>经济系统语义与快照暴露自测；返回空列表表示全过。</summary>
@@ -17,14 +19,6 @@ public static class EconomySelfTest
         CheckChecksumTracksEconomy(failures);
         CheckDeterministic(failures);
         return failures;
-    }
-
-    private static void Expect(List<string> failures, bool condition, string message)
-    {
-        if (!condition)
-        {
-            failures.Add(message);
-        }
     }
 
     private static void CheckGatherConservation(List<string> failures)

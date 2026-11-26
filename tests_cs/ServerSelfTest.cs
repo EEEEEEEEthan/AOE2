@@ -2,6 +2,8 @@ using System.Collections.Generic;
 using System.Threading;
 using AoeSim;
 
+using static AOE2Framework.SelfTestBase;
+
 namespace AOE2Framework;
 
 /// <summary>
@@ -332,13 +334,5 @@ public static class ServerSelfTest
             }
         }
         return true;
-    }
-
-    private static void Expect(List<string> failures, bool condition, string message)
-    {
-        if (!condition)
-        {
-            failures.Add(message);
-        }
     }
 }

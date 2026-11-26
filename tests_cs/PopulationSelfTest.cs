@@ -1,6 +1,8 @@
 using System.Collections.Generic;
 using AoeSim;
 
+using static AOE2Framework.SelfTestBase;
+
 namespace AOE2Framework;
 
 /// <summary>人口账本与生成校验的语义断言；返回空列表表示全过。</summary>
@@ -22,14 +24,6 @@ public static class PopulationSelfTest
         CheckLedgerHiddenFromSnapshot(failures);
         CheckDeterminism(failures);
         return failures;
-    }
-
-    private static void Expect(List<string> failures, bool condition, string message)
-    {
-        if (!condition)
-        {
-            failures.Add(message);
-        }
     }
 
     private static void CheckCapAndReserve(List<string> failures)
@@ -186,17 +180,5 @@ public static class PopulationSelfTest
         sim.SpawnUnit(6, 5, 0, 50, 6, 1.0, 2.0, 0.1, popCost: 2);
         sim.SpawnUnit(11, 5, 1, 50, 6, 1.0, 2.0, 0.1, popCost: 3);
         return sim;
-    }
-
-    private static bool ContainsEntity(SnapshotFrame frame, long id)
-    {
-        foreach (EntitySnapshot entity in frame.Entities)
-        {
-            if (entity.Id == id)
-            {
-                return true;
-            }
-        }
-        return false;
     }
 }
