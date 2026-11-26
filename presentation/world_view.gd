@@ -540,22 +540,6 @@ func _ensure_placement_mesh() -> void:
 	add_child(_placement_mesh)
 
 
-func show_order_marker(cell_x: int, cell_y: int, color: Color) -> Node3D:
-	var marker := Node3D.new()
-	var visual := MeshInstance3D.new()
-	var quad := QuadMesh.new()
-	quad.size = Vector2(0.9, 0.9)
-	visual.mesh = quad
-	visual.rotation_degrees.x = -90.0
-	visual.material_override = _flat_material(color)
-	visual.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
-	marker.add_child(visual)
-	marker.position = Vector3(
-		cell_x + 0.5, _ground_level(cell_x + 0.5, cell_y + 0.5) + 0.06, cell_y + 0.5)
-	add_child(marker)
-	return marker
-
-
 func _flat_material(color: Color) -> StandardMaterial3D:
 	var material := StandardMaterial3D.new()
 	material.albedo_color = color

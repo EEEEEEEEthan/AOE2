@@ -7,8 +7,16 @@ signal research_requested(tech_id: int)
 signal age_up_requested(target_age: int)
 signal stop_requested
 signal placement_cancelled
+signal idle_villager_requested
+signal town_bell_toggled(enabled: bool)
+signal formation_requested(formation: int)
 
 const AGE_NAMES := ["黑暗时代", "封建时代", "城堡时代", "帝王时代"]
+const FORMATION_NAMES := ["线列", "楔形", "方阵", "散开"]
+const GAME_SPEEDS := [0.5, 1.0, 1.5, 2.0]
+const NOTICE_LIMIT := 5
+const TOOLTIP_OFFSET := Vector2(16.0, 16.0)
+const TOOLTIP_MARGIN := 8.0
 const KIND_BUILDING := 8
 const BUILDING_STATE_FOUNDATION := 0
 const VILLAGER_UNIT := -1
@@ -18,12 +26,14 @@ const BARRACKS := 3
 var _building_costs: Dictionary = {}
 var _unit_costs: Dictionary = {}
 var _notice_serial := 0
+var _town_bell_enabled := false
 
 
 func _ready() -> void:
 	%SelectionBox.hide()
 	%PlacementHint.hide()
 	%NoticeLabel.text = ""
+	%TooltipPanel.hide()
 
 
 func setup(bridge: GameBridge) -> void:
@@ -170,6 +180,110 @@ func set_notice(text: String) -> void:
 	await get_tree().create_timer(2.5).timeout
 	if serial == _notice_serial:
 		%NoticeLabel.text = ""
+
+
+func push_notification(text: String) -> void:
+	var label := Label.new()
+	label.text = text
+	%NoticeFeed.add_child(label)
+	while %NoticeFeed.get_child_count() > NOTICE_LIMIT:
+		var oldest := %NoticeFeed.get_child(0)
+		%NoticeFeed.remove_child(oldest)
+		oldest.queue_free()
+
+
+func push_chat_line(text: String) -> void:
+	%ChatLog.add_text("%s\n" % text)
+	%ChatLog.scroll_to_line(maxi(0, %ChatLog.get_line_count() - 1))
+
+
+func show_unit_tooltip(entry: Dictionary, screen_position: Vector2) -> void:
+	%TooltipTitle.text = str(entry["name"])
+	%TooltipBody.text = _tooltip_body(entry)
+	%TooltipPanel.show()
+	var panel_size: Vector2 = %TooltipPanel.get_combined_minimum_size()
+	var viewport_size := get_viewport().get_visible_rect().size
+	var target := screen_position + TOOLTIP_OFFSET
+	target.x = clampf(target.x, 0.0, viewport_size.x - panel_size.x - TOOLTIP_MARGIN)
+	target.y = clampf(target.y, 0.0, viewport_size.y - panel_size.y - TOOLTIP_MARGIN)
+	%TooltipPanel.position = target
+
+
+func hide_unit_tooltip() -> void:
+	%TooltipPanel.hide()
+
+
+func open_pause_menu() -> void:
+	%PauseMenu.open()
+
+
+func close_pause_menu() -> void:
+	%PauseMenu.close()
+
+
+func _tooltip_body(entry: Dictionary) -> String:
+	var lines: PackedStringArray = ["生命 %d / %d" % [entry["hp"], entry["max_hp"]]]
+	if int(entry["kind"]) == KIND_BUILDING:
+		lines.append(_building_state_text(entry))
+	return "\n".join(lines)
+
+
+func _on_chat_submitted(text: String) -> void:
+	var trimmed := text.strip_edges()
+	if trimmed.is_empty():
+		return
+	push_chat_line("[你] %s" % trimmed)
+	%ChatInput.text = ""
+
+
+func _on_chat_send_pressed() -> void:
+	_on_chat_submitted(%ChatInput.text)
+	%ChatInput.grab_focus()
+
+
+func _on_chat_button_pressed() -> void:
+	%ChatPanel.visible = not %ChatPanel.visible
+	if %ChatPanel.visible:
+		%ChatInput.grab_focus()
+
+
+func _on_speed_selected(index: int) -> void:
+	Engine.time_scale = GAME_SPEEDS[index]
+	push_notification("游戏速度：%s" % %SpeedOption.get_item_text(index))
+
+
+func _on_menu_pressed() -> void:
+	open_pause_menu()
+
+
+func _on_diplomacy_pressed() -> void:
+	_show_unavailable("外交功能开发中，敬请期待。")
+
+
+func _on_objectives_pressed() -> void:
+	_show_unavailable("目标与剧情功能开发中，敬请期待。")
+
+
+func _on_idle_villager_pressed() -> void:
+	idle_villager_requested.emit()
+	push_notification("暂无闲置村民")
+
+
+func _on_town_bell_pressed() -> void:
+	_town_bell_enabled = not _town_bell_enabled
+	%TownBellButton.text = "解除警钟" if _town_bell_enabled else "城镇警钟"
+	town_bell_toggled.emit(_town_bell_enabled)
+	push_notification("城镇警钟：%s" % ("召集" if _town_bell_enabled else "解除"))
+
+
+func _on_formation_pressed(formation: int) -> void:
+	formation_requested.emit(formation)
+	push_notification("阵型：%s" % FORMATION_NAMES[formation])
+
+
+func _show_unavailable(message: String) -> void:
+	%UnavailableDialog.dialog_text = message
+	%UnavailableDialog.popup_centered()
 
 
 func set_selection_box(rect: Rect2) -> void:

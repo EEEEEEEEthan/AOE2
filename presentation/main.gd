@@ -41,6 +41,10 @@ func _ready() -> void:
 	_last_tick = bridge.ClientTick()
 
 
+func _exit_tree() -> void:
+	Engine.time_scale = 1.0
+
+
 func _start_session() -> void:
 	bridge.StartGeneratedMatch(DEFAULT_SEED, DEFAULT_PLAYER_COUNT, ARABIA_MAP_TYPE)
 
