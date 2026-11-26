@@ -105,6 +105,13 @@ public static class SimComponents
 
     public const string Age = "age";
     public const string Research = "research";
+    public const string ResearchKind = "research_kind";
+    public const string ResearchTarget = "research_target";
+    public const string ResearchProgress = "research_progress";
+    public const string ResearchMaxProgress = "research_max_progress";
+    public const string ResearchPaidFood = "research_paid_food";
+    public const string ResearchPaidGold = "research_paid_gold";
+    public const string ResearchBuilding = "research_building";
 
     public const string State = "state";
     public const string ConvertProgress = "convert_progress";

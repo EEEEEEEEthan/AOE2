@@ -46,19 +46,37 @@ public static class DeterminismScenarios
     private static long TechProgressRun()
     {
         var sim = new GameSim(new NavGrid(20, 20), 88, 2, 6);
+        sim.AddResource(0, GameSim.ResourceFood, 5000);
+        sim.AddResource(0, GameSim.ResourceGold, 5000);
         sim.SpawnUnit(2, 2, 0, 50, 5, 1.0, 1.0, 0.2);
         sim.SpawnUnit(2, 5, 1, 50, 5, 1.0, 1.0, 0.2);
         sim.AgeUp(0, TechCatalog.AgeFeudal);
+        Run(sim, 200);
+        CompleteBuilding(sim, 0, BuildingTypes.Barracks, 6, 6);
         sim.Research(0, TechCatalog.TechForging);
+        Run(sim, 120);
         sim.SpawnUnit(4, 2, 0, 50, 5, 1.0, 2.0, 0.2);
+        CompleteBuilding(sim, 0, BuildingTypes.Market, 11, 6);
         sim.AgeUp(0, TechCatalog.AgeCastle);
+        Run(sim, 260);
         sim.Research(0, TechCatalog.TechFletching);
-        sim.Research(1, TechCatalog.TechScaleMail);
-        for (int tick = 0; tick < 40; tick++)
+        Run(sim, 140);
+        return sim.World.Checksum();
+    }
+
+    private static void Run(GameSim sim, int ticks)
+    {
+        for (int tick = 0; tick < ticks; tick++)
         {
             sim.SimulateTick();
         }
-        return sim.World.Checksum();
+    }
+
+    private static void CompleteBuilding(GameSim sim, long team, long type, int cellX, int cellY)
+    {
+        long id = sim.IssuePlaceBuilding(type, cellX, cellY, team);
+        sim.World.SetValue(id, SimComponents.Building, SimComponents.Progress, BuildingTypes.BuildTicks(type));
+        sim.World.SetValue(id, SimComponents.Building, SimComponents.State, BuildingSystem.StateComplete);
     }
 
     private static long OrderBattle()

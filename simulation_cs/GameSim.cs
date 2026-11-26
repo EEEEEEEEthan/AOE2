@@ -227,25 +227,30 @@ public sealed class GameSim
     {
         if (!_progressEntities.TryGetValue(team, out long entity))
         {
-            entity = World.Spawn();
-            World.Attach(entity, SimComponents.PlayerProgress);
-            World.Attach(entity, SimComponents.Team);
-            World.SetValue(entity, SimComponents.Team, SimComponents.TeamId, team);
-            World.SetValue(entity, SimComponents.PlayerProgress, SimComponents.Age, TechCatalog.AgeDark);
-            World.SetValue(entity, SimComponents.PlayerProgress, SimComponents.Research, 0);
+            if (!World.TryGetPlayerEntity(SimComponents.PlayerProgress, team, out entity))
+            {
+                entity = World.Spawn();
+                World.Attach(entity, SimComponents.PlayerProgress);
+                World.Attach(entity, SimComponents.Team);
+                World.SetValue(entity, SimComponents.Team, SimComponents.TeamId, team);
+                World.SetValue(entity, SimComponents.PlayerProgress, SimComponents.Age, TechCatalog.AgeDark);
+                World.SetValue(entity, SimComponents.PlayerProgress, SimComponents.Research, 0);
+                World.RegisterPlayerEntity(SimComponents.PlayerProgress, team, entity);
+            }
             _progressEntities[team] = entity;
-            World.RegisterPlayerEntity(SimComponents.PlayerProgress, team, entity);
         }
         return new PlayerProgress(World, entity, team);
     }
 
     public long PlayerAge(long team) =>
         _progressEntities.TryGetValue(team, out long entity)
+        || World.TryGetPlayerEntity(SimComponents.PlayerProgress, team, out entity)
             ? World.GetValue(entity, SimComponents.PlayerProgress, SimComponents.Age)
             : TechCatalog.AgeDark;
 
     public long PlayerResearch(long team) =>
         _progressEntities.TryGetValue(team, out long entity)
+        || World.TryGetPlayerEntity(SimComponents.PlayerProgress, team, out entity)
             ? World.GetValue(entity, SimComponents.PlayerProgress, SimComponents.Research)
             : 0;
 
@@ -258,15 +263,11 @@ public sealed class GameSim
         {
             return false;
         }
-        long currentAge = PlayerAge(team);
-        if (targetAge != currentAge + 1 || !TechCatalog.TryPayAgeUp(team, targetAge))
+        if (targetAge != PlayerAge(team) + 1)
         {
             return false;
         }
-        long research = PlayerResearch(team);
-        ApplyProgressDelta(team, currentAge, research, targetAge, research);
-        Progress(team).Age = targetAge;
-        return true;
+        return ResearchSystem.TryStartAge(this, team, targetAge);
     }
 
     public bool Research(long team, long techId)
@@ -275,22 +276,19 @@ public sealed class GameSim
         {
             return false;
         }
-        long age = PlayerAge(team);
-        long research = PlayerResearch(team);
-        if (TechCatalog.IsResearched(research, techId)
-            || age < TechCatalog.RequiredAge(techId)
-            || !TechCatalog.HasPrerequisites(team, techId)
-            || !TechCatalog.TryPayResearch(team, techId))
+        return ResearchSystem.TryStartTech(this, team, techId);
+    }
+
+    public bool CancelResearch(long team)
+    {
+        if (team < 0 || team >= Lockstep.PlayerCount)
         {
             return false;
         }
-        long nextResearch = research | TechCatalog.ResearchBit(techId);
-        ApplyProgressDelta(team, age, research, age, nextResearch);
-        Progress(team).Research = nextResearch;
-        return true;
+        return ResearchSystem.Cancel(this, team);
     }
 
-    private void ApplyProgressDelta(
+    internal void ApplyProgressDelta(
         long team, long oldAge, long oldResearch, long newAge, long newResearch)
     {
         ApplyStatDelta(
@@ -888,6 +886,7 @@ public sealed class GameSim
         kind == LockstepCommand.KindSurrender
         || kind == LockstepCommand.KindAgeUp
         || kind == LockstepCommand.KindResearch
+        || kind == LockstepCommand.KindCancelResearch
         || kind == LockstepCommand.KindPlaceBuilding;
 
     private static bool IsEntityCommand(long kind) =>
@@ -975,6 +974,9 @@ public sealed class GameSim
             case LockstepCommand.KindResearch:
                 Research(command.Player, command.Aux);
                 break;
+            case LockstepCommand.KindCancelResearch:
+                CancelResearch(command.Player);
+                break;
             case LockstepCommand.KindPlaceBuilding:
                 IssuePlaceBuilding(command.Aux, (int)command.CellX, (int)command.CellY, command.Player);
                 break;
@@ -1006,6 +1008,7 @@ public sealed class GameSim
         List<long> dead = ProjectileSystem.Step(World);
         dead.AddRange(CombatSystem.Step(World, Spatial));
         ResolveDeaths(dead);
+        ResearchSystem.Step(this);
         RelicSystem.Step(World, InventoryForTeam);
         if (Match != null)
         {
