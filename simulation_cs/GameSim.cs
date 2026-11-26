@@ -147,9 +147,35 @@ public sealed class GameSim
         {
             return;
         }
+        World.Detach(id, SimComponents.AttackTarget);
         World.SetValue(id, SimComponents.Move, SimComponents.TargetX, cellX);
         World.SetValue(id, SimComponents.Move, SimComponents.TargetY, cellY);
         World.SetValue(id, SimComponents.Move, SimComponents.Active, 1);
+    }
+
+    public void IssueAttack(long attacker, long target)
+    {
+        if (!World.IsAlive(attacker) || !World.HasComponent(attacker, SimComponents.Combat))
+        {
+            return;
+        }
+        if (!World.IsAlive(target) || !World.HasComponent(target, SimComponents.Health))
+        {
+            return;
+        }
+        if (World.GetValue(target, SimComponents.Team, SimComponents.TeamId)
+            == World.GetValue(attacker, SimComponents.Team, SimComponents.TeamId))
+        {
+            return;
+        }
+        if (World.HasComponent(attacker, SimComponents.Move))
+        {
+            World.SetValue(attacker, SimComponents.Move, SimComponents.Active, 0);
+            World.SetValue(attacker, SimComponents.Velocity, SimComponents.X, 0);
+            World.SetValue(attacker, SimComponents.Velocity, SimComponents.Y, 0);
+        }
+        World.Attach(attacker, SimComponents.AttackTarget);
+        World.SetValue(attacker, SimComponents.AttackTarget, SimComponents.TargetEntity, target);
     }
 
     public void IssueGather(long villager, long node, long drop)
@@ -171,6 +197,7 @@ public sealed class GameSim
         {
             return;
         }
+        World.Detach(id, SimComponents.AttackTarget);
         World.SetValue(id, SimComponents.Move, SimComponents.Active, 0);
         World.SetValue(id, SimComponents.Velocity, SimComponents.X, 0);
         World.SetValue(id, SimComponents.Velocity, SimComponents.Y, 0);
@@ -182,6 +209,9 @@ public sealed class GameSim
         {
             case LockstepCommand.KindMove:
                 IssueMove(command.Entity, command.CellX, command.CellY);
+                break;
+            case LockstepCommand.KindAttack:
+                IssueAttack(command.Entity, command.TargetEntity);
                 break;
             case LockstepCommand.KindStop:
                 Stop(command.Entity);

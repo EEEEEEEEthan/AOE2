@@ -7,6 +7,7 @@ public static class SimComponents
     public const string Move = "move";
     public const string Health = "health";
     public const string Combat = "combat";
+    public const string AttackTarget = "attack_target";
     public const string Team = "team";
     public const string Gather = "gather";
     public const string Resource = "resource";
@@ -26,6 +27,7 @@ public static class SimComponents
     public const string Cooldown = "cooldown";
     public const string CooldownLeft = "cooldown_left";
     public const string TeamId = "team_id";
+    public const string TargetEntity = "target_entity";
 
     public const string Wood = "wood";
     public const string Food = "food";

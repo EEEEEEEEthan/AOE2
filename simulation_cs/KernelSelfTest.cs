@@ -15,6 +15,7 @@ public static class KernelSelfTest
         CheckEcs(failures);
         CheckPathfinding(failures);
         CheckCombat(failures);
+        CheckAttack(failures);
         CheckGather(failures);
         CheckLockstep(failures);
         var result = new Godot.Collections.Array<string>();
@@ -189,6 +190,62 @@ public static class KernelSelfTest
         Expect(failures, aliveCount == 2, "combat friendly fire disabled");
     }
 
+    private static void CheckAttack(List<string> failures)
+    {
+        var sim = new GameSim(new NavGrid(24, 24), 51);
+        long attacker = sim.SpawnUnit(2, 2, 0, 100, 10, 1.0, 0.5);
+        long victim = sim.SpawnUnit(12, 2, 1, 30, 0, 1.0, 0.0);
+        sim.IssueAttack(attacker, victim);
+        Expect(failures, sim.World.HasComponent(attacker, SimComponents.AttackTarget), "attack locks explicit target");
+        for (int tick = 0; tick < 200; tick++)
+        {
+            sim.SimulateTick();
+        }
+        Expect(failures, sim.World.IsAlive(attacker) && !sim.World.IsAlive(victim), "attack chases and kills explicit target");
+
+        var friendly = new GameSim(new NavGrid(12, 12), 52);
+        long ally = friendly.SpawnUnit(4, 4, 0, 60, 5, 1.2, 0.0);
+        long friend = friendly.SpawnUnit(5, 4, 0, 60, 5, 1.2, 0.0);
+        friendly.IssueAttack(ally, friend);
+        Expect(failures, !friendly.World.HasComponent(ally, SimComponents.AttackTarget), "attack ignores friendly target");
+
+        var priority = new GameSim(new NavGrid(12, 12), 53);
+        long hunter = priority.SpawnUnit(5, 5, 0, 100, 10, 2.0, 0.0);
+        long near = priority.SpawnUnit(5, 6, 1, 100, 0, 1.0, 0.0);
+        long far = priority.SpawnUnit(6, 6, 1, 100, 0, 1.0, 0.0);
+        priority.IssueAttack(hunter, far);
+        priority.SimulateTick();
+        long farHp = priority.World.GetValue(far, SimComponents.Health, SimComponents.Hp);
+        long nearHp = priority.World.GetValue(near, SimComponents.Health, SimComponents.Hp);
+        Expect(failures, farHp < 100 && nearHp == 100, "explicit attack beats nearest auto target");
+
+        var release = new GameSim(new NavGrid(20, 20), 54);
+        long chaser = release.SpawnUnit(2, 2, 0, 100, 10, 1.0, 0.5);
+        long doomed = release.SpawnUnit(10, 2, 1, 30, 0, 1.0, 0.0);
+        release.IssueAttack(chaser, doomed);
+        release.World.Despawn(doomed);
+        release.SimulateTick();
+        Expect(failures, !release.World.HasComponent(chaser, SimComponents.AttackTarget), "attack clears lock when target gone");
+
+        Expect(failures, AttackDeterminismChecksum() == AttackDeterminismChecksum(), "attack lockstep deterministic");
+        Expect(failures, AttackDeterminismChecksum() != 0, "attack checksum populated");
+    }
+
+    private static long AttackDeterminismChecksum()
+    {
+        var sim = new GameSim(new NavGrid(20, 20), 61, 2, 6);
+        long attacker = sim.SpawnUnit(3, 3, 0, 60, 8, 1.2, 0.15);
+        long victim = sim.SpawnUnit(12, 3, 1, 60, 8, 1.2, 0.0);
+        sim.IssueAttack(attacker, victim);
+        long checksum = 0;
+        for (int tick = 0; tick < 90; tick++)
+        {
+            sim.SimulateTick();
+            checksum = sim.World.Checksum();
+        }
+        return checksum;
+    }
+
     private static void CheckGather(List<string> failures)
     {
         var sim = new GameSim(new NavGrid(20, 20), 42);
@@ -223,5 +280,12 @@ public static class KernelSelfTest
             restored.Player == 1 && restored.Kind == LockstepCommand.KindGather && restored.Entity == 12
             && restored.TargetEntity == 30 && restored.DropEntity == 31,
             "lockstep command roundtrip");
+
+        var attackCommand = new LockstepCommand(1, LockstepCommand.KindAttack, 5, 0, 0, 99, -1);
+        LockstepCommand restoredAttack = LockstepCommand.FromArray(attackCommand.ToArray());
+        Expect(failures,
+            restoredAttack.Kind == LockstepCommand.KindAttack && restoredAttack.Entity == 5
+            && restoredAttack.TargetEntity == 99,
+            "lockstep attack command roundtrip");
     }
 }
