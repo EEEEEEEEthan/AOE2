@@ -248,6 +248,11 @@ func _refresh_entities(batch: Dictionary) -> void:
 	if _last_snapshot_ms > 0:
 		interval = clampf(float(now - _last_snapshot_ms) / 1000.0, MIN_INTERP_SECONDS, MAX_INTERP_SECONDS)
 	_last_snapshot_ms = now
+	var prod_units: PackedInt64Array = batch["prod_unit"]
+	var prod_ticks_lefts: PackedInt64Array = batch["prod_ticks_left"]
+	var prod_ticks_totals: PackedInt64Array = batch["prod_ticks_total"]
+	var prod_queues: PackedInt64Array = batch["prod_queue"]
+	var prod_repeats: PackedInt64Array = batch["prod_repeat"]
 	var alive: Dictionary = {}
 	_entity_positions.clear()
 	_unit_slots.clear()
@@ -277,6 +282,11 @@ func _refresh_entities(batch: Dictionary) -> void:
 				"building_progress": building_progresses[index],
 				"building_max_progress": building_max_progresses[index],
 				"gate_state": gate_states[index],
+				"prod_unit": prod_units[index],
+				"prod_ticks_left": prod_ticks_lefts[index],
+				"prod_ticks_total": prod_ticks_totals[index],
+				"prod_queue": prod_queues[index],
+				"prod_repeat": prod_repeats[index],
 			})
 			var size_w: int = maxi(1, widths[index])
 			var size_h: int = maxi(1, heights[index])
@@ -456,6 +466,7 @@ func _show_building_model(building: Node3D, entity: Dictionary, path: String) ->
 		entity["x"] - 0.5 + size_w * 0.5,
 		_ground_level_rect(entity["x"], entity["y"], size_w, size_h),
 		entity["y"] - 0.5 + size_h * 0.5)
+	_update_production_label(building, entity, Vector3.ZERO)
 
 
 func _show_building_block(building: Node3D, entity: Dictionary, state: int) -> void:
@@ -479,6 +490,60 @@ func _show_building_block(building: Node3D, entity: Dictionary, state: int) -> v
 		entity["x"] - 0.5,
 		_ground_level_rect(entity["x"], entity["y"], size_w, size_h),
 		entity["y"] - 0.5)
+	_update_production_label(building, entity, Vector3(size_w * 0.5, 0.0, size_h * 0.5))
+
+
+const PROD_NONE := -1000000
+
+
+func _update_production_label(
+		building: Node3D, entity: Dictionary, center: Vector3) -> void:
+	var current: int = entity.get("prod_unit", PROD_NONE)
+	var queue: int = entity.get("prod_queue", 0)
+	var repeat: int = entity.get("prod_repeat", 0)
+	var label := building.get_node_or_null("ProdLabel") as Label3D
+	if current <= PROD_NONE and queue <= 0 and repeat == 0:
+		if label != null:
+			label.queue_free()
+		return
+	if label == null:
+		label = Label3D.new()
+		label.name = "ProdLabel"
+		label.billboard = BaseMaterial3D.BILLBOARD_ENABLED
+		label.no_depth_test = true
+		label.font_size = 64
+		label.outline_size = 14
+		label.modulate = Color(1.0, 0.95, 0.75)
+		building.add_child(label)
+	var lines: PackedStringArray = []
+	if current > PROD_NONE:
+		var ticks_left: int = entity.get("prod_ticks_left", 0)
+		var ticks_total: int = maxi(1, int(entity.get("prod_ticks_total", 1)))
+		lines.append("训练中 %s %d/%d" % [_unit_name(current), ticks_left, ticks_total])
+	if queue > 0:
+		lines.append("队列 %d" % queue)
+	if repeat != 0:
+		lines.append("连续生产")
+	label.text = "\n".join(lines)
+	label.position = Vector3(center.x, 1.9, center.z)
+
+
+func _unit_name(unit_type: int) -> String:
+	match unit_type:
+		-1:
+			return "村民"
+		0:
+			return "剑士"
+		1:
+			return "长枪兵"
+		2:
+			return "弓兵"
+		3:
+			return "骑士"
+		4:
+			return "长弓兵"
+		_:
+			return "单位"
 
 
 func _building_layers(entity: Dictionary, state: int) -> int:

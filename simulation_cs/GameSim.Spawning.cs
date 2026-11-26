@@ -517,4 +517,16 @@ public sealed partial class GameSim
         World.SetValue(id, SimComponents.RelicSlot, SimComponents.GoldProgress, 0);
         return id;
     }
+
+    /// <summary>直接落成一座完工建筑，跳过施工。供测试与演示搭建生产建筑。</summary>
+    public long SpawnCompletedBuilding(int cellX, int cellY, long team, long type)
+    {
+        long id = BuildingSystem.Place(World, Grid, Terrain, type, cellX, cellY, team);
+        if (id < 0)
+        {
+            return -1;
+        }
+        BuildingSystem.Complete(World, id);
+        return id;
+    }
 }

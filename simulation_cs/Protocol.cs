@@ -129,6 +129,11 @@ public readonly struct EntitySnapshot
     public readonly long GateState;
     public readonly long UnitType;
     public readonly long MaxHp;
+    public readonly long ProdUnitType;
+    public readonly long ProdTicksLeft;
+    public readonly long ProdTicksTotal;
+    public readonly long ProdQueueCount;
+    public readonly long ProdRepeat;
 
     public EntitySnapshot(
         long id,
@@ -155,7 +160,12 @@ public readonly struct EntitySnapshot
         long repairTarget,
         long gateState,
         long unitType,
-        long maxHp)
+        long maxHp,
+        long prodUnitType,
+        long prodTicksLeft,
+        long prodTicksTotal,
+        long prodQueueCount,
+        long prodRepeat)
     {
         Id = id;
         X = x;
@@ -182,6 +192,11 @@ public readonly struct EntitySnapshot
         GateState = gateState;
         UnitType = unitType;
         MaxHp = maxHp;
+        ProdUnitType = prodUnitType;
+        ProdTicksLeft = prodTicksLeft;
+        ProdTicksTotal = prodTicksTotal;
+        ProdQueueCount = prodQueueCount;
+        ProdRepeat = prodRepeat;
     }
 
     /// <summary>逐字段比较：增量编码以它为「本实体是否需要下发」的判据。</summary>
@@ -210,7 +225,12 @@ public readonly struct EntitySnapshot
         && RepairTarget == other.RepairTarget
         && GateState == other.GateState
         && UnitType == other.UnitType
-        && MaxHp == other.MaxHp;
+        && MaxHp == other.MaxHp
+        && ProdUnitType == other.ProdUnitType
+        && ProdTicksLeft == other.ProdTicksLeft
+        && ProdTicksTotal == other.ProdTicksTotal
+        && ProdQueueCount == other.ProdQueueCount
+        && ProdRepeat == other.ProdRepeat;
 }
 
 public readonly struct PlayerSnapshot
@@ -331,6 +351,7 @@ public sealed class SnapshotFrame
         public readonly ComponentAccess Relic;
         public readonly ComponentAccess Trade;
         public readonly ComponentAccess Transport;
+        public readonly ComponentAccess Production;
         public readonly int ResourceWood;
         public readonly int ResourceFood;
         public readonly int ResourceGold;
@@ -359,6 +380,11 @@ public sealed class SnapshotFrame
         public readonly int GateState;
         public readonly int GarrisonCount;
         public readonly int GarrisonCapacity;
+        public readonly int ProdCurrent;
+        public readonly int ProdTicksLeft;
+        public readonly int ProdTicksTotal;
+        public readonly int ProdQueueCount;
+        public readonly int ProdRepeat;
         public readonly int ProgressAge;
         public readonly int ProgressResearch;
         public readonly int ProgressResearchKind;
@@ -387,6 +413,7 @@ public sealed class SnapshotFrame
             Relic = world.Access(SimComponents.Relic);
             Trade = world.Access(SimComponents.Trade);
             Transport = world.Access(SimComponents.Transport);
+            Production = world.Access(SimComponents.Production);
             ResourceWood = Resource.Column(SimComponents.Wood);
             ResourceFood = Resource.Column(SimComponents.Food);
             ResourceGold = Resource.Column(SimComponents.Gold);
@@ -415,6 +442,11 @@ public sealed class SnapshotFrame
             GateState = Building.Column(SimComponents.GateState);
             GarrisonCount = Garrison.Column(SimComponents.Count);
             GarrisonCapacity = Garrison.Column(SimComponents.Capacity);
+            ProdCurrent = Production.Column(SimComponents.ProdCurrent);
+            ProdTicksLeft = Production.Column(SimComponents.ProdTicksLeft);
+            ProdTicksTotal = Production.Column(SimComponents.ProdTicksTotal);
+            ProdQueueCount = Production.Column(SimComponents.ProdQueueCount);
+            ProdRepeat = Production.Column(SimComponents.ProdRepeat);
             ProgressAge = PlayerProgress.Column(SimComponents.Age);
             ProgressResearch = PlayerProgress.Column(SimComponents.Research);
             ProgressResearchKind = PlayerProgress.Column(SimComponents.ResearchKind);
@@ -492,6 +524,11 @@ public sealed class SnapshotFrame
             long repairState = 0;
             long repairTarget = -1;
             long gateState = BuildingSystem.GateClosed;
+            long prodUnitType = ProductionSystem.None;
+            long prodTicksLeft = 0;
+            long prodTicksTotal = 0;
+            long prodQueueCount = 0;
+            long prodRepeat = 0;
             if (kind == EntityKind.Villager && layout.Repair.Has(id))
             {
                 repairState = layout.Repair.Get(id, layout.RepairState);
@@ -513,6 +550,14 @@ public sealed class SnapshotFrame
                 {
                     garrisonCount = layout.Garrison.Get(id, layout.GarrisonCount);
                     garrisonCapacity = layout.Garrison.Get(id, layout.GarrisonCapacity);
+                }
+                if (layout.Production.Has(id))
+                {
+                    prodUnitType = layout.Production.Get(id, layout.ProdCurrent);
+                    prodTicksLeft = layout.Production.Get(id, layout.ProdTicksLeft);
+                    prodTicksTotal = layout.Production.Get(id, layout.ProdTicksTotal);
+                    prodQueueCount = layout.Production.Get(id, layout.ProdQueueCount);
+                    prodRepeat = layout.Production.Get(id, layout.ProdRepeat);
                 }
             }
             entities.Add(new EntitySnapshot(
@@ -540,7 +585,12 @@ public sealed class SnapshotFrame
                 repairTarget,
                 gateState,
                 unitType,
-                maxHp));
+                maxHp,
+                prodUnitType,
+                prodTicksLeft,
+                prodTicksTotal,
+                prodQueueCount,
+                prodRepeat));
         }
         var frame = new SnapshotFrame { Tick = world.Tick, Turn = turn, Entities = entities.ToArray() };
         if (vision != null)
@@ -823,6 +873,11 @@ public sealed class SnapshotFrame
         if ((mask & (1u << 21)) != 0) writer.Write(entity.GateState);
         if ((mask & (1u << 22)) != 0) writer.Write(entity.UnitType);
         if ((mask & (1u << 23)) != 0) writer.Write(entity.MaxHp);
+        if ((mask & (1u << 24)) != 0) writer.Write(entity.ProdUnitType);
+        if ((mask & (1u << 25)) != 0) writer.Write(entity.ProdTicksLeft);
+        if ((mask & (1u << 26)) != 0) writer.Write(entity.ProdTicksTotal);
+        if ((mask & (1u << 27)) != 0) writer.Write(entity.ProdQueueCount);
+        if ((mask & (1u << 28)) != 0) writer.Write(entity.ProdRepeat);
     }
 
     private static EntitySnapshot ReadEntity(BinaryReader reader, long id, in EntitySnapshot baseline)
@@ -852,6 +907,11 @@ public sealed class SnapshotFrame
         long gateState = baseline.GateState;
         long unitType = baseline.UnitType;
         long maxHp = baseline.MaxHp;
+        long prodUnitType = baseline.ProdUnitType;
+        long prodTicksLeft = baseline.ProdTicksLeft;
+        long prodTicksTotal = baseline.ProdTicksTotal;
+        long prodQueueCount = baseline.ProdQueueCount;
+        long prodRepeat = baseline.ProdRepeat;
         if ((mask & 1u) != 0) x = reader.ReadInt64();
         if ((mask & (1u << 1)) != 0) y = reader.ReadInt64();
         if ((mask & (1u << 2)) != 0) team = reader.ReadInt64();
@@ -876,11 +936,17 @@ public sealed class SnapshotFrame
         if ((mask & (1u << 21)) != 0) gateState = reader.ReadInt64();
         if ((mask & (1u << 22)) != 0) unitType = reader.ReadInt64();
         if ((mask & (1u << 23)) != 0) maxHp = reader.ReadInt64();
+        if ((mask & (1u << 24)) != 0) prodUnitType = reader.ReadInt64();
+        if ((mask & (1u << 25)) != 0) prodTicksLeft = reader.ReadInt64();
+        if ((mask & (1u << 26)) != 0) prodTicksTotal = reader.ReadInt64();
+        if ((mask & (1u << 27)) != 0) prodQueueCount = reader.ReadInt64();
+        if ((mask & (1u << 28)) != 0) prodRepeat = reader.ReadInt64();
         return new EntitySnapshot(
             id, x, y, team, kind, hp, nodeType, nodeSubtype, nodeRemaining,
             gatherState, carryType, carryAmount, buildingType, width, height,
             buildingState, buildingProgress, buildingMaxProgress, garrisonCount,
-            garrisonCapacity, repairState, repairTarget, gateState, unitType, maxHp);
+            garrisonCapacity, repairState, repairTarget, gateState, unitType, maxHp,
+            prodUnitType, prodTicksLeft, prodTicksTotal, prodQueueCount, prodRepeat);
     }
 
     private static void WriteVisionStates(BinaryWriter writer, byte[] states)
@@ -1081,7 +1147,7 @@ public sealed class SnapshotFrame
 public sealed class SnapshotDelta
 {
     /// <summary>实体全部 24 个可变字段的掩码（Id 恒写，不占位）。</summary>
-    public const uint AllFields = 0x00FFFFFFu;
+    public const uint AllFields = 0x1FFFFFFFu;
 
     private readonly Dictionary<long, EntitySnapshot> _previous = new();
     private readonly HashSet<long> _currentIds = new();
@@ -1195,6 +1261,11 @@ public sealed class SnapshotDelta
         if (current.GateState != previous.GateState) mask |= 1u << 21;
         if (current.UnitType != previous.UnitType) mask |= 1u << 22;
         if (current.MaxHp != previous.MaxHp) mask |= 1u << 23;
+        if (current.ProdUnitType != previous.ProdUnitType) mask |= 1u << 24;
+        if (current.ProdTicksLeft != previous.ProdTicksLeft) mask |= 1u << 25;
+        if (current.ProdTicksTotal != previous.ProdTicksTotal) mask |= 1u << 26;
+        if (current.ProdQueueCount != previous.ProdQueueCount) mask |= 1u << 27;
+        if (current.ProdRepeat != previous.ProdRepeat) mask |= 1u << 28;
         return mask;
     }
 
