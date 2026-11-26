@@ -42,7 +42,7 @@
 
 ## 体素地形与单位
 
-- 1 格 = 1 Godot 单位；取 4px 为 1 体素，即每格 8×8 体素，高度层 `1/8` 单位。普通地面可 0～2 层起伏，悬崖落差可达 8 层。
+- 1 格 = 1 Godot 单位 = 8×8 体素（1 体素 = 1/8 单位），高度层 `1/8` 单位。普通地面可 0～2 层起伏，悬崖落差可达 8 层。地图编辑器笔刷、网格拾取、坐标换算一律以「格」为单位。
 - `TerrainGrid`（`simulation_cs/TerrainGrid.cs`）逐格存类型（草地/泥土/水/崖）与 uint8 高度层，**与 `NavGrid` 完全独立**：NavGrid 继续只描述建筑 footprint 与障碍，地形高度不写进去，避免与 AOE-5 冲突。
 - 寻路接高度差：`FlowField` 与 `MovementSystem` 通过 `TerrainGrid.CanTraverse` 判定，高度差超过 1 层、水或崖面不可通行，悬崖上下自然不通。
 - 地图格式由 `MapData`（`simulation_cs/MapData.cs`）组合 TerrainGrid 与 NavGrid；`maps/voxel_demo.json` 是示例，行优先扁平数组 `types` / `heights` / `blocked`，另有可选的 `placements`（出生点/资源点/建筑）。
