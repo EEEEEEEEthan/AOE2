@@ -62,7 +62,7 @@ func compute(grid: NavGrid, target_x: int, target_y: int) -> bool:
 				continue
 			cost[neighbor] = next_cost
 			queue.append(neighbor)
-	_build_directions()
+	_build_directions(grid)
 	return true
 
 func direction_at(x: int, y: int) -> Vector2i:
@@ -79,7 +79,7 @@ func cost_at(x: int, y: int) -> int:
 func reachable(x: int, y: int) -> bool:
 	return cost_at(x, y) >= 0
 
-func _build_directions() -> void:
+func _build_directions(grid: NavGrid) -> void:
 	for y in height:
 		for x in width:
 			var index := y * width + x
@@ -93,6 +93,9 @@ func _build_directions() -> void:
 				var ny: int = y + offset.y
 				if nx < 0 or ny < 0 or nx >= width or ny >= height:
 					continue
+				if offset.x != 0 and offset.y != 0:
+					if grid.is_blocked(x + offset.x, y) or grid.is_blocked(x, y + offset.y):
+						continue
 				var neighbor_cost := cost[ny * width + nx]
 				if neighbor_cost < 0 or neighbor_cost >= best_cost:
 					continue

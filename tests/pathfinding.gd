@@ -4,6 +4,7 @@ func run() -> void:
 	_flow_field_moves_toward_goal()
 	_unit_reaches_target()
 	_unit_routes_around_wall()
+	_diagonal_speed_normalized()
 	_movement_is_deterministic()
 
 func _flow_field_moves_toward_goal() -> void:
@@ -54,6 +55,20 @@ func _unit_routes_around_wall() -> void:
 	var y := sim.world.get_value(id, SimComponents.POSITION, SimComponents.Y)
 	check_eq(Fixed.to_int(x), 13, "unit crosses wall gap to target x")
 	check_eq(Fixed.to_int(y), 8, "unit crosses wall gap to target y")
+
+func _diagonal_speed_normalized() -> void:
+	var grid := NavGrid.new(16, 16)
+	var sim := GameSim.new(grid, 41)
+	var speed := Fixed.from_float(0.4)
+	var id := sim.spawn_unit(2, 2, 0, 10, 0, 0.0, 0.4)
+	sim.issue_move(id, 3, 3)
+	check_true(sim.field_for(3, 3).direction_at(2, 2) == Vector2i(1, 1), "diagonal step chosen")
+	sim.simulate_tick()
+	var velocity_x := sim.world.get_value(id, SimComponents.VELOCITY, SimComponents.X)
+	var velocity_y := sim.world.get_value(id, SimComponents.VELOCITY, SimComponents.Y)
+	var magnitude_sq := Fixed.add(Fixed.mul(velocity_x, velocity_x), Fixed.mul(velocity_y, velocity_y))
+	var expected_sq := Fixed.mul(speed, speed)
+	check_true(Fixed.abs(magnitude_sq - expected_sq) <= Fixed.from_float(0.005), "diagonal speed matches straight speed")
 
 func _movement_is_deterministic() -> void:
 	var first := _run_march(77)

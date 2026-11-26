@@ -40,9 +40,11 @@ func get_value(id: int, column: StringName) -> int:
 	return values[id]
 
 func columns_sorted() -> Array:
-	var names := _columns.keys()
-	names.sort()
-	return names
+	var texts: Array[String] = []
+	for column: StringName in _columns.keys():
+		texts.append(String(column))
+	texts.sort()
+	return texts
 
 func column_values(column: StringName) -> PackedInt64Array:
 	return _columns.get(column, PackedInt64Array())

@@ -68,23 +68,34 @@ func has_component(id: int, component: StringName) -> bool:
 	return _stores.has(component) and _stores[component].has(id)
 
 func component_names_sorted() -> Array:
-	var names := _stores.keys()
-	names.sort()
-	return names
+	var texts: Array[String] = []
+	for name: StringName in _stores.keys():
+		texts.append(String(name))
+	texts.sort()
+	return texts
 
 func checksum() -> int:
 	var hash := FNV_OFFSET
 	hash = _hash_int(hash, tick)
+	hash = _hash_int(hash, next_entity)
+	hash = _hash_int(hash, rng.state)
 	for id in entities():
 		hash = _hash_int(hash, id)
-		for component_name: StringName in component_names_sorted():
+		for component_text: String in component_names_sorted():
+			var component_name := StringName(component_text)
 			var store: ComponentStore = _stores[component_name]
 			if not store.has(id):
 				continue
-			hash = _hash_int(hash, String(component_name).hash())
-			for column: StringName in store.columns_sorted():
-				hash = _hash_int(hash, String(column).hash())
-				hash = _hash_int(hash, store.get_value(id, column))
+			hash = _hash_text(hash, component_text)
+			for column_text: String in store.columns_sorted():
+				hash = _hash_text(hash, column_text)
+				hash = _hash_int(hash, store.get_value(id, StringName(column_text)))
+	return hash
+
+func _hash_text(hash: int, text: String) -> int:
+	for index in text.length():
+		hash = (hash ^ text.unicode_at(index)) & MASK32
+		hash = (hash * FNV_PRIME) & MASK32
 	return hash
 
 func _hash_int(hash: int, value: int) -> int:

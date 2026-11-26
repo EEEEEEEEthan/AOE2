@@ -1,6 +1,8 @@
 class_name MovementSystem
 extends RefCounted
 
+const DIAGONAL_SCALE := 46341
+
 static func step(world: SimWorld, grid: NavGrid, field_provider: Callable) -> void:
 	var move_store := world.store(SimComponents.MOVE)
 	if move_store.count == 0:
@@ -42,8 +44,15 @@ static func _step_entity(world: SimWorld, id: int, grid: NavGrid, field_provider
 		world.set_value(id, SimComponents.VELOCITY, SimComponents.Y, 0)
 		_stop(world, id)
 		return
-	var velocity_x := Fixed.mul(direction.x * Fixed.SCALE, speed)
-	var velocity_y := Fixed.mul(direction.y * Fixed.SCALE, speed)
+	var velocity_x := 0
+	var velocity_y := 0
+	if direction.x != 0 and direction.y != 0:
+		var diagonal_speed := Fixed.mul(speed, DIAGONAL_SCALE)
+		velocity_x = direction.x * diagonal_speed
+		velocity_y = direction.y * diagonal_speed
+	else:
+		velocity_x = direction.x * speed
+		velocity_y = direction.y * speed
 	world.set_value(id, SimComponents.VELOCITY, SimComponents.X, velocity_x)
 	world.set_value(id, SimComponents.VELOCITY, SimComponents.Y, velocity_y)
 	world.set_value(id, SimComponents.POSITION, SimComponents.X, Fixed.add(x, velocity_x))

@@ -23,6 +23,33 @@ func run() -> void:
 	check_eq(first, second, "checksum deterministic for identical operations")
 	check_ne(first, _checksum_with_extra_damage(), "checksum changes with state")
 	check_eq(world.entities()[0], a, "entities stay in ascending id order")
+	_columns_sort_by_content()
+	_checksum_tracks_rng()
+
+func _columns_sort_by_content() -> void:
+	var store := ComponentStore.new()
+	store.add(0)
+	store.set_value(0, &"zeta", 1)
+	store.set_value(0, &"alpha", 2)
+	store.set_value(0, &"mu", 3)
+	var sorted := store.columns_sorted()
+	check_true(sorted[0] == "alpha", "first column sorted by content")
+	check_true(sorted[1] == "mu", "second column sorted by content")
+	check_true(sorted[2] == "zeta", "third column sorted by content")
+
+func _checksum_tracks_rng() -> void:
+	var world := _checksum_world()
+	var before := world.checksum()
+	world.rng.next_u32()
+	check_ne(before, world.checksum(), "checksum includes rng state")
+
+func _checksum_world() -> SimWorld:
+	var world := SimWorld.new(9)
+	for i in 4:
+		var id := world.spawn()
+		world.attach(id, &"position")
+		world.set_value(id, &"position", &"x", Fixed.from_int(i))
+	return world
 
 func _checksum_of_sample() -> int:
 	var world := SimWorld.new(5)
