@@ -14,8 +14,6 @@ public sealed class TerrainGrid
     public const byte TypeWater = 2;
     public const byte TypeCliff = 3;
 
-    public const int MaxStep = 1;
-
     public int Width { get; }
     public int Height { get; }
     public byte[] Types { get; private set; }
@@ -68,7 +66,10 @@ public sealed class TerrainGrid
 
     public bool IsCliff(int x, int y) => TypeAt(x, y) == TypeCliff;
 
-    /// <summary>能否从一格走到相邻格：终点非水/崖，且高度差不超过一层。</summary>
+    /// <summary>
+    /// 能否从一格走到相邻格：只看终点地形类型（水/崖不可通行）与越界。
+    /// 高度仅作表现，不参与通行判定，与复刻原作一致。
+    /// </summary>
     public bool CanTraverse(int fromX, int fromY, int toX, int toY)
     {
         if (!InBounds(fromX, fromY) || !InBounds(toX, toY))
@@ -76,12 +77,7 @@ public sealed class TerrainGrid
             return false;
         }
         byte type = Types[Index(toX, toY)];
-        if (type == TypeWater || type == TypeCliff)
-        {
-            return false;
-        }
-        int delta = Math.Abs(Heights[Index(toX, toY)] - Heights[Index(fromX, fromY)]);
-        return delta <= MaxStep;
+        return type != TypeWater && type != TypeCliff;
     }
 
     public TerrainGrid Clone()

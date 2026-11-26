@@ -83,8 +83,10 @@ public static class BuildingSelfTest
         sim.AddResource(0, GameSim.ResourceWood, 100);
         Expect(failures, sim.IssuePlaceBuilding(BuildingTypes.House, 3, 3, 0) == -1, "water rejected");
         Expect(failures, sim.IssuePlaceBuilding(BuildingTypes.House, 6, 3, 0) == -1, "cliff rejected");
-        Expect(failures, sim.IssuePlaceBuilding(BuildingTypes.House, 12, 12, 0) == -1, "sloped footprint rejected");
-        Expect(failures, sim.IssuePlaceBuilding(BuildingTypes.House, 10, 10, 0) >= 0, "flat plateau accepted");
+        Expect(failures, sim.IssuePlaceBuilding(BuildingTypes.House, 12, 12, 0) >= 0, "sloped footprint accepted");
+        Expect(failures,
+            sim.IssuePlaceBuilding(BuildingTypes.House, 10, 10, 0) >= 0,
+            "flat plateau accepted");
     }
 
     private static void CheckConstruction(List<string> failures)

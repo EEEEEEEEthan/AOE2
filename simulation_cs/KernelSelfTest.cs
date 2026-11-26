@@ -1128,7 +1128,9 @@ public static class KernelSelfTest
         terrain.SetHeight(3, 3, 1);
         Expect(failures, terrain.CanTraverse(2, 3, 3, 3), "one level step traversable");
         terrain.SetHeight(3, 3, 2);
-        Expect(failures, !terrain.CanTraverse(2, 3, 3, 3), "cliff height difference blocks");
+        Expect(failures, terrain.CanTraverse(2, 3, 3, 3), "height difference stays traversable");
+        terrain.SetHeight(3, 3, 8);
+        Expect(failures, terrain.CanTraverse(2, 3, 3, 3), "large height difference stays traversable");
         terrain.Set(4, 4, TerrainGrid.TypeWater, 0);
         Expect(failures, !terrain.CanTraverse(4, 3, 4, 4), "water blocks traversal");
         terrain.Set(5, 4, TerrainGrid.TypeCliff, 0);
@@ -1139,7 +1141,7 @@ public static class KernelSelfTest
         var wall = new TerrainGrid(8, 8);
         for (int y = 0; y < 8; y++)
         {
-            wall.Set(3, y, TerrainGrid.TypeGrass, 3);
+            wall.Set(3, y, TerrainGrid.TypeCliff, 3);
         }
         var field = new FlowField(nav, wall);
         Expect(failures,
