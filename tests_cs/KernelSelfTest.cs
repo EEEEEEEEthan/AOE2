@@ -16,6 +16,7 @@ public static partial class KernelSelfTest
         CheckFixed(failures);
         CheckRng(failures);
         CheckEcs(failures);
+        CheckColumnBinding(failures);
         CheckPathfinding(failures);
         CheckFlowFieldCache(failures);
         CheckCombat(failures);
