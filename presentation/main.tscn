@@ -1,9 +1,12 @@
-[gd_scene load_steps=6 format=3]
+[gd_scene load_steps=9 format=3]
 
 [ext_resource type="Script" path="res://presentation/main.gd" id="1_main"]
 [ext_resource type="Script" path="res://presentation/iso_camera.gd" id="2_camera"]
 [ext_resource type="Script" path="res://presentation/world_view.gd" id="3_world"]
 [ext_resource type="PackedScene" path="res://presentation/tech_tree.tscn" id="4_tech"]
+[ext_resource type="Script" path="res://presentation/hud.gd" id="5_hud"]
+[ext_resource type="Script" path="res://presentation/minimap.gd" id="6_minimap"]
+[ext_resource type="Script" path="res://presentation/battle_controller.gd" id="7_controller"]
 
 [sub_resource type="Environment" id="Env_main"]
 background_mode = 1
@@ -27,9 +30,16 @@ unique_name_in_owner = true
 script = ExtResource("3_world")
 
 [node name="Camera3D" type="Camera3D" parent="."]
+unique_name_in_owner = true
 script = ExtResource("2_camera")
 
+[node name="BattleController" type="Node" parent="."]
+unique_name_in_owner = true
+script = ExtResource("7_controller")
+
 [node name="Hud" type="CanvasLayer" parent="."]
+unique_name_in_owner = true
+script = ExtResource("5_hud")
 
 [node name="SurrenderButton" type="Button" parent="Hud"]
 unique_name_in_owner = true
@@ -46,6 +56,308 @@ offset_top = 16.0
 offset_right = 200.0
 offset_bottom = 52.0
 text = "科技树"
+
+[node name="TopBar" type="PanelContainer" parent="Hud"]
+offset_left = 16.0
+offset_top = 60.0
+offset_right = 700.0
+offset_bottom = 96.0
+
+[node name="Margin" type="MarginContainer" parent="Hud/TopBar"]
+layout_mode = 2
+theme_override_constants/margin_left = 10
+theme_override_constants/margin_top = 4
+theme_override_constants/margin_right = 10
+theme_override_constants/margin_bottom = 4
+
+[node name="Row" type="HBoxContainer" parent="Hud/TopBar/Margin"]
+layout_mode = 2
+theme_override_constants/separation = 20
+
+[node name="ResourceLabel" type="Label" parent="Hud/TopBar/Margin/Row"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "木 0　食 0　金 0　石 0"
+
+[node name="PopulationLabel" type="Label" parent="Hud/TopBar/Margin/Row"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "人口 0 / 0"
+
+[node name="AgeLabel" type="Label" parent="Hud/TopBar/Margin/Row"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "黑暗时代"
+
+[node name="NoticeLabel" type="Label" parent="Hud"]
+unique_name_in_owner = true
+anchor_left = 0.5
+anchor_right = 0.5
+offset_left = -220.0
+offset_top = 64.0
+offset_right = 220.0
+offset_bottom = 92.0
+text = "就绪"
+horizontal_alignment = 1
+
+[node name="PlacementHint" type="Label" parent="Hud"]
+unique_name_in_owner = true
+anchor_left = 0.5
+anchor_right = 0.5
+offset_left = -220.0
+offset_top = 100.0
+offset_right = 220.0
+offset_bottom = 128.0
+text = "放置模式：左键确认，右键或 Esc 取消"
+horizontal_alignment = 1
+
+[node name="MinimapPanel" type="PanelContainer" parent="Hud"]
+anchor_top = 1.0
+anchor_bottom = 1.0
+offset_left = 16.0
+offset_top = -252.0
+offset_right = 252.0
+offset_bottom = -16.0
+
+[node name="Margin" type="MarginContainer" parent="Hud/MinimapPanel"]
+layout_mode = 2
+theme_override_constants/margin_left = 6
+theme_override_constants/margin_top = 6
+theme_override_constants/margin_right = 6
+theme_override_constants/margin_bottom = 6
+
+[node name="Minimap" type="Control" parent="Hud/MinimapPanel/Margin"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(220, 220)
+layout_mode = 2
+script = ExtResource("6_minimap")
+
+[node name="SelectionPanel" type="PanelContainer" parent="Hud"]
+anchor_top = 1.0
+anchor_bottom = 1.0
+offset_left = 264.0
+offset_top = -140.0
+offset_right = 760.0
+offset_bottom = -16.0
+
+[node name="Margin" type="MarginContainer" parent="Hud/SelectionPanel"]
+layout_mode = 2
+theme_override_constants/margin_left = 12
+theme_override_constants/margin_top = 8
+theme_override_constants/margin_right = 12
+theme_override_constants/margin_bottom = 8
+
+[node name="Content" type="VBoxContainer" parent="Hud/SelectionPanel/Margin"]
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="SelectionTitle" type="Label" parent="Hud/SelectionPanel/Margin/Content"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "未选择单位"
+
+[node name="SelectionDetail" type="Label" parent="Hud/SelectionPanel/Margin/Content"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "左键点选或拖拽框选己方单位
+右键下达移动、攻击或采集指令"
+
+[node name="CommandPanel" type="PanelContainer" parent="Hud"]
+anchor_left = 1.0
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = -636.0
+offset_top = -360.0
+offset_right = -16.0
+offset_bottom = -16.0
+
+[node name="Margin" type="MarginContainer" parent="Hud/CommandPanel"]
+layout_mode = 2
+theme_override_constants/margin_left = 10
+theme_override_constants/margin_top = 6
+theme_override_constants/margin_right = 10
+theme_override_constants/margin_bottom = 6
+
+[node name="Content" type="VBoxContainer" parent="Hud/CommandPanel/Margin"]
+layout_mode = 2
+theme_override_constants/separation = 4
+
+[node name="BuildTitle" type="Label" parent="Hud/CommandPanel/Margin/Content"]
+layout_mode = 2
+text = "建造"
+
+[node name="BuildGrid" type="GridContainer" parent="Hud/CommandPanel/Margin/Content"]
+unique_name_in_owner = true
+layout_mode = 2
+columns = 7
+
+[node name="TownCenter" type="Button" parent="Hud/CommandPanel/Margin/Content/BuildGrid"]
+layout_mode = 2
+text = "城镇中心"
+metadata/building_type = 1
+
+[node name="House" type="Button" parent="Hud/CommandPanel/Margin/Content/BuildGrid"]
+layout_mode = 2
+text = "房屋"
+metadata/building_type = 2
+
+[node name="Barracks" type="Button" parent="Hud/CommandPanel/Margin/Content/BuildGrid"]
+layout_mode = 2
+text = "兵营"
+metadata/building_type = 3
+
+[node name="Wall" type="Button" parent="Hud/CommandPanel/Margin/Content/BuildGrid"]
+layout_mode = 2
+text = "石墙"
+metadata/building_type = 4
+
+[node name="Tower" type="Button" parent="Hud/CommandPanel/Margin/Content/BuildGrid"]
+layout_mode = 2
+text = "箭塔"
+metadata/building_type = 5
+
+[node name="Market" type="Button" parent="Hud/CommandPanel/Margin/Content/BuildGrid"]
+layout_mode = 2
+text = "市场"
+metadata/building_type = 6
+
+[node name="Farm" type="Button" parent="Hud/CommandPanel/Margin/Content/BuildGrid"]
+layout_mode = 2
+text = "农田"
+metadata/building_type = 7
+
+[node name="Dock" type="Button" parent="Hud/CommandPanel/Margin/Content/BuildGrid"]
+layout_mode = 2
+text = "码头"
+metadata/building_type = 8
+
+[node name="LumberCamp" type="Button" parent="Hud/CommandPanel/Margin/Content/BuildGrid"]
+layout_mode = 2
+text = "伐木场"
+metadata/building_type = 9
+
+[node name="Mill" type="Button" parent="Hud/CommandPanel/Margin/Content/BuildGrid"]
+layout_mode = 2
+text = "磨坊"
+metadata/building_type = 10
+
+[node name="MiningCamp" type="Button" parent="Hud/CommandPanel/Margin/Content/BuildGrid"]
+layout_mode = 2
+text = "采矿营"
+metadata/building_type = 11
+
+[node name="PalisadeWall" type="Button" parent="Hud/CommandPanel/Margin/Content/BuildGrid"]
+layout_mode = 2
+text = "木栅栏"
+metadata/building_type = 12
+
+[node name="Gate" type="Button" parent="Hud/CommandPanel/Margin/Content/BuildGrid"]
+layout_mode = 2
+text = "城门"
+metadata/building_type = 13
+
+[node name="FortifiedWall" type="Button" parent="Hud/CommandPanel/Margin/Content/BuildGrid"]
+layout_mode = 2
+text = "加固墙"
+metadata/building_type = 14
+
+[node name="TrainTitle" type="Label" parent="Hud/CommandPanel/Margin/Content"]
+layout_mode = 2
+text = "生产"
+
+[node name="TrainRow" type="HBoxContainer" parent="Hud/CommandPanel/Margin/Content"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="Villager" type="Button" parent="Hud/CommandPanel/Margin/Content/TrainRow"]
+layout_mode = 2
+text = "村民"
+metadata/unit_type = -1
+
+[node name="Swordsman" type="Button" parent="Hud/CommandPanel/Margin/Content/TrainRow"]
+layout_mode = 2
+text = "剑士"
+metadata/unit_type = 0
+
+[node name="Spearman" type="Button" parent="Hud/CommandPanel/Margin/Content/TrainRow"]
+layout_mode = 2
+text = "长枪兵"
+metadata/unit_type = 1
+
+[node name="Archer" type="Button" parent="Hud/CommandPanel/Margin/Content/TrainRow"]
+layout_mode = 2
+text = "弓兵"
+metadata/unit_type = 2
+
+[node name="Knight" type="Button" parent="Hud/CommandPanel/Margin/Content/TrainRow"]
+layout_mode = 2
+text = "骑士"
+metadata/unit_type = 3
+
+[node name="TechTitle" type="Label" parent="Hud/CommandPanel/Margin/Content"]
+layout_mode = 2
+text = "科技"
+
+[node name="AgeRow" type="HBoxContainer" parent="Hud/CommandPanel/Margin/Content"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="Feudal" type="Button" parent="Hud/CommandPanel/Margin/Content/AgeRow"]
+layout_mode = 2
+text = "升封建"
+metadata/target_age = 1
+
+[node name="Castle" type="Button" parent="Hud/CommandPanel/Margin/Content/AgeRow"]
+layout_mode = 2
+text = "升城堡"
+metadata/target_age = 2
+
+[node name="Imperial" type="Button" parent="Hud/CommandPanel/Margin/Content/AgeRow"]
+layout_mode = 2
+text = "升帝王"
+metadata/target_age = 3
+
+[node name="TechRow" type="HBoxContainer" parent="Hud/CommandPanel/Margin/Content"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="Forging" type="Button" parent="Hud/CommandPanel/Margin/Content/TechRow"]
+layout_mode = 2
+text = "锻造"
+metadata/tech_id = 0
+
+[node name="ScaleMail" type="Button" parent="Hud/CommandPanel/Margin/Content/TechRow"]
+layout_mode = 2
+text = "鳞甲"
+metadata/tech_id = 1
+
+[node name="Fletching" type="Button" parent="Hud/CommandPanel/Margin/Content/TechRow"]
+layout_mode = 2
+text = "锥形箭"
+metadata/tech_id = 2
+
+[node name="ActionRow" type="HBoxContainer" parent="Hud/CommandPanel/Margin/Content"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="StopButton" type="Button" parent="Hud/CommandPanel/Margin/Content/ActionRow"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "停止"
+
+[node name="CancelPlacementButton" type="Button" parent="Hud/CommandPanel/Margin/Content/ActionRow"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "取消放置"
+
+[node name="SelectionBox" type="ColorRect" parent="Hud"]
+unique_name_in_owner = true
+color = Color(0.4, 1, 0.4, 0.22)
+mouse_filter = 2
 
 [node name="ResultPanel" type="PanelContainer" parent="Hud"]
 unique_name_in_owner = true
@@ -96,5 +408,32 @@ unique_name_in_owner = true
 
 [connection signal="pressed" from="Hud/SurrenderButton" to="." method="_on_surrender_pressed"]
 [connection signal="pressed" from="Hud/TechTreeButton" to="." method="_on_tech_tree_pressed"]
+[connection signal="pressed" from="Hud/CommandPanel/Margin/Content/BuildGrid/TownCenter" to="Hud" method="_on_build_button_pressed" binds=[1]]
+[connection signal="pressed" from="Hud/CommandPanel/Margin/Content/BuildGrid/House" to="Hud" method="_on_build_button_pressed" binds=[2]]
+[connection signal="pressed" from="Hud/CommandPanel/Margin/Content/BuildGrid/Barracks" to="Hud" method="_on_build_button_pressed" binds=[3]]
+[connection signal="pressed" from="Hud/CommandPanel/Margin/Content/BuildGrid/Wall" to="Hud" method="_on_build_button_pressed" binds=[4]]
+[connection signal="pressed" from="Hud/CommandPanel/Margin/Content/BuildGrid/Tower" to="Hud" method="_on_build_button_pressed" binds=[5]]
+[connection signal="pressed" from="Hud/CommandPanel/Margin/Content/BuildGrid/Market" to="Hud" method="_on_build_button_pressed" binds=[6]]
+[connection signal="pressed" from="Hud/CommandPanel/Margin/Content/BuildGrid/Farm" to="Hud" method="_on_build_button_pressed" binds=[7]]
+[connection signal="pressed" from="Hud/CommandPanel/Margin/Content/BuildGrid/Dock" to="Hud" method="_on_build_button_pressed" binds=[8]]
+[connection signal="pressed" from="Hud/CommandPanel/Margin/Content/BuildGrid/LumberCamp" to="Hud" method="_on_build_button_pressed" binds=[9]]
+[connection signal="pressed" from="Hud/CommandPanel/Margin/Content/BuildGrid/Mill" to="Hud" method="_on_build_button_pressed" binds=[10]]
+[connection signal="pressed" from="Hud/CommandPanel/Margin/Content/BuildGrid/MiningCamp" to="Hud" method="_on_build_button_pressed" binds=[11]]
+[connection signal="pressed" from="Hud/CommandPanel/Margin/Content/BuildGrid/PalisadeWall" to="Hud" method="_on_build_button_pressed" binds=[12]]
+[connection signal="pressed" from="Hud/CommandPanel/Margin/Content/BuildGrid/Gate" to="Hud" method="_on_build_button_pressed" binds=[13]]
+[connection signal="pressed" from="Hud/CommandPanel/Margin/Content/BuildGrid/FortifiedWall" to="Hud" method="_on_build_button_pressed" binds=[14]]
+[connection signal="pressed" from="Hud/CommandPanel/Margin/Content/TrainRow/Villager" to="Hud" method="_on_train_button_pressed" binds=[-1]]
+[connection signal="pressed" from="Hud/CommandPanel/Margin/Content/TrainRow/Swordsman" to="Hud" method="_on_train_button_pressed" binds=[0]]
+[connection signal="pressed" from="Hud/CommandPanel/Margin/Content/TrainRow/Spearman" to="Hud" method="_on_train_button_pressed" binds=[1]]
+[connection signal="pressed" from="Hud/CommandPanel/Margin/Content/TrainRow/Archer" to="Hud" method="_on_train_button_pressed" binds=[2]]
+[connection signal="pressed" from="Hud/CommandPanel/Margin/Content/TrainRow/Knight" to="Hud" method="_on_train_button_pressed" binds=[3]]
+[connection signal="pressed" from="Hud/CommandPanel/Margin/Content/AgeRow/Feudal" to="Hud" method="_on_age_button_pressed" binds=[1]]
+[connection signal="pressed" from="Hud/CommandPanel/Margin/Content/AgeRow/Castle" to="Hud" method="_on_age_button_pressed" binds=[2]]
+[connection signal="pressed" from="Hud/CommandPanel/Margin/Content/AgeRow/Imperial" to="Hud" method="_on_age_button_pressed" binds=[3]]
+[connection signal="pressed" from="Hud/CommandPanel/Margin/Content/TechRow/Forging" to="Hud" method="_on_tech_button_pressed" binds=[0]]
+[connection signal="pressed" from="Hud/CommandPanel/Margin/Content/TechRow/ScaleMail" to="Hud" method="_on_tech_button_pressed" binds=[1]]
+[connection signal="pressed" from="Hud/CommandPanel/Margin/Content/TechRow/Fletching" to="Hud" method="_on_tech_button_pressed" binds=[2]]
+[connection signal="pressed" from="Hud/CommandPanel/Margin/Content/ActionRow/StopButton" to="Hud" method="_on_stop_pressed"]
+[connection signal="pressed" from="Hud/CommandPanel/Margin/Content/ActionRow/CancelPlacementButton" to="Hud" method="_on_cancel_placement_pressed"]
 [connection signal="pressed" from="Hud/ResultPanel/Margin/Content/ExitButton" to="." method="_on_exit_pressed"]
 [connection signal="closed" from="TechTree" to="." method="_on_tech_tree_closed"]

@@ -86,9 +86,16 @@ var _fog_height := 0
 var _terrain_width := 0
 var _terrain_height := 0
 var _terrain_levels: PackedInt32Array = PackedInt32Array()
+var _bridge: GameBridge
+var _selected_ids: Array = []
+var _entity_positions: Dictionary = {}
+var _selection_mesh: MultiMeshInstance3D
+var _placement_mesh: MeshInstance3D
+var _placement_material: StandardMaterial3D
 
 
 func build_terrain(bridge: GameBridge) -> void:
+	_bridge = bridge
 	_terrain_width = bridge.TerrainWidth
 	_terrain_height = bridge.TerrainHeight
 	if _terrain_width == 0 or _terrain_height == 0:
@@ -154,6 +161,7 @@ func _refresh_entities(batch: Dictionary) -> void:
 	var building_max_progresses: PackedFloat32Array = batch["building_max_progress"]
 	var gate_states: PackedInt32Array = batch["gate_state"]
 	var alive: Dictionary = {}
+	_entity_positions.clear()
 	for bucket: Dictionary in _unit_meshes.values():
 		bucket["transforms"].clear()
 	for index in int(batch["count"]):
@@ -181,14 +189,23 @@ func _refresh_entities(batch: Dictionary) -> void:
 				"building_max_progress": building_max_progresses[index],
 				"gate_state": gate_states[index],
 			})
+			var size_w: int = maxi(1, widths[index])
+			var size_h: int = maxi(1, heights[index])
+			_entity_positions[id] = Vector3(
+				positions_x[index] - 0.5 + size_w * 0.5,
+				_ground_level_rect(positions_x[index], positions_y[index], size_w, size_h),
+				positions_y[index] - 0.5 + size_h * 0.5)
 		elif _is_visible_unit(kind, node_remainings[index]):
-			_append_unit(kind, teams[index], node_types[index], positions_x[index], positions_y[index])
+			_append_unit(
+				int(ids[index]), kind, teams[index], node_types[index],
+				positions_x[index], positions_y[index])
 	for id in _units.keys():
 		if not alive.has(id):
 			var dead: Node3D = _units[id]
 			dead.queue_free()
 			_units.erase(id)
 	_commit_units()
+	_refresh_selection_rings()
 
 
 func _is_visible_unit(kind: int, node_remaining: int) -> bool:
@@ -197,12 +214,14 @@ func _is_visible_unit(kind: int, node_remaining: int) -> bool:
 	return true
 
 
-func _append_unit(kind: int, team: int, node_type: int, tile_x: float, tile_y: float) -> void:
+func _append_unit(
+	id: int, kind: int, team: int, node_type: int, tile_x: float, tile_y: float) -> void:
 	var path: String = MODEL_PATHS.get(kind, MODEL_PATHS[KIND_UNIT])
 	var bucket: Dictionary = _unit_bucket(path, _color_for(kind, team, node_type))
-	var origin: Vector3 = Vector3(
-		tile_x, _ground_level(tile_x, tile_y), tile_y) + (bucket["offset"] as Vector3)
+	var ground := _ground_level(tile_x, tile_y)
+	var origin: Vector3 = Vector3(tile_x, ground, tile_y) + (bucket["offset"] as Vector3)
 	bucket["transforms"].append(Transform3D(Basis(), origin))
+	_entity_positions[id] = Vector3(tile_x, ground, tile_y)
 
 
 func _unit_bucket(path: String, color: Color) -> Dictionary:
@@ -443,3 +462,104 @@ func _refresh_fog(bridge: GameBridge) -> void:
 				mesh.set_instance_color(index, FOG_EXPLORED_COLOR)
 			_:
 				mesh.set_instance_color(index, FOG_UNEXPLORED_COLOR)
+
+func set_selection(ids: Array) -> void:
+	_selected_ids = ids.duplicate()
+	_refresh_selection_rings()
+
+
+func ground_level_at(tile_x: float, tile_y: float) -> float:
+	return _ground_level(tile_x, tile_y)
+
+
+func _ensure_selection_mesh() -> void:
+	if _selection_mesh != null:
+		return
+	var torus := TorusMesh.new()
+	torus.inner_radius = 0.26
+	torus.outer_radius = 0.4
+	torus.rings = 20
+	torus.ring_segments = 8
+	var mesh := MultiMesh.new()
+	mesh.transform_format = MultiMesh.TRANSFORM_3D
+	mesh.mesh = torus
+	_selection_mesh = MultiMeshInstance3D.new()
+	_selection_mesh.name = "SelectionRings"
+	_selection_mesh.multimesh = mesh
+	_selection_mesh.material_override = _flat_material(Color(0.35, 1.0, 0.4, 0.85))
+	_selection_mesh.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	add_child(_selection_mesh)
+
+
+func _refresh_selection_rings() -> void:
+	_ensure_selection_mesh()
+	var transforms: Array[Transform3D] = []
+	for id in _selected_ids:
+		if not _entity_positions.has(id):
+			continue
+		var position: Vector3 = _entity_positions[id]
+		transforms.append(Transform3D(Basis(), Vector3(position.x, position.y + 0.03, position.z)))
+	var mesh := _selection_mesh.multimesh
+	mesh.instance_count = transforms.size()
+	_selection_mesh.set_visible(not transforms.is_empty())
+	for index in transforms.size():
+		mesh.set_instance_transform(index, transforms[index])
+
+
+func show_placement(building_type: int, cell_x: int, cell_y: int, is_valid: bool) -> void:
+	if cell_x < 0 or cell_y < 0:
+		hide_placement()
+		return
+	_ensure_placement_mesh()
+	var size_width := maxi(1, _bridge.BuildingWidth(building_type))
+	var size_height := maxi(1, _bridge.BuildingHeight(building_type))
+	var ground := _ground_level_rect(float(cell_x), float(cell_y), size_width, size_height)
+	_placement_mesh.position = Vector3(
+		cell_x + size_width * 0.5, ground + 0.5, cell_y + size_height * 0.5)
+	_placement_mesh.scale = Vector3(size_width, 1.0, size_height)
+	_placement_material.albedo_color = Color(0.35, 1.0, 0.4, 0.35) if is_valid else Color(1.0, 0.3, 0.25, 0.35)
+	_placement_mesh.show()
+
+
+func hide_placement() -> void:
+	if _placement_mesh != null:
+		_placement_mesh.hide()
+
+
+func _ensure_placement_mesh() -> void:
+	if _placement_mesh != null:
+		return
+	var box := BoxMesh.new()
+	box.size = Vector3.ONE
+	_placement_material = _flat_material(Color(0.35, 1.0, 0.4, 0.35))
+	_placement_mesh = MeshInstance3D.new()
+	_placement_mesh.name = "PlacementPreview"
+	_placement_mesh.mesh = box
+	_placement_mesh.material_override = _placement_material
+	_placement_mesh.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	add_child(_placement_mesh)
+
+
+func show_order_marker(cell_x: int, cell_y: int, color: Color) -> Node3D:
+	var marker := Node3D.new()
+	var visual := MeshInstance3D.new()
+	var quad := QuadMesh.new()
+	quad.size = Vector2(0.9, 0.9)
+	visual.mesh = quad
+	visual.rotation_degrees.x = -90.0
+	visual.material_override = _flat_material(color)
+	visual.cast_shadow = GeometryInstance3D.SHADOW_CASTING_SETTING_OFF
+	marker.add_child(visual)
+	marker.position = Vector3(
+		cell_x + 0.5, _ground_level(cell_x + 0.5, cell_y + 0.5) + 0.06, cell_y + 0.5)
+	add_child(marker)
+	return marker
+
+
+func _flat_material(color: Color) -> StandardMaterial3D:
+	var material := StandardMaterial3D.new()
+	material.albedo_color = color
+	material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	material.cull_mode = BaseMaterial3D.CULL_DISABLED
+	return material
