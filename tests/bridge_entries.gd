@@ -11,6 +11,7 @@ func run() -> void:
 	_move_command_is_accepted()
 	_train_command_spawns_unit()
 	_market_endpoints_reach_lockstep()
+	_market_buy_spends_gold_and_moves_rate()
 	_tribute_endpoint_transfers_resource()
 
 
@@ -69,7 +70,7 @@ func _market_endpoints_reach_lockstep() -> void:
 	var bridge := GameBridge.new()
 	add_child(bridge)
 	bridge.StartBuildingShowcase()
-	check_true(bridge.HasCompletedMarket(), "showcase completes a market for the view team")
+	check_true(bridge.HasCompletedMarket, "showcase completes a market for the view team")
 	var player := _my_player(bridge)
 	check_true(player.has("market_wood"), "player state exposes market rates")
 	check_true(not bridge.CanMarketBuy(0, 100), "buying without gold is blocked")
@@ -82,6 +83,29 @@ func _market_endpoints_reach_lockstep() -> void:
 	player = _my_player(bridge)
 	check_true(int(player["wood"]) < wood_before, "market sell removes wood")
 	check_true(int(player["gold"]) > gold_before, "market sell pays gold")
+	bridge.queue_free()
+
+
+func _market_buy_spends_gold_and_moves_rate() -> void:
+	var bridge := GameBridge.new()
+	add_child(bridge)
+	bridge.StartBuildingShowcase()
+	check_true(bridge.HasCompletedMarket, "showcase completes a market for buy tests")
+	bridge.MarketSell(0, 200)
+	bridge.FastForward(6)
+	var gold_funded: int = _my_player(bridge)["gold"]
+	check_true(gold_funded > 0, "selling wood funds gold for buying")
+	var food_rate_before: int = bridge.MarketBaseRate(1)
+	var food_before: int = _my_player(bridge)["food"]
+	check_true(bridge.CanMarketBuy(1, 100), "buying is allowed with sufficient gold")
+	var before: int = bridge.AcceptedCommands
+	bridge.MarketBuy(1, 100)
+	bridge.FastForward(6)
+	check_true(bridge.AcceptedCommands > before, "market buy reaches the lockstep queue")
+	var player := _my_player(bridge)
+	check_true(int(player["gold"]) < gold_funded, "market buy spends gold")
+	check_true(int(player["food"]) == food_before + 100, "market buy adds the bought resource")
+	check_true(bridge.MarketBaseRate(1) > food_rate_before, "market buy raises the resource rate")
 	bridge.queue_free()
 
 
