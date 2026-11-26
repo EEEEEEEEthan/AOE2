@@ -43,6 +43,7 @@ public static class CombatSystem
         }
         foreach (long id in dead)
         {
+            PopulationSystem.Release(world, id);
             world.Despawn(id);
         }
         return dead.Count;
