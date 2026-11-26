@@ -53,6 +53,9 @@ func setup(value: GameBridge) -> void:
 	hud.age_up_requested.connect(_age_up)
 	hud.stop_requested.connect(_stop_units)
 	hud.placement_cancelled.connect(_cancel_placement)
+	hud.market_buy_requested.connect(_market_buy)
+	hud.market_sell_requested.connect(_market_sell)
+	hud.tribute_requested.connect(_tribute)
 	minimap.setup(camera)
 	minimap.set_map_size(bridge.GridWidth, bridge.GridHeight)
 	minimap.jump_requested.connect(_jump_to)
@@ -477,6 +480,21 @@ func _stop_units() -> void:
 		return
 	bridge.StopUnits(PackedInt64Array(ids))
 	hud.set_notice("已下达停止指令")
+
+
+func _market_buy(resource: int, amount: int) -> void:
+	bridge.MarketBuy(resource, amount)
+	hud.set_notice("已下达买入指令")
+
+
+func _market_sell(resource: int, amount: int) -> void:
+	bridge.MarketSell(resource, amount)
+	hud.set_notice("已下达卖出指令")
+
+
+func _tribute(target: int, resource: int, amount: int) -> void:
+	bridge.Tribute(target, resource, amount)
+	hud.set_notice("已下达进贡指令")
 
 
 func _jump_to(world_position: Vector2) -> void:

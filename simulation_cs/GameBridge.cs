@@ -210,6 +210,10 @@ public partial class GameBridge : Node
                 { "food", player.Food },
                 { "gold", player.Gold },
                 { "stone", player.Stone },
+                { "market_wood", player.MarketWood },
+                { "market_food", player.MarketFood },
+                { "market_gold", player.MarketGold },
+                { "market_stone", player.MarketStone },
                 { "population_used", player.PopulationUsed },
                 { "population_cap", player.PopulationCap },
             });
@@ -322,6 +326,92 @@ public partial class GameBridge : Node
         {
             new AoeSim.LockstepCommand(
                 MyTeam, AoeSim.LockstepCommand.KindTrain, building, 0, 0, -1, -1, -1, 0, 0, unitType),
+        });
+    }
+
+    public bool HasCompletedMarket() =>
+        _session != null && AoeSim.MarketSystem.HasCompletedMarket(_session.Server.Sim.World, MyTeam);
+
+    public long MarketBaseRate(long resource) =>
+        _session == null
+            ? AoeSim.MarketSystem.BaseRate
+            : AoeSim.MarketSystem.Rate(_session.Server.Sim.World, MyTeam, resource);
+
+    public long MarketBuyRate(long resource) => MarketBaseRate(resource) + AoeSim.MarketSystem.BuySpread;
+
+    public long MarketSellRate(long resource) => MarketBaseRate(resource) - AoeSim.MarketSystem.SellSpread;
+
+    public bool CanMarketBuy(long resource, long amount)
+    {
+        if (_session == null || amount <= 0 || amount > AoeSim.MarketSystem.MaxTradeAmount)
+        {
+            return false;
+        }
+        AoeSim.GameSim sim = _session.Server.Sim;
+        if (!AoeSim.MarketSystem.HasCompletedMarket(sim.World, MyTeam))
+        {
+            return false;
+        }
+        long cost = System.Math.Max(1, AoeSim.MarketSystem.BuyCost(sim.World, MyTeam, resource, amount));
+        return sim.Resource(MyTeam, AoeSim.GameSim.ResourceGold) >= cost;
+    }
+
+    public bool CanMarketSell(long resource, long amount)
+    {
+        if (_session == null || amount <= 0 || amount > AoeSim.MarketSystem.MaxTradeAmount)
+        {
+            return false;
+        }
+        AoeSim.GameSim sim = _session.Server.Sim;
+        if (!AoeSim.MarketSystem.HasCompletedMarket(sim.World, MyTeam))
+        {
+            return false;
+        }
+        if (sim.Resource(MyTeam, resource) < amount)
+        {
+            return false;
+        }
+        return AoeSim.MarketSystem.SellRevenue(sim.World, MyTeam, resource, amount) > 0;
+    }
+
+    public bool CanTribute(long target, long resource, long amount)
+    {
+        if (_session == null || amount <= 0 || amount > AoeSim.MarketSystem.MaxTradeAmount)
+        {
+            return false;
+        }
+        AoeSim.GameSim sim = _session.Server.Sim;
+        if (target < 0 || target >= sim.Lockstep.PlayerCount || target == MyTeam)
+        {
+            return false;
+        }
+        return sim.Resource(MyTeam, resource) >= amount;
+    }
+
+    public void MarketBuy(long resource, long amount)
+    {
+        SubmitCommands(new[]
+        {
+            new AoeSim.LockstepCommand(
+                MyTeam, AoeSim.LockstepCommand.KindMarketBuy, -1, amount, 0, -1, -1, -1, 0, 0, resource),
+        });
+    }
+
+    public void MarketSell(long resource, long amount)
+    {
+        SubmitCommands(new[]
+        {
+            new AoeSim.LockstepCommand(
+                MyTeam, AoeSim.LockstepCommand.KindMarketSell, -1, amount, 0, -1, -1, -1, 0, 0, resource),
+        });
+    }
+
+    public void Tribute(long target, long resource, long amount)
+    {
+        SubmitCommands(new[]
+        {
+            new AoeSim.LockstepCommand(
+                MyTeam, AoeSim.LockstepCommand.KindTribute, -1, resource, amount, -1, -1, -1, 0, 0, target),
         });
     }
 
