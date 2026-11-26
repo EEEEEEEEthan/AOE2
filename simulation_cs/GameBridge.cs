@@ -14,6 +14,7 @@ public partial class GameBridge : Node
     private AoeSim.ReplaySession? _replay;
     private AoeSim.ReplayData? _replayData;
     private AoeSim.DedicatedServer? _dedicated;
+    private MultiplayerSession? _multiplayer;
     private AoeSim.NavGrid? _grid;
     private AoeSim.TerrainGrid? _terrain;
     private double _accumulator;
@@ -24,15 +25,21 @@ public partial class GameBridge : Node
     private double _replaySpeed = 1.0;
     private string _savedReplayPath = "";
 
-    public bool HasSession => _session != null;
+    public bool HasSession => _session != null || _multiplayer != null;
 
     public bool IsReplay => _isReplay;
+
+    public bool IsRemote => _multiplayer != null;
 
     public string LastReplayError { get; private set; } = "";
 
     public string LastMapError { get; private set; } = "";
 
-    public int MyTeam => (int)(_session?.Server.ViewTeam ?? 0);
+    public int MyTeam => _multiplayer != null
+        ? (int)_multiplayer.MySeat
+        : (int)(_session?.Server.ViewTeam ?? 0);
+
+    private AoeSim.SimulationClient? ClientState => _multiplayer?.Client?.State ?? _session?.Client;
 
     public override void _ExitTree()
     {
@@ -41,6 +48,10 @@ public partial class GameBridge : Node
     }
 
     public void StartLocalMatch() => StartGeneratedMatch();
+
+    /// <summary>不带文明选择的入口：保持旧调用端的默认文明路径（civIds 为 null，不写入文明列）。</summary>
+    public void StartGeneratedMatch(long seed, int playerCount, AoeSim.MapType mapType, int aiDifficulty) =>
+        StartGeneratedMatch(seed, playerCount, mapType, aiDifficulty, null);
 
     public void StartLocalDemo()
     {
@@ -283,8 +294,38 @@ public partial class GameBridge : Node
         GD.Print($"dedicated server listening on {port}");
     }
 
+    /// <summary>接管大厅里已经连上的客户端：对局状态只来自服务器快照，本机不再跑模拟。</summary>
+    public void AdoptMultiplayer(MultiplayerSession session)
+    {
+        StopPlayback();
+        _multiplayer = session;
+        AddChild(session);
+        _session = null;
+        _accumulator = 0.0;
+        ResetBatchCache();
+        PrepareRemoteWorld();
+    }
+
+    /// <summary>对局开始后静态地图才下发，地形与空导航网格在此补齐，供渲染与放置预览使用。</summary>
+    private void PrepareRemoteWorld()
+    {
+        AoeSim.StaticMapFrame? map = _multiplayer?.Client?.State.Map;
+        if (map == null || _terrain != null)
+        {
+            return;
+        }
+        _terrain = AoeSim.TerrainGrid.FromArrays(
+            (int)map.Width, (int)map.Height, map.TerrainTypes, map.TerrainVertexHeights);
+        _grid = new AoeSim.NavGrid((int)map.Width, (int)map.Height);
+    }
+
     public void Step(double delta)
     {
+        if (_multiplayer != null)
+        {
+            PrepareRemoteWorld();
+            return;
+        }
         if (_session == null)
         {
             return;
@@ -517,13 +558,13 @@ public partial class GameBridge : Node
         return _replay.ChecksumMismatch ? "校验和不一致" : "校验和一致";
     }
 
-    public long ClientTick() => _session?.Client.Tick ?? -1;    public long MatchPhase() => _session?.Client.Latest?.Phase ?? -1;
+    public long ClientTick() => ClientState?.Tick ?? -1;    public long MatchPhase() => ClientState?.Latest?.Phase ?? -1;
 
-    public long MatchWinnerTeam() => _session?.Client.Latest?.WinnerTeam ?? -1;
+    public long MatchWinnerTeam() => ClientState?.Latest?.WinnerTeam ?? -1;
 
-    public long MatchReason() => _session?.Client.Latest?.Reason ?? AoeSim.VictoryReason.None;
+    public long MatchReason() => ClientState?.Latest?.Reason ?? AoeSim.VictoryReason.None;
 
-    public long MatchEndTick() => _session?.Client.Latest?.EndTick ?? -1;
+    public long MatchEndTick() => ClientState?.Latest?.EndTick ?? -1;
 
     public bool MatchEnded() => MatchPhase() == AoeSim.MatchState.PhaseEnded;
 
@@ -565,7 +606,7 @@ public partial class GameBridge : Node
     public Godot.Collections.Array<Godot.Collections.Dictionary> PlayerStates()
     {
         var result = new Godot.Collections.Array<Godot.Collections.Dictionary>();
-        AoeSim.SnapshotFrame? frame = _session?.Client.Latest;
+        AoeSim.SnapshotFrame? frame = ClientState?.Latest;
         if (frame == null)
         {
             return result;
@@ -602,14 +643,22 @@ public partial class GameBridge : Node
 
     private void SubmitCommands(AoeSim.LockstepCommand[] commands)
     {
-        if (_session == null || commands.Length == 0)
+        if (commands.Length == 0)
         {
             return;
         }
-        int player = MyTeam;
+        if (_multiplayer != null)
+        {
+            _multiplayer.Client?.SubmitCommands(commands);
+            return;
+        }
+        if (_session == null)
+        {
+            return;
+        }
         var frame = new AoeSim.CommandFrame
         {
-            Player = player,
+            Player = MyTeam,
             Turn = _session.Server.Turn,
             Commands = commands,
         };
@@ -731,6 +780,10 @@ public partial class GameBridge : Node
 
     public bool CanTransportUnload(long ship)
     {
+        if (_multiplayer != null)
+        {
+            return true;
+        }
         if (_session == null || _grid == null || _terrain == null)
         {
             return false;
@@ -741,6 +794,10 @@ public partial class GameBridge : Node
 
     public bool CanTransportLoad(long unit, long ship)
     {
+        if (_multiplayer != null)
+        {
+            return true;
+        }
         if (_session == null || _grid == null || _terrain == null)
         {
             return false;
@@ -749,13 +806,52 @@ public partial class GameBridge : Node
             _session.Server.Sim.World, _grid, _terrain, unit, ship);
     }
 
-    public bool HasCompletedMarket() =>
-        _session != null && AoeSim.MarketSystem.HasCompletedMarket(_session.Server.Sim.World, MyTeam);
+    public bool HasCompletedMarket()
+    {
+        if (_multiplayer != null)
+        {
+            AoeSim.SnapshotFrame? frame = ClientState?.Latest;
+            if (frame == null)
+            {
+                return false;
+            }
+            foreach (AoeSim.EntitySnapshot entity in frame.Entities)
+            {
+                if (entity.Team == MyTeam
+                    && entity.Kind == AoeSim.EntityKind.Building
+                    && entity.BuildingType == AoeSim.BuildingTypes.Market
+                    && entity.BuildingState == AoeSim.BuildingSystem.StateComplete)
+                {
+                    return true;
+                }
+            }
+            return false;
+        }
+        return _session != null
+            && AoeSim.MarketSystem.HasCompletedMarket(_session.Server.Sim.World, MyTeam);
+    }
 
-    public long MarketBaseRate(long resource) =>
-        _session == null
+    public long MarketBaseRate(long resource)
+    {
+        if (_multiplayer != null)
+        {
+            AoeSim.PlayerSnapshot? player = MyPlayerSnapshot();
+            if (player == null)
+            {
+                return AoeSim.MarketSystem.BaseRate;
+            }
+            return resource switch
+            {
+                AoeSim.GameSim.ResourceWood => player.Value.MarketWood,
+                AoeSim.GameSim.ResourceFood => player.Value.MarketFood,
+                AoeSim.GameSim.ResourceGold => player.Value.MarketGold,
+                _ => player.Value.MarketStone,
+            };
+        }
+        return _session == null
             ? AoeSim.MarketSystem.BaseRate
             : AoeSim.MarketSystem.Rate(_session.Server.Sim.World, MyTeam, resource);
+    }
 
     public long MarketBuyRate(long resource) => MarketBaseRate(resource) + AoeSim.MarketSystem.BuySpread;
 
@@ -763,7 +859,22 @@ public partial class GameBridge : Node
 
     public bool CanMarketBuy(long resource, long amount)
     {
-        if (_session == null || amount <= 0 || amount > AoeSim.MarketSystem.MaxTradeAmount)
+        if (amount <= 0 || amount > AoeSim.MarketSystem.MaxTradeAmount)
+        {
+            return false;
+        }
+        if (_multiplayer != null)
+        {
+            AoeSim.PlayerSnapshot? player = MyPlayerSnapshot();
+            if (player == null || !HasCompletedMarket())
+            {
+                return false;
+            }
+            long remoteCost = System.Math.Max(
+                1, MarketBuyRate(resource) * amount / 100);
+            return player.Value.Gold >= remoteCost;
+        }
+        if (_session == null)
         {
             return false;
         }
@@ -778,7 +889,17 @@ public partial class GameBridge : Node
 
     public bool CanMarketSell(long resource, long amount)
     {
-        if (_session == null || amount <= 0 || amount > AoeSim.MarketSystem.MaxTradeAmount)
+        if (amount <= 0 || amount > AoeSim.MarketSystem.MaxTradeAmount)
+        {
+            return false;
+        }
+        if (_multiplayer != null)
+        {
+            AoeSim.PlayerSnapshot? player = MyPlayerSnapshot();
+            return player != null && HasCompletedMarket()
+                && MyResource(player.Value, resource) >= amount;
+        }
+        if (_session == null)
         {
             return false;
         }
@@ -796,7 +917,17 @@ public partial class GameBridge : Node
 
     public bool CanTribute(long target, long resource, long amount)
     {
-        if (_session == null || amount <= 0 || amount > AoeSim.MarketSystem.MaxTradeAmount)
+        if (amount <= 0 || amount > AoeSim.MarketSystem.MaxTradeAmount)
+        {
+            return false;
+        }
+        if (_multiplayer != null)
+        {
+            AoeSim.PlayerSnapshot? player = MyPlayerSnapshot();
+            return player != null && target != MyTeam
+                && MyResource(player.Value, resource) >= amount;
+        }
+        if (_session == null)
         {
             return false;
         }
@@ -807,6 +938,24 @@ public partial class GameBridge : Node
         }
         return sim.Resource(MyTeam, resource) >= amount;
     }
+
+    private AoeSim.PlayerSnapshot? MyPlayerSnapshot()
+    {
+        AoeSim.SnapshotFrame? frame = ClientState?.Latest;
+        if (frame == null || MyTeam < 0 || MyTeam >= frame.Players.Length)
+        {
+            return null;
+        }
+        return frame.Players[MyTeam];
+    }
+
+    private static long MyResource(in AoeSim.PlayerSnapshot player, long resource) => resource switch
+    {
+        AoeSim.GameSim.ResourceWood => player.Wood,
+        AoeSim.GameSim.ResourceFood => player.Food,
+        AoeSim.GameSim.ResourceGold => player.Gold,
+        _ => player.Stone,
+    };
 
     public void MarketBuy(long resource, long amount)
     {
@@ -841,7 +990,7 @@ public partial class GameBridge : Node
         && AoeSim.BuildingSystem.CanPlace(_grid, _terrain, type, (int)cellX, (int)cellY);
 
     public bool CanTrainBuilding(long building, long unitType) =>
-        _session != null && _session.Server.Sim.CanTrain(building, MyTeam, unitType);
+        _multiplayer != null || (_session != null && _session.Server.Sim.CanTrain(building, MyTeam, unitType));
 
     public Godot.Collections.Array<Godot.Collections.Dictionary> BuildingOptions()
     {
@@ -915,7 +1064,7 @@ public partial class GameBridge : Node
 
     public void FastForward(int maxTicks)
     {
-        if (_session == null)
+        if (_multiplayer != null || _session == null)
         {
             return;
         }
@@ -939,13 +1088,13 @@ public partial class GameBridge : Node
 
     public int GridHeight => _grid?.Height ?? 0;
 
-    public int VisionWidth => (int)(_session?.Client.Latest?.VisionWidth ?? 0);
+    public int VisionWidth => (int)(ClientState?.Latest?.VisionWidth ?? 0);
 
-    public int VisionHeight => (int)(_session?.Client.Latest?.VisionHeight ?? 0);
+    public int VisionHeight => (int)(ClientState?.Latest?.VisionHeight ?? 0);
 
     public byte[] VisionStates()
     {
-        AoeSim.SnapshotFrame? frame = _session?.Client.Latest;
+        AoeSim.SnapshotFrame? frame = ClientState?.Latest;
         if (frame == null)
         {
             return System.Array.Empty<byte>();
@@ -1031,7 +1180,7 @@ public partial class GameBridge : Node
     /// <summary>预览/截图专用：把观察方视野整张揭示后推一帧快照，便于一次看到完整地图。</summary>
     public void RevealAllVision()
     {
-        if (_session == null || _grid == null)
+        if (_multiplayer != null || _session == null || _grid == null)
         {
             return;
         }
@@ -1050,7 +1199,7 @@ public partial class GameBridge : Node
     public Godot.Collections.Array<Godot.Collections.Dictionary> Snapshot()
     {
         var result = new Godot.Collections.Array<Godot.Collections.Dictionary>();
-        AoeSim.SnapshotFrame? frame = _session?.Client.Latest;
+        AoeSim.SnapshotFrame? frame = ClientState?.Latest;
         if (frame == null)
         {
             return result;
@@ -1108,7 +1257,7 @@ public partial class GameBridge : Node
     /// </summary>
     public Godot.Collections.Dictionary SnapshotBatch()
     {
-        AoeSim.SnapshotFrame? frame = _session?.Client.Latest;
+        AoeSim.SnapshotFrame? frame = ClientState?.Latest;
         if (frame == null)
         {
             return new Godot.Collections.Dictionary();
@@ -1219,4 +1368,3 @@ public partial class GameBridge : Node
         return _batch;
     }
 }
-

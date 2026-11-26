@@ -14,6 +14,7 @@ public static class NetFrameType
     public const byte Snapshot = 1;
     public const byte StaticMap = 2;
     public const byte Welcome = 3;
+    public const byte Lobby = 4;
 }
 
 /// <summary>长度前缀分帧：[type:1][len:4 LE][payload:len]。</summary>
@@ -91,11 +92,16 @@ public sealed class DedicatedServer
             Tcp = client;
             Stream = client.GetStream();
             Team = team;
+            Name = $"玩家 {team + 1}";
+            Color = team;
         }
 
         public TcpClient Tcp { get; }
         public NetworkStream Stream { get; }
-        public long Team { get; }
+        public long Team { get; set; }
+        public string Name { get; set; }
+        public long Color { get; set; }
+        public bool Ready { get; set; }
         public SnapshotDelta Delta { get; } = new();
         public volatile bool Alive = true;
         public Thread? Reader { get; set; }
@@ -151,8 +157,9 @@ public sealed class DedicatedServer
     }
 
     private readonly TcpListener _listener;
-    private readonly SimulationServer _server;
-    private readonly byte[] _staticMapPayload;
+    private SimulationServer? _server = null;
+    private byte[]? _staticMapPayload;
+    private readonly LobbyRules? _lobbyRules = null;
     private readonly int _ticksPerSecond;
     private readonly int _snapshotIntervalTicks;
     private readonly object _clientsGate = new();
@@ -161,12 +168,23 @@ public sealed class DedicatedServer
     private Thread? _acceptThread;
     private Thread? _simThread;
     private volatile bool _running;
+    private volatile bool _matchRunning;
 
     public DedicatedServer(int port, GameSim sim, int ticksPerSecond = 30, int snapshotIntervalTicks = 2)
     {
         _listener = new TcpListener(IPAddress.Any, port);
         _server = new SimulationServer(sim);
         _staticMapPayload = StaticMapFrame.FromTerrain(sim.Terrain).Encode();
+        _ticksPerSecond = Math.Max(1, ticksPerSecond);
+        _snapshotIntervalTicks = Math.Max(1, snapshotIntervalTicks);
+        _matchRunning = true;
+    }
+
+    /// <summary>带大厅的模式：先收人、准备、修好房间配置，房主开始后才构建对局。</summary>
+    public DedicatedServer(int port, LobbyRules lobbyRules, int ticksPerSecond = 30, int snapshotIntervalTicks = 2)
+    {
+        _listener = new TcpListener(IPAddress.Any, port);
+        _lobbyRules = lobbyRules;
         _ticksPerSecond = Math.Max(1, ticksPerSecond);
         _snapshotIntervalTicks = Math.Max(1, snapshotIntervalTicks);
     }
@@ -187,6 +205,14 @@ public sealed class DedicatedServer
         Port = ((IPEndPoint)_listener.LocalEndpoint).Port;
         _acceptThread = new Thread(AcceptLoop) { IsBackground = true };
         _acceptThread.Start();
+        if (_server != null)
+        {
+            StartSimulationLoop();
+        }
+    }
+
+    private void StartSimulationLoop()
+    {
         _simThread = new Thread(SimulateLoop) { IsBackground = true };
         _simThread.Start();
     }
@@ -243,16 +269,31 @@ public sealed class DedicatedServer
         client.NoDelay = true;
         if (!TryReserveTeam(out long team))
         {
-            // 已满员：不再分配可复用 team，避免第三个连接冒充已有玩家。
+            // 已满员：先回一条明确错误再断开，避免客户端只看到无声掉线。
+            try
+            {
+                NetFraming.WriteFrame(
+                    client.GetStream(),
+                    NetFrameType.Lobby,
+                    new LobbyMessage { Kind = LobbyMessage.KindError, Error = "房间已满" }.Encode());
+            }
+            catch (Exception)
+            {
+                // 对端已经断开时无需再提示。
+            }
             client.Close();
             return;
         }
         var channel = new ClientChannel(client, team);
+        bool sentMap = false;
         try
         {
-            // 握手必须先于任何快照写入，客户端据此知道自己观察哪一方，也据此提交本回合指令。
             NetFraming.WriteFrame(channel.Stream, NetFrameType.Welcome, new WelcomeFrame { ViewerTeam = team }.Encode());
-            NetFraming.WriteFrame(channel.Stream, NetFrameType.StaticMap, _staticMapPayload);
+            if (!IsLobby)
+            {
+                NetFraming.WriteFrame(channel.Stream, NetFrameType.StaticMap, _staticMapPayload!);
+                sentMap = true;
+            }
         }
         catch (Exception)
         {
@@ -267,15 +308,33 @@ public sealed class DedicatedServer
         lock (_clientsGate)
         {
             _clients.Add(channel);
+            if (!sentMap && _server != null && _staticMapPayload != null)
+            {
+                // 与开局并发接入的客户端：开局循环还没把它算进去，这里补发地图与开始通知。
+                channel.Enqueue(
+                    NetFrameType.StaticMap,
+                    _staticMapPayload);
+                channel.Enqueue(NetFrameType.Lobby, new LobbyMessage
+                {
+                    Kind = LobbyMessage.KindStartMatch,
+                    MapName = _lobbyRules?.MapName ?? "",
+                    Started = true,
+                    HostSeat = 0,
+                }.Encode());
+            }
         }
+        BroadcastRoomState();
     }
+
+    private bool IsLobby => _lobbyRules != null && !_matchRunning;
 
     /// <summary>为连接分配一个空闲玩家位；满员时返回 false。</summary>
     private bool TryReserveTeam(out long team)
     {
+        long capacity = _server?.Sim.Lockstep.PlayerCount ?? _lobbyRules!.MaxPlayers;
         lock (_clientsGate)
         {
-            for (long candidate = 0; candidate < _server.Sim.Lockstep.PlayerCount; candidate++)
+            for (long candidate = 0; candidate < capacity; candidate++)
             {
                 if (!_assignedTeams.Contains(candidate))
                 {
@@ -310,7 +369,14 @@ public sealed class DedicatedServer
                 if (frameType == NetFrameType.Command)
                 {
                     // 指令来源以连接分配的 team 为准，客户端自报的 Player 不可信。
-                    _server.Enqueue(CommandFrame.Decode(payload), channel.Team);
+                    if (_server != null)
+                    {
+                        _server.Enqueue(CommandFrame.Decode(payload), channel.Team);
+                    }
+                }
+                else if (frameType == NetFrameType.Lobby)
+                {
+                    HandleLobbyMessage(channel, LobbyMessage.Decode(payload));
                 }
             }
         }
@@ -329,6 +395,7 @@ public sealed class DedicatedServer
             {
                 // 已关闭。
             }
+            RemoveDeadClients();
         }
     }
 
@@ -361,12 +428,17 @@ public sealed class DedicatedServer
 
     private void SimulateLoop()
     {
+        SimulationServer? server = _server;
+        if (server == null)
+        {
+            return;
+        }
         int tickMilliseconds = 1000 / _ticksPerSecond;
         int ticksSinceSnapshot = _snapshotIntervalTicks;
         while (_running)
         {
             long deadline = Environment.TickCount64 + tickMilliseconds;
-            _server.Step();
+            server.Step();
             ticksSinceSnapshot += 1;
             List<ClientChannel> channels = SnapshotClients();
             bool removed = false;
@@ -386,8 +458,8 @@ public sealed class DedicatedServer
                     {
                         continue;
                     }
-                    full ??= _server.SnapshotFull();
-                    SnapshotFrame snapshot = _server.SnapshotFor(full, channel.Team);
+                    full ??= server.SnapshotFull();
+                    SnapshotFrame snapshot = server.SnapshotFor(full, channel.Team);
                     SnapshotFrame outgoing = channel.Delta.Build(snapshot);
                     if (!channel.Enqueue(NetFrameType.Snapshot, outgoing.Encode()))
                     {
@@ -419,6 +491,7 @@ public sealed class DedicatedServer
     private void RemoveDeadClients()
     {
         List<ClientChannel> dead = new();
+        bool removed;
         lock (_clientsGate)
         {
             for (int index = _clients.Count - 1; index >= 0; index--)
@@ -429,11 +502,181 @@ public sealed class DedicatedServer
                     _clients.RemoveAt(index);
                 }
             }
+            removed = dead.Count > 0;
+            if (removed)
+            {
+                foreach (ClientChannel channel in dead)
+                {
+                    _assignedTeams.Remove(channel.Team);
+                }
+            }
+            if (removed && IsLobby)
+            {
+                CompactLobbySeats();
+            }
         }
         foreach (ClientChannel channel in dead)
         {
             channel.Close();
-            ReleaseTeam(channel.Team);
+        }
+        if (removed)
+        {
+            BroadcastRoomState();
+        }
+    }
+
+    /// <summary>大厅里有人离开后把座位压密：空位不留在中间，剩余玩家依次前移并领到新的观察方编号。</summary>
+    private void CompactLobbySeats()
+    {
+        _clients.Sort((left, right) => left.Team.CompareTo(right.Team));
+        _assignedTeams.Clear();
+        for (int index = 0; index < _clients.Count; index++)
+        {
+            ClientChannel channel = _clients[index];
+            _assignedTeams.Add(index);
+            if (channel.Team == index)
+            {
+                continue;
+            }
+            channel.Team = index;
+            channel.Enqueue(
+                NetFrameType.Welcome,
+                new WelcomeFrame { ViewerTeam = index }.Encode());
+        }
+    }
+
+    private void HandleLobbyMessage(ClientChannel channel, LobbyMessage message)
+    {
+        lock (_clientsGate)
+        {
+            if (_matchRunning || IsLobby == false)
+            {
+                SendLobbyError(channel, "对局已经开始");
+                return;
+            }
+            if (message.Kind == LobbyMessage.KindJoin || message.Kind == LobbyMessage.KindProfile)
+            {
+                string name = message.Name.Trim();
+                if (name.Length > 0)
+                {
+                    channel.Name = name.Length > 20 ? name.Substring(0, 20) : name;
+                }
+                channel.Color = System.Math.Clamp(message.Color, 0, 7);
+            }
+            else if (message.Kind == LobbyMessage.KindReady)
+            {
+                channel.Ready = message.Ready;
+            }
+            else if (message.Kind == LobbyMessage.KindStart)
+            {
+                if (channel.Team != 0)
+                {
+                    SendLobbyError(channel, "只有房主可以开始对局");
+                    return;
+                }
+                if (!TryStartMatch(out string error))
+                {
+                    SendLobbyError(channel, error);
+                    return;
+                }
+            }
+            else
+            {
+                SendLobbyError(channel, "未知的大厅请求");
+                return;
+            }
+        }
+        BroadcastRoomState();
+    }
+
+    private bool TryStartMatch(out string error)
+    {
+        if (_clients.Count == 0)
+        {
+            error = "房间里还没有玩家";
+            return false;
+        }
+        foreach (ClientChannel channel in _clients)
+        {
+            if (channel.Team != 0 && !channel.Ready)
+            {
+                error = $"等待 {channel.Name} 准备";
+                return false;
+            }
+        }
+        GameSim sim;
+        try
+        {
+            sim = MapSetup.BuildGeneratedMatch(
+                MapType.Arabia, _lobbyRules!.Seed, _clients.Count);
+        }
+        catch (System.Exception exception)
+        {
+            error = $"开局失败：{exception.Message}";
+            return false;
+        }
+        _server = new SimulationServer(sim);
+        _staticMapPayload = StaticMapFrame.FromTerrain(sim.Terrain).Encode();
+        _matchRunning = true;
+        var started = new LobbyMessage
+        {
+            Kind = LobbyMessage.KindStartMatch,
+            MapName = _lobbyRules.MapName,
+            Started = true,
+            HostSeat = 0,
+        };
+        List<ClientChannel> clients = new(_clients);
+        clients.Sort((left, right) => left.Team.CompareTo(right.Team));
+        foreach (ClientChannel channel in clients)
+        {
+            channel.Enqueue(
+                NetFrameType.Welcome,
+                new WelcomeFrame { ViewerTeam = channel.Team }.Encode());
+            channel.Enqueue(NetFrameType.StaticMap, _staticMapPayload!);
+            channel.Enqueue(NetFrameType.Lobby, started.Encode());
+        }
+        StartSimulationLoop();
+        error = "";
+        return true;
+    }
+
+    private void SendLobbyError(ClientChannel channel, string error)
+    {
+        channel.Enqueue(NetFrameType.Lobby, new LobbyMessage
+        {
+            Kind = LobbyMessage.KindError,
+            Error = error,
+        }.Encode());
+    }
+
+    private void BroadcastRoomState()
+    {
+        lock (_clientsGate)
+        {
+            if (_clients.Count == 0)
+            {
+                return;
+            }
+            List<ClientChannel> clients = new(_clients);
+            clients.Sort((left, right) => left.Team.CompareTo(right.Team));
+            var slots = new LobbySlot[clients.Count];
+            for (int index = 0; index < clients.Count; index++)
+            {
+                ClientChannel channel = clients[index];
+                slots[index] = new LobbySlot(channel.Team, channel.Name, channel.Color, channel.Ready);
+            }
+            byte[] payload = new LobbyMessage
+            {
+                Kind = LobbyMessage.KindRoom,
+                MapName = _lobbyRules?.MapName ?? "",
+                HostSeat = clients.Count > 0 ? clients[0].Team : -1,
+                Started = _matchRunning,
+                Slots = slots,
+            }.Encode();
+            foreach (ClientChannel channel in clients)
+            {
+                channel.Enqueue(NetFrameType.Lobby, payload);
+            }
         }
     }
 }
@@ -451,6 +694,34 @@ public sealed class RemoteClient
 
     /// <summary>已应用的下行快照帧数，用于验证快照降频后仍持续推进。</summary>
     public long SnapshotFrames { get; private set; }
+
+    /// <summary>最近一次房间快照；未进大厅时为 null。</summary>
+    public LobbyMessage? Room { get; private set; }
+
+    /// <summary>房间快照版本号：内容变化时递增，UI 据此决定是否重建列表。</summary>
+    public long LobbyVersion { get; private set; }
+
+    public bool MatchStarted => State.Map != null;
+
+    /// <summary>大厅连接：只建立 TCP 与读超时，不阻塞等待静态地图（对局开始后才下发）。</summary>
+    public void ConnectLobby(string host, int port)
+    {
+        _client.Connect(host, port);
+        _client.NoDelay = true;
+        _client.ReceiveTimeout = 5000;
+        _stream = _client.GetStream();
+        _client.ReceiveTimeout = 0;
+    }
+
+    /// <summary>向服务器发一条大厅请求：加入/资料/开始。</summary>
+    public void SendLobby(LobbyMessage message)
+    {
+        if (_stream == null)
+        {
+            return;
+        }
+        NetFraming.WriteFrame(_stream, NetFrameType.Lobby, message.Encode());
+    }
 
     public void Connect(string host, int port)
     {
@@ -540,6 +811,12 @@ public sealed class RemoteClient
         {
             State.ApplySnapshot(payload);
             SnapshotFrames += 1;
+            return true;
+        }
+        if (frameType == NetFrameType.Lobby)
+        {
+            Room = LobbyMessage.Decode(payload);
+            LobbyVersion += 1;
             return true;
         }
         return false;

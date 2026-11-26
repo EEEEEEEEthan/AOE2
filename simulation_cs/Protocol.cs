@@ -1384,3 +1384,103 @@ public sealed class CommandFrame
         return frame;
     }
 }
+
+/// <summary>房间规则：进程启动前固定，容量决定最多可坐几个玩家位。</summary>
+public sealed class LobbyRules
+{
+    public int MaxPlayers = 4;
+    public string MapName = "阿拉伯";
+    public long Seed = 20261127;
+}
+
+public readonly struct LobbySlot
+{
+    public readonly long Seat;
+    public readonly string Name;
+    public readonly long Color;
+    public readonly bool Ready;
+
+    public LobbySlot(long seat, string name, long color, bool ready)
+    {
+        Seat = seat;
+        Name = name;
+        Color = color;
+        Ready = ready;
+    }
+}
+
+/// <summary>
+/// 大厅帧：客户端上行加入/资料/准备/开始，服务器下行房间快照/开始通知/错误。
+/// 对局开始后不再使用，改走 Welcome + StaticMap + Snapshot。
+/// </summary>
+public sealed class LobbyMessage
+{
+    public const byte KindJoin = 0;
+    public const byte KindProfile = 1;
+    public const byte KindStart = 2;
+    public const byte KindRoom = 3;
+    public const byte KindStartMatch = 4;
+    public const byte KindError = 5;
+    public const byte KindReady = 6;
+
+    public byte Kind;
+    public string Name = "";
+    public long Color;
+    public bool Ready;
+    public string MapName = "";
+    public string Error = "";
+    public long HostSeat = -1;
+    public bool Started;
+    public LobbySlot[] Slots = System.Array.Empty<LobbySlot>();
+
+    public byte[] Encode()
+    {
+        using var stream = new MemoryStream();
+        using (var writer = new BinaryWriter(stream, System.Text.Encoding.UTF8, leaveOpen: true))
+        {
+            writer.Write(Kind);
+            writer.Write(Name);
+            writer.Write(Color);
+            writer.Write(Ready);
+            writer.Write(MapName);
+            writer.Write(Error);
+            writer.Write(HostSeat);
+            writer.Write(Started);
+            writer.Write(Slots.Length);
+            foreach (LobbySlot slot in Slots)
+            {
+                writer.Write(slot.Seat);
+                writer.Write(slot.Name);
+                writer.Write(slot.Color);
+                writer.Write(slot.Ready);
+            }
+        }
+        return stream.ToArray();
+    }
+
+    public static LobbyMessage Decode(byte[] data)
+    {
+        using var stream = new MemoryStream(data);
+        using var reader = new BinaryReader(stream, System.Text.Encoding.UTF8, leaveOpen: true);
+        var message = new LobbyMessage
+        {
+            Kind = reader.ReadByte(),
+            Name = reader.ReadString(),
+            Color = reader.ReadInt64(),
+            Ready = reader.ReadBoolean(),
+            MapName = reader.ReadString(),
+            Error = reader.ReadString(),
+            HostSeat = reader.ReadInt64(),
+            Started = reader.ReadBoolean(),
+        };
+        int count = reader.ReadInt32();
+        var slots = new LobbySlot[count];
+        for (int index = 0; index < count; index++)
+        {
+            slots[index] = new LobbySlot(
+                reader.ReadInt64(), reader.ReadString(), reader.ReadInt64(), reader.ReadBoolean());
+        }
+        message.Slots = slots;
+        return message;
+    }
+}
