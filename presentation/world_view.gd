@@ -17,9 +17,18 @@ const KIND_VILLAGER := 1
 const KIND_RESOURCE_NODE := 2
 const KIND_DROP_SITE := 3
 
+const FOG_UNEXPLORED_COLOR := Color(0.0, 0.0, 0.0, 1.0)
+const FOG_EXPLORED_COLOR := Color(0.32, 0.34, 0.38, 0.55)
+const FOG_VISIBLE_COLOR := Color(0.0, 0.0, 0.0, 0.0)
+const FOG_HEIGHT := 0.03
+
 var _unit_mesh: BoxMesh
 var _materials: Dictionary = {}
 var _units: Dictionary = {}
+var _walls: Array = []
+var _fog: MultiMeshInstance3D
+var _fog_width := 0
+var _fog_height := 0
 
 
 func build_terrain(width: int, height: int, blocked: PackedInt32Array) -> void:
@@ -38,6 +47,8 @@ func build_terrain(width: int, height: int, blocked: PackedInt32Array) -> void:
 		wall.material_override = wall_material
 		wall.position = Vector3(x + 0.5, 0.4, y + 0.5)
 		add_child(wall)
+		_walls.append({"node": wall, "x": x, "y": y})
+	_build_fog(width, height)
 
 
 func refresh(bridge: GameBridge) -> void:
@@ -55,6 +66,8 @@ func refresh(bridge: GameBridge) -> void:
 			var dead: MeshInstance3D = _units[id]
 			dead.queue_free()
 			_units.erase(id)
+	_refresh_terrain_visibility(bridge)
+	_refresh_fog(bridge)
 
 
 func _create_unit(entity: Dictionary) -> MeshInstance3D:
@@ -89,3 +102,57 @@ func _material_for(color: Color) -> StandardMaterial3D:
 	material.roughness = 0.7
 	_materials[color] = material
 	return material
+
+
+func _build_fog(width: int, height: int) -> void:
+	_fog_width = width
+	_fog_height = height
+	var quad := QuadMesh.new()
+	quad.size = Vector2(1.0, 1.0)
+	var mesh := MultiMesh.new()
+	mesh.transform_format = MultiMesh.TRANSFORM_3D
+	mesh.use_colors = true
+	mesh.mesh = quad
+	mesh.instance_count = width * height
+	var basis := Basis(Vector3.RIGHT, -PI / 2.0)
+	for y in height:
+		for x in width:
+			var origin := Vector3(x + 0.5, FOG_HEIGHT, y + 0.5)
+			mesh.set_instance_transform(y * width + x, Transform3D(basis, origin))
+	var material := StandardMaterial3D.new()
+	material.albedo_color = Color(1.0, 1.0, 1.0, 1.0)
+	material.vertex_color_use_as_albedo = true
+	material.transparency = BaseMaterial3D.TRANSPARENCY_ALPHA
+	material.shading_mode = BaseMaterial3D.SHADING_MODE_UNSHADED
+	material.cull_mode = BaseMaterial3D.CULL_DISABLED
+	_fog = MultiMeshInstance3D.new()
+	_fog.multimesh = mesh
+	_fog.material_override = material
+	add_child(_fog)
+
+
+func _refresh_terrain_visibility(bridge: GameBridge) -> void:
+	var states := bridge.VisionStates()
+	if states.size() < _fog_width * _fog_height:
+		return
+	for wall in _walls:
+		var index: int = wall["y"] * _fog_width + wall["x"]
+		var node: MeshInstance3D = wall["node"]
+		node.visible = states[index] != 0
+
+
+func _refresh_fog(bridge: GameBridge) -> void:
+	if _fog == null:
+		return
+	var states := bridge.VisionStates()
+	if states.size() < _fog_width * _fog_height:
+		return
+	var mesh := _fog.multimesh
+	for index in states.size():
+		match states[index]:
+			2:
+				mesh.set_instance_color(index, FOG_VISIBLE_COLOR)
+			1:
+				mesh.set_instance_color(index, FOG_EXPLORED_COLOR)
+			_:
+				mesh.set_instance_color(index, FOG_UNEXPLORED_COLOR)

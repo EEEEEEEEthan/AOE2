@@ -128,6 +128,20 @@ public partial class GameBridge : Node
 
     public int GridHeight => _grid?.Height ?? 0;
 
+    public int VisionWidth => (int)(_session?.Client.Latest?.VisionWidth ?? 0);
+
+    public int VisionHeight => (int)(_session?.Client.Latest?.VisionHeight ?? 0);
+
+    public byte[] VisionStates()
+    {
+        AoeSim.SnapshotFrame? frame = _session?.Client.Latest;
+        if (frame == null)
+        {
+            return System.Array.Empty<byte>();
+        }
+        return frame.VisionStates;
+    }
+
     public int[] GridBlocked()
     {
         if (_grid == null)

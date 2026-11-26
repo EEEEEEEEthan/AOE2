@@ -61,15 +61,22 @@ public sealed class SnapshotFrame
     public long WinnerTeam = -1;
     public long Reason = AoeSim.VictoryReason.None;
     public long EndTick = -1;
+    public long VisionWidth;
+    public long VisionHeight;
+    public byte[] VisionStates = System.Array.Empty<byte>();
     public PlayerSnapshot[] Players = System.Array.Empty<PlayerSnapshot>();
     public EntitySnapshot[] Entities = System.Array.Empty<EntitySnapshot>();
 
-    public static SnapshotFrame Build(SimWorld world, long turn, MatchState? match = null)
+    public static SnapshotFrame Build(SimWorld world, long turn, MatchState? match = null, VisionGrid? vision = null, long viewerTeam = -1)
     {
         var entities = new List<EntitySnapshot>();
         foreach (long id in world.Entities())
         {
             if (!world.HasComponent(id, SimComponents.Position))
+            {
+                continue;
+            }
+            if (vision != null && viewerTeam >= 0 && !ShouldInclude(world, id, vision, viewerTeam))
             {
                 continue;
             }
@@ -85,6 +92,12 @@ public sealed class SnapshotFrame
                 hp));
         }
         var frame = new SnapshotFrame { Tick = world.Tick, Turn = turn, Entities = entities.ToArray() };
+        if (vision != null)
+        {
+            frame.VisionWidth = vision.Width;
+            frame.VisionHeight = vision.Height;
+            frame.VisionStates = vision.States();
+        }
         if (match != null)
         {
             frame.Phase = match.Phase;
@@ -140,6 +153,32 @@ public sealed class SnapshotFrame
         return EntityKind.Inventory;
     }
 
+    /// <summary>按观察者玩家裁剪快照：己方恒可见，中立与静态建筑按已探索，敌方单位仅当前可见。</summary>
+    public static bool ShouldInclude(SimWorld world, long id, VisionGrid vision, long viewerTeam)
+    {
+        long x = Fixed.ToInt(world.GetValue(id, SimComponents.Position, SimComponents.X));
+        long y = Fixed.ToInt(world.GetValue(id, SimComponents.Position, SimComponents.Y));
+        int tileX = (int)x;
+        int tileY = (int)y;
+        bool hasTeam = world.HasComponent(id, SimComponents.Team);
+        if (hasTeam && world.GetValue(id, SimComponents.Team, SimComponents.TeamId) == viewerTeam)
+        {
+            return true;
+        }
+        if (!hasTeam)
+        {
+            return vision.IsExplored(tileX, tileY);
+        }
+        bool structure = world.HasComponent(id, SimComponents.Building)
+            || world.HasComponent(id, SimComponents.Wonder)
+            || world.HasComponent(id, SimComponents.RelicSlot);
+        if (structure)
+        {
+            return vision.IsExplored(tileX, tileY);
+        }
+        return vision.VisibleAt(tileX, tileY);
+    }
+
     public byte[] Encode()
     {
         using var stream = new MemoryStream();
@@ -170,6 +209,10 @@ public sealed class SnapshotFrame
                 writer.Write(entity.Kind);
                 writer.Write(entity.Hp);
             }
+            writer.Write(VisionWidth);
+            writer.Write(VisionHeight);
+            writer.Write(VisionStates.Length);
+            writer.Write(VisionStates);
         }
         return stream.ToArray();
     }
@@ -212,6 +255,10 @@ public sealed class SnapshotFrame
                 reader.ReadInt64());
         }
         frame.Entities = entities;
+        frame.VisionWidth = reader.ReadInt64();
+        frame.VisionHeight = reader.ReadInt64();
+        int visionCount = reader.ReadInt32();
+        frame.VisionStates = reader.ReadBytes(visionCount);
         return frame;
     }
 }

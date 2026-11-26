@@ -8,6 +8,7 @@ public sealed class SimulationServer
 
     public GameSim Sim { get; }
     public long Turn => Sim.Lockstep.Turn;
+    public long ViewTeam { get; set; }
 
     public SimulationServer(GameSim sim)
     {
@@ -38,7 +39,8 @@ public sealed class SimulationServer
         return Sim.World.Checksum();
     }
 
-    public SnapshotFrame Snapshot() => SnapshotFrame.Build(Sim.World, Turn, Sim.Match);
+    public SnapshotFrame Snapshot() =>
+        SnapshotFrame.Build(Sim.World, Turn, Sim.Match, Sim.VisionFor(ViewTeam), ViewTeam);
 
     public long Checksum() => Sim.World.Checksum();
 }
