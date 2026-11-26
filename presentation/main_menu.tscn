@@ -139,6 +139,6 @@ filters = PackedStringArray("*.json ; 场景地图")
 [connection signal="pressed" from="Center/Content/ReplayButton" to="." method="_on_replay_pressed"]
 [connection signal="pressed" from="Center/Content/MapEditorButton" to="." method="_on_map_editor_pressed"]
 [connection signal="pressed" from="Center/Content/CustomMapButton" to="." method="_on_custom_map_pressed"]
-[connection signal="pressed" from="Center/Content/OptionsButton" to="." method="_on_unavailable_pressed"]
+[connection signal="pressed" from="Center/Content/OptionsButton" to="." method="_on_options_pressed"]
 [connection signal="pressed" from="Center/Content/QuitButton" to="." method="_on_quit_pressed"]
 [connection signal="file_selected" from="CustomMapDialog" to="." method="_on_custom_map_selected"]

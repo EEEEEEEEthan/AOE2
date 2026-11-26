@@ -4,6 +4,8 @@ extends Control
 signal surrender_requested
 signal return_to_menu_requested
 
+const OPTIONS_SCENE := "res://presentation/options.tscn"
+
 
 func _ready() -> void:
 	hide()
@@ -33,6 +35,11 @@ func close() -> void:
 
 func _on_resume_pressed() -> void:
 	close()
+
+
+func _on_options_pressed() -> void:
+	var options: Node = load(OPTIONS_SCENE).instantiate()
+	add_child(options)
 
 
 func _on_save_pressed() -> void:
