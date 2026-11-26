@@ -7,8 +7,13 @@ public sealed class SimulationClient
     /// <summary>连接建立时下发的静态地图；快照不再携带地形，渲染地形时读这里。</summary>
     public StaticMapFrame? Map { get; private set; }
 
-    public void ApplySnapshot(byte[] encodedSnapshot) =>
-        Latest = SnapshotFrame.Decode(encodedSnapshot);
+    /// <summary>解码并按需把增量帧合并到上一帧：关键帧直接替换，增量帧在既有完整状态上叠加。</summary>
+    public void ApplySnapshot(byte[] encodedSnapshot)
+    {
+        SnapshotFrame? previous = Latest;
+        SnapshotFrame frame = SnapshotFrame.Decode(encodedSnapshot, previous);
+        Latest = frame.Delta && previous != null ? frame.Merge(previous) : frame;
+    }
 
     public void ApplySnapshot(SnapshotFrame snapshot) => Latest = snapshot;
 

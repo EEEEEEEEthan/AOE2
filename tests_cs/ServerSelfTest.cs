@@ -21,7 +21,80 @@ public static class ServerSelfTest
         CheckHighLatencyCommands(failures);
         CheckLocalServerParity(failures);
         CheckMultiClient(failures);
+        CheckDeltaSnapshots(failures);
         return failures;
+    }
+
+    /// <summary>
+    /// 千单位场景：关键帧后只下发变化实体与字段，客户端合并结果必须与全量快照逐实体一致，
+    /// 且总字节数显著低于每 tick 全量编码。
+    /// </summary>
+    private static void CheckDeltaSnapshots(List<string> failures)
+    {
+        var sim = new GameSim(new NavGrid(48, 48), 4242, 2, 2);
+        var ids = new List<long>();
+        for (int index = 0; index < 1000; index++)
+        {
+            long id = sim.SpawnUnit(2 + index % 44, 2 + index / 44 % 44, 0, 50, 0, 0.0, 0.0, 0.0);
+            if (id < 0)
+            {
+                failures.Add("delta snapshot: spawn failed");
+                return;
+            }
+            ids.Add(id);
+        }
+
+        var delta = new SnapshotDelta();
+        SnapshotFrame? merged = null;
+        SnapshotFrame? keyframe = null;
+        long fullBytes = 0;
+        long deltaBytes = 0;
+        bool mismatch = false;
+        for (int tick = 0; tick < 20; tick++)
+        {
+            SnapshotFrame full = SnapshotFrame.Build(sim.World, sim.Lockstep.Turn);
+            SnapshotFrame outgoing = delta.Build(full);
+            fullBytes += full.Encode().Length;
+            byte[] encoded = outgoing.Encode();
+            deltaBytes += encoded.Length;
+            SnapshotFrame decoded = SnapshotFrame.Decode(encoded, merged);
+            merged = decoded.Delta && merged != null ? decoded.Merge(merged) : decoded;
+            if (keyframe == null)
+            {
+                keyframe = outgoing;
+            }
+            mismatch |= !SameEntities(full, merged);
+            for (int index = 0; index < ids.Count; index++)
+            {
+                long x = sim.World.GetValue(ids[index], SimComponents.Position, SimComponents.X);
+                sim.World.SetValue(ids[index], SimComponents.Position, SimComponents.X, x + Fixed.FromInt(1));
+            }
+        }
+        Expect(failures, keyframe != null && !keyframe.Delta, "delta snapshot: first frame is a keyframe");
+        Expect(failures, !mismatch, "delta snapshot: merged client state matches full snapshot every tick");
+        Expect(failures, deltaBytes * 2 < fullBytes,
+            $"delta snapshot: bandwidth {deltaBytes} should be far below full {fullBytes}");
+    }
+
+    private static bool SameEntities(SnapshotFrame full, SnapshotFrame merged)
+    {
+        if (full.Entities.Length != merged.Entities.Length)
+        {
+            return false;
+        }
+        var map = new System.Collections.Generic.Dictionary<long, EntitySnapshot>(merged.Entities.Length);
+        foreach (EntitySnapshot entity in merged.Entities)
+        {
+            map[entity.Id] = entity;
+        }
+        foreach (EntitySnapshot entity in full.Entities)
+        {
+            if (!map.TryGetValue(entity.Id, out EntitySnapshot candidate) || !candidate.SameAs(entity))
+            {
+                return false;
+            }
+        }
+        return true;
     }
 
     private static void CheckCommandAuthority(List<string> failures)

@@ -21,7 +21,7 @@ public static class EntityKind
 /// <summary>网络协议版本：静态地图帧携带，握手时校验两端一致。</summary>
 public static class NetProtocol
 {
-    public const int Version = 8;
+    public const int Version = 9;
 }
 
 /// <summary>
@@ -183,6 +183,34 @@ public readonly struct EntitySnapshot
         UnitType = unitType;
         MaxHp = maxHp;
     }
+
+    /// <summary>逐字段比较：增量编码以它为「本实体是否需要下发」的判据。</summary>
+    public bool SameAs(in EntitySnapshot other) =>
+        Id == other.Id
+        && X == other.X
+        && Y == other.Y
+        && Team == other.Team
+        && Kind == other.Kind
+        && Hp == other.Hp
+        && NodeType == other.NodeType
+        && NodeSubtype == other.NodeSubtype
+        && NodeRemaining == other.NodeRemaining
+        && GatherState == other.GatherState
+        && CarryType == other.CarryType
+        && CarryAmount == other.CarryAmount
+        && BuildingType == other.BuildingType
+        && Width == other.Width
+        && Height == other.Height
+        && BuildingState == other.BuildingState
+        && BuildingProgress == other.BuildingProgress
+        && BuildingMaxProgress == other.BuildingMaxProgress
+        && GarrisonCount == other.GarrisonCount
+        && GarrisonCapacity == other.GarrisonCapacity
+        && RepairState == other.RepairState
+        && RepairTarget == other.RepairTarget
+        && GateState == other.GateState
+        && UnitType == other.UnitType
+        && MaxHp == other.MaxHp;
 }
 
 public readonly struct PlayerSnapshot
@@ -266,9 +294,16 @@ public sealed class SnapshotFrame
     public long EndTick = -1;
     public long VisionWidth;
     public long VisionHeight;
+    public bool HasVision;
     public byte[] VisionStates = System.Array.Empty<byte>();
     public PlayerSnapshot[] Players = System.Array.Empty<PlayerSnapshot>();
     public EntitySnapshot[] Entities = System.Array.Empty<EntitySnapshot>();
+
+    /// <summary>为 true 时 Entities 只含新增/变化实体，RemovedEntities 含本帧消失的实体 id。</summary>
+    public bool Delta;
+    /// <summary>与 <see cref="Entities"/> 一一对应的字段掩码：仅这些字段被编码，其余沿用客户端上一帧的值。</summary>
+    public uint[] EntityMasks = System.Array.Empty<uint>();
+    public long[] RemovedEntities = System.Array.Empty<long>();
 
     [System.ThreadStatic] private static List<EntitySnapshot>? _entityBuffer;
     [System.ThreadStatic] private static Dictionary<long, long>? _inventoryBuffer;
@@ -397,6 +432,7 @@ public sealed class SnapshotFrame
             frame.VisionWidth = vision.Width;
             frame.VisionHeight = vision.Height;
             frame.VisionStates = vision.States();
+            frame.HasVision = true;
         }
         if (match != null)
         {
@@ -564,6 +600,7 @@ public sealed class SnapshotFrame
             writer.Write(WinnerTeam);
             writer.Write(Reason);
             writer.Write(EndTick);
+            writer.Write(Delta);
             writer.Write(Players.Length);
             foreach (PlayerSnapshot player in Players)
             {
@@ -590,40 +627,114 @@ public sealed class SnapshotFrame
                 writer.Write(player.PopulationCap);
             }
             writer.Write(Entities.Length);
-            foreach (EntitySnapshot entity in Entities)
+            for (int index = 0; index < Entities.Length; index++)
             {
-                writer.Write(entity.Id);
-                writer.Write(entity.X);
-                writer.Write(entity.Y);
-                writer.Write(entity.Team);
-                writer.Write(entity.Kind);
-                writer.Write(entity.Hp);
-                writer.Write(entity.NodeType);
-                writer.Write(entity.NodeSubtype);
-                writer.Write(entity.NodeRemaining);
-                writer.Write(entity.GatherState);
-                writer.Write(entity.CarryType);
-                writer.Write(entity.CarryAmount);
-                writer.Write(entity.BuildingType);
-                writer.Write(entity.Width);
-                writer.Write(entity.Height);
-                writer.Write(entity.BuildingState);
-                writer.Write(entity.BuildingProgress);
-                writer.Write(entity.BuildingMaxProgress);
-                writer.Write(entity.GarrisonCount);
-                writer.Write(entity.GarrisonCapacity);
-                writer.Write(entity.RepairState);
-                writer.Write(entity.RepairTarget);
-                writer.Write(entity.GateState);
-                writer.Write(entity.UnitType);
-                writer.Write(entity.MaxHp);
+                WriteEntity(writer, Entities[index], EntityMasks.Length == Entities.Length ? EntityMasks[index] : SnapshotDelta.AllFields);
+            }
+            writer.Write(RemovedEntities.Length);
+            foreach (long removed in RemovedEntities)
+            {
+                writer.Write(removed);
             }
             writer.Write(VisionWidth);
             writer.Write(VisionHeight);
-            WriteVisionStates(writer, VisionStates);
+            writer.Write(HasVision);
+            if (HasVision)
+            {
+                WriteVisionStates(writer, VisionStates);
+            }
         }
         length = (int)stream.Length;
         return stream.GetBuffer();
+    }
+
+    /// <summary>按掩码写实体：Id 恒写，其余字段仅写掩码位为 1 的部分，掩码为全量时等价于完整字段。</summary>
+    private static void WriteEntity(BinaryWriter writer, in EntitySnapshot entity, uint mask)
+    {
+        writer.Write(entity.Id);
+        writer.Write(mask);
+        if ((mask & 1u) != 0) writer.Write(entity.X);
+        if ((mask & (1u << 1)) != 0) writer.Write(entity.Y);
+        if ((mask & (1u << 2)) != 0) writer.Write(entity.Team);
+        if ((mask & (1u << 3)) != 0) writer.Write(entity.Kind);
+        if ((mask & (1u << 4)) != 0) writer.Write(entity.Hp);
+        if ((mask & (1u << 5)) != 0) writer.Write(entity.NodeType);
+        if ((mask & (1u << 6)) != 0) writer.Write(entity.NodeSubtype);
+        if ((mask & (1u << 7)) != 0) writer.Write(entity.NodeRemaining);
+        if ((mask & (1u << 8)) != 0) writer.Write(entity.GatherState);
+        if ((mask & (1u << 9)) != 0) writer.Write(entity.CarryType);
+        if ((mask & (1u << 10)) != 0) writer.Write(entity.CarryAmount);
+        if ((mask & (1u << 11)) != 0) writer.Write(entity.BuildingType);
+        if ((mask & (1u << 12)) != 0) writer.Write(entity.Width);
+        if ((mask & (1u << 13)) != 0) writer.Write(entity.Height);
+        if ((mask & (1u << 14)) != 0) writer.Write(entity.BuildingState);
+        if ((mask & (1u << 15)) != 0) writer.Write(entity.BuildingProgress);
+        if ((mask & (1u << 16)) != 0) writer.Write(entity.BuildingMaxProgress);
+        if ((mask & (1u << 17)) != 0) writer.Write(entity.GarrisonCount);
+        if ((mask & (1u << 18)) != 0) writer.Write(entity.GarrisonCapacity);
+        if ((mask & (1u << 19)) != 0) writer.Write(entity.RepairState);
+        if ((mask & (1u << 20)) != 0) writer.Write(entity.RepairTarget);
+        if ((mask & (1u << 21)) != 0) writer.Write(entity.GateState);
+        if ((mask & (1u << 22)) != 0) writer.Write(entity.UnitType);
+        if ((mask & (1u << 23)) != 0) writer.Write(entity.MaxHp);
+    }
+
+    private static EntitySnapshot ReadEntity(BinaryReader reader, long id, in EntitySnapshot baseline)
+    {
+        uint mask = reader.ReadUInt32();
+        long x = baseline.X;
+        long y = baseline.Y;
+        long team = baseline.Team;
+        long kind = baseline.Kind;
+        long hp = baseline.Hp;
+        long nodeType = baseline.NodeType;
+        long nodeSubtype = baseline.NodeSubtype;
+        long nodeRemaining = baseline.NodeRemaining;
+        long gatherState = baseline.GatherState;
+        long carryType = baseline.CarryType;
+        long carryAmount = baseline.CarryAmount;
+        long buildingType = baseline.BuildingType;
+        long width = baseline.Width;
+        long height = baseline.Height;
+        long buildingState = baseline.BuildingState;
+        long buildingProgress = baseline.BuildingProgress;
+        long buildingMaxProgress = baseline.BuildingMaxProgress;
+        long garrisonCount = baseline.GarrisonCount;
+        long garrisonCapacity = baseline.GarrisonCapacity;
+        long repairState = baseline.RepairState;
+        long repairTarget = baseline.RepairTarget;
+        long gateState = baseline.GateState;
+        long unitType = baseline.UnitType;
+        long maxHp = baseline.MaxHp;
+        if ((mask & 1u) != 0) x = reader.ReadInt64();
+        if ((mask & (1u << 1)) != 0) y = reader.ReadInt64();
+        if ((mask & (1u << 2)) != 0) team = reader.ReadInt64();
+        if ((mask & (1u << 3)) != 0) kind = reader.ReadInt64();
+        if ((mask & (1u << 4)) != 0) hp = reader.ReadInt64();
+        if ((mask & (1u << 5)) != 0) nodeType = reader.ReadInt64();
+        if ((mask & (1u << 6)) != 0) nodeSubtype = reader.ReadInt64();
+        if ((mask & (1u << 7)) != 0) nodeRemaining = reader.ReadInt64();
+        if ((mask & (1u << 8)) != 0) gatherState = reader.ReadInt64();
+        if ((mask & (1u << 9)) != 0) carryType = reader.ReadInt64();
+        if ((mask & (1u << 10)) != 0) carryAmount = reader.ReadInt64();
+        if ((mask & (1u << 11)) != 0) buildingType = reader.ReadInt64();
+        if ((mask & (1u << 12)) != 0) width = reader.ReadInt64();
+        if ((mask & (1u << 13)) != 0) height = reader.ReadInt64();
+        if ((mask & (1u << 14)) != 0) buildingState = reader.ReadInt64();
+        if ((mask & (1u << 15)) != 0) buildingProgress = reader.ReadInt64();
+        if ((mask & (1u << 16)) != 0) buildingMaxProgress = reader.ReadInt64();
+        if ((mask & (1u << 17)) != 0) garrisonCount = reader.ReadInt64();
+        if ((mask & (1u << 18)) != 0) garrisonCapacity = reader.ReadInt64();
+        if ((mask & (1u << 19)) != 0) repairState = reader.ReadInt64();
+        if ((mask & (1u << 20)) != 0) repairTarget = reader.ReadInt64();
+        if ((mask & (1u << 21)) != 0) gateState = reader.ReadInt64();
+        if ((mask & (1u << 22)) != 0) unitType = reader.ReadInt64();
+        if ((mask & (1u << 23)) != 0) maxHp = reader.ReadInt64();
+        return new EntitySnapshot(
+            id, x, y, team, kind, hp, nodeType, nodeSubtype, nodeRemaining,
+            gatherState, carryType, carryAmount, buildingType, width, height,
+            buildingState, buildingProgress, buildingMaxProgress, garrisonCount,
+            garrisonCapacity, repairState, repairTarget, gateState, unitType, maxHp);
     }
 
     private static void WriteVisionStates(BinaryWriter writer, byte[] states)
@@ -688,7 +799,11 @@ public sealed class SnapshotFrame
         return states;
     }
 
-    public static SnapshotFrame Decode(byte[] data)
+    /// <summary>
+    /// 解码快照。增量帧的字段掩码需要基线恢复：<paramref name="previous"/> 必须是客户端上一帧合并后的
+    /// 完整快照；关键帧（Delta=false）可传 null。
+    /// </summary>
+    public static SnapshotFrame Decode(byte[] data, SnapshotFrame? previous = null)
     {
         using var stream = new MemoryStream(data);
         using var reader = new BinaryReader(stream, System.Text.Encoding.UTF8, leaveOpen: true);
@@ -700,7 +815,17 @@ public sealed class SnapshotFrame
             WinnerTeam = reader.ReadInt64(),
             Reason = reader.ReadInt64(),
             EndTick = reader.ReadInt64(),
+            Delta = reader.ReadBoolean(),
         };
+        Dictionary<long, EntitySnapshot>? baselines = null;
+        if (frame.Delta && previous != null)
+        {
+            baselines = new Dictionary<long, EntitySnapshot>(previous.Entities.Length);
+            foreach (EntitySnapshot entity in previous.Entities)
+            {
+                baselines[entity.Id] = entity;
+            }
+        }
         int playerCount = reader.ReadInt32();
         var players = new PlayerSnapshot[playerCount];
         for (int index = 0; index < playerCount; index++)
@@ -733,38 +858,214 @@ public sealed class SnapshotFrame
         var entities = new EntitySnapshot[count];
         for (int index = 0; index < count; index++)
         {
-            entities[index] = new EntitySnapshot(
-                reader.ReadInt64(),
-                reader.ReadInt64(),
-                reader.ReadInt64(),
-                reader.ReadInt64(),
-                reader.ReadInt64(),
-                reader.ReadInt64(),
-                reader.ReadInt64(),
-                reader.ReadInt64(),
-                reader.ReadInt64(),
-                reader.ReadInt64(),
-                reader.ReadInt64(),
-                reader.ReadInt64(),
-                reader.ReadInt64(),
-                reader.ReadInt64(),
-                reader.ReadInt64(),
-                reader.ReadInt64(),
-                reader.ReadInt64(),
-                reader.ReadInt64(),
-                reader.ReadInt64(),
-                reader.ReadInt64(),
-                reader.ReadInt64(),
-                reader.ReadInt64(),
-                reader.ReadInt64(),
-                reader.ReadInt64(),
-                reader.ReadInt64());
+            long id = reader.ReadInt64();
+            EntitySnapshot baseline = default;
+            if (baselines != null)
+            {
+                baselines.TryGetValue(id, out baseline);
+            }
+            entities[index] = ReadEntity(reader, id, baseline);
         }
         frame.Entities = entities;
+        int removedCount = reader.ReadInt32();
+        var removed = new long[removedCount];
+        for (int index = 0; index < removedCount; index++)
+        {
+            removed[index] = reader.ReadInt64();
+        }
+        frame.RemovedEntities = removed;
         frame.VisionWidth = reader.ReadInt64();
         frame.VisionHeight = reader.ReadInt64();
-        frame.VisionStates = ReadVisionStates(reader);
+        frame.HasVision = reader.ReadBoolean();
+        frame.VisionStates = frame.HasVision ? ReadVisionStates(reader) : System.Array.Empty<byte>();
         return frame;
+    }
+
+    /// <summary>把增量帧合并到上一帧完整快照：替换变化实体、删除消失实体；视野未下发时沿用上一帧。</summary>
+    public SnapshotFrame Merge(SnapshotFrame previous)
+    {
+        if (!Delta)
+        {
+            return this;
+        }
+        var removed = new HashSet<long>(RemovedEntities);
+        var changed = new Dictionary<long, EntitySnapshot>(Entities.Length);
+        foreach (EntitySnapshot entity in Entities)
+        {
+            changed[entity.Id] = entity;
+        }
+        var merged = new EntitySnapshot[previous.Entities.Length + Entities.Length];
+        int count = 0;
+        foreach (EntitySnapshot entity in previous.Entities)
+        {
+            if (removed.Contains(entity.Id))
+            {
+                continue;
+            }
+            merged[count++] = changed.TryGetValue(entity.Id, out EntitySnapshot updated) ? updated : entity;
+            changed.Remove(entity.Id);
+        }
+        foreach (EntitySnapshot entity in changed.Values)
+        {
+            merged[count++] = entity;
+        }
+        System.Array.Resize(ref merged, count);
+        return new SnapshotFrame
+        {
+            Tick = Tick,
+            Turn = Turn,
+            Phase = Phase,
+            WinnerTeam = WinnerTeam,
+            Reason = Reason,
+            EndTick = EndTick,
+            Players = Players,
+            Entities = merged,
+            VisionWidth = HasVision ? VisionWidth : previous.VisionWidth,
+            VisionHeight = HasVision ? VisionHeight : previous.VisionHeight,
+            HasVision = HasVision || previous.HasVision,
+            VisionStates = HasVision ? VisionStates : previous.VisionStates,
+        };
+    }
+}
+
+/// <summary>
+/// 每条连接一份的增量编码器：首次下发关键帧，其后只下发新增/变化实体（按字段掩码）、消失实体 id，
+/// 视野位图仅在内容变化时附带。变化检测只做整数比较，不改变模拟状态。
+/// </summary>
+public sealed class SnapshotDelta
+{
+    /// <summary>实体全部 24 个可变字段的掩码（Id 恒写，不占位）。</summary>
+    public const uint AllFields = 0x00FFFFFFu;
+
+    private readonly Dictionary<long, EntitySnapshot> _previous = new();
+    private readonly HashSet<long> _currentIds = new();
+    private readonly List<EntitySnapshot> _changed = new();
+    private readonly List<uint> _masks = new();
+    private readonly List<long> _removed = new();
+    private byte[]? _vision;
+
+    /// <summary>丢弃已发送状态：下一次 <see cref="Build"/> 强制关键帧（慢客户端丢帧或重连时调用）。</summary>
+    public void Reset()
+    {
+        _previous.Clear();
+        _vision = null;
+    }
+
+    public SnapshotFrame Build(SnapshotFrame current)
+    {
+        bool keyframe = _previous.Count == 0;
+        _currentIds.Clear();
+        _changed.Clear();
+        _masks.Clear();
+        _removed.Clear();
+        foreach (EntitySnapshot entity in current.Entities)
+        {
+            _currentIds.Add(entity.Id);
+            if (keyframe)
+            {
+                _changed.Add(entity);
+                _masks.Add(AllFields);
+                continue;
+            }
+            if (!_previous.TryGetValue(entity.Id, out EntitySnapshot previous))
+            {
+                _changed.Add(entity);
+                _masks.Add(AllFields);
+            }
+            else if (!previous.SameAs(entity))
+            {
+                _changed.Add(entity);
+                _masks.Add(DiffMask(previous, entity));
+            }
+        }
+        if (!keyframe)
+        {
+            foreach (long id in _previous.Keys)
+            {
+                if (!_currentIds.Contains(id))
+                {
+                    _removed.Add(id);
+                }
+            }
+        }
+        foreach (EntitySnapshot entity in _changed)
+        {
+            _previous[entity.Id] = entity;
+        }
+        foreach (long id in _removed)
+        {
+            _previous.Remove(id);
+        }
+        bool visionChanged = current.HasVision
+            && (keyframe || _vision == null || !SameBytes(_vision, current.VisionStates));
+        if (visionChanged)
+        {
+            _vision = current.VisionStates;
+        }
+        return new SnapshotFrame
+        {
+            Tick = current.Tick,
+            Turn = current.Turn,
+            Phase = current.Phase,
+            WinnerTeam = current.WinnerTeam,
+            Reason = current.Reason,
+            EndTick = current.EndTick,
+            Players = current.Players,
+            Delta = !keyframe,
+            Entities = _changed.ToArray(),
+            EntityMasks = _masks.ToArray(),
+            RemovedEntities = _removed.ToArray(),
+            VisionWidth = current.VisionWidth,
+            VisionHeight = current.VisionHeight,
+            HasVision = visionChanged,
+            VisionStates = visionChanged ? _vision! : System.Array.Empty<byte>(),
+        };
+    }
+
+    private static uint DiffMask(in EntitySnapshot previous, in EntitySnapshot current)
+    {
+        uint mask = 0;
+        if (current.X != previous.X) mask |= 1u;
+        if (current.Y != previous.Y) mask |= 1u << 1;
+        if (current.Team != previous.Team) mask |= 1u << 2;
+        if (current.Kind != previous.Kind) mask |= 1u << 3;
+        if (current.Hp != previous.Hp) mask |= 1u << 4;
+        if (current.NodeType != previous.NodeType) mask |= 1u << 5;
+        if (current.NodeSubtype != previous.NodeSubtype) mask |= 1u << 6;
+        if (current.NodeRemaining != previous.NodeRemaining) mask |= 1u << 7;
+        if (current.GatherState != previous.GatherState) mask |= 1u << 8;
+        if (current.CarryType != previous.CarryType) mask |= 1u << 9;
+        if (current.CarryAmount != previous.CarryAmount) mask |= 1u << 10;
+        if (current.BuildingType != previous.BuildingType) mask |= 1u << 11;
+        if (current.Width != previous.Width) mask |= 1u << 12;
+        if (current.Height != previous.Height) mask |= 1u << 13;
+        if (current.BuildingState != previous.BuildingState) mask |= 1u << 14;
+        if (current.BuildingProgress != previous.BuildingProgress) mask |= 1u << 15;
+        if (current.BuildingMaxProgress != previous.BuildingMaxProgress) mask |= 1u << 16;
+        if (current.GarrisonCount != previous.GarrisonCount) mask |= 1u << 17;
+        if (current.GarrisonCapacity != previous.GarrisonCapacity) mask |= 1u << 18;
+        if (current.RepairState != previous.RepairState) mask |= 1u << 19;
+        if (current.RepairTarget != previous.RepairTarget) mask |= 1u << 20;
+        if (current.GateState != previous.GateState) mask |= 1u << 21;
+        if (current.UnitType != previous.UnitType) mask |= 1u << 22;
+        if (current.MaxHp != previous.MaxHp) mask |= 1u << 23;
+        return mask;
+    }
+
+    private static bool SameBytes(byte[] left, byte[] right)
+    {
+        if (left.Length != right.Length)
+        {
+            return false;
+        }
+        for (int index = 0; index < left.Length; index++)
+        {
+            if (left[index] != right[index])
+            {
+                return false;
+            }
+        }
+        return true;
     }
 }
 

@@ -27,7 +27,7 @@
 
 游戏引擎已切到 Godot 的 .NET 版（`project.godot` 的 `[engine_host] dotnet="true"`），模拟内核在 `simulation_cs/` 用 C# 且**不依赖 Godot**，前后端彻底拆分：
 
-- **服务器**：`SimulationServer` 持有权威 `GameSim`，按 30Hz 推进并产出 `SnapshotFrame`；`DedicatedServer` 把同一内核放进独立进程，经 TCP（`Protocol.cs` 的长度前缀帧）广播快照、接收 `CommandFrame`。每个连接按接入顺序占用一个空闲玩家位，满员后拒绝新连接，避免复用 team 冒充已有玩家。
+- **服务器**：`SimulationServer` 持有权威 `GameSim`，按 30Hz 推进并产出 `SnapshotFrame`；`DedicatedServer` 把同一内核放进独立进程，经 TCP（`Protocol.cs` 的长度前缀帧）广播快照、接收 `CommandFrame`。每个连接按接入顺序占用一个空闲玩家位，满员后拒绝新连接，避免复用 team 冒充已有玩家。每条连接由 `SnapshotDelta` 做增量下发：首帧关键帧，其后只发新增/变化实体（按字段掩码）与消失实体 id，慢客户端丢帧则重发关键帧。
 - **连接身份与权限**：连接层把「连接 → 玩家」绑定好，指令入队时以该玩家覆写 `CommandFrame.Player` 与指令自报的 `Player`；`GameSim.IsCommandAllowed` 再校验：作用于实体的指令要求该实体属于该玩家，作用于玩家的指令（投降/时代/科技/放置建筑）要求玩家合法。越权、过期、非法指令直接丢弃并计入 `RejectedCommands`，不进入模拟。
 - **锁步回合**：服务器固定每 `Lockstep.TicksPerTurn` 个 tick 为一次回合边界，回合开始时按玩家升序统一应用该回合收到的输入，再递增回合号；缺输入的玩家按空输入推进，服务器不会为等待输入而停顿。本地局与联机对局共用这套「不等输入」语义，`Lockstep` 只是一枚回合时钟（`AdvanceTurn`），不再有 `SubmitTurn`/`CanAdvance` 等会让人误以为要等待全员的接口。早于当前回合的帧被拒绝，当前回合已开始后收到的帧顺延到下一回合，允许提前提交至多 8 个回合。
 - **客户端提前提交**：`RemoteClient.SubmitCommands` 以最近快照回合为基准加提前量填 `CommandFrame.Turn`（默认 4 回合，覆盖约 300ms 单向延迟并在 +8 窗口内），`InputTiming` 集中负责「延迟 → 提前量」换算；否则高 RTT 下帧到达时回合已过会被整帧丢弃。`ServerSelfTest` 用 300ms 单向延迟回归守住「不丢指令 + 本地/联机校验和一致」。
@@ -38,7 +38,7 @@
 ## 战争迷雾
 
 - 每个玩家一份 `VisionGrid`（`_visible` 每 tick 重置、`_explored` 持久），`VisionSystem` 每 tick 以定点欧氏圆揭示单位/建筑视距内的格子并写回已探索。
-- 视野随 `SnapshotFrame` 下发：快照按观察者玩家裁剪实体（己方恒见、中立与静态建筑按已探索、敌方单位仅当前可见），并附带整张可视性位图。
+- 视野随 `SnapshotFrame` 下发：快照按观察者玩家裁剪实体（己方恒见、中立与静态建筑按已探索、敌方单位仅当前可见）；可视性位图仅在内容变化时附带，编码用游程压缩，不再每帧整图。
 - 表现层 `WorldView` 依据位图渲染迷雾（未探索黑 / 已探索灰 / 可见透明）并隐藏未探索地形；`GameBridge` 只暴露解码后的客户端快照。`KernelSelfTest` 覆盖揭示、离开转已探索、双玩家独立、快照裁剪与确定性。
 
 ## 体素地形与单位
