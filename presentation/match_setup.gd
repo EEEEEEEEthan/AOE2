@@ -18,6 +18,7 @@ var config: Dictionary = {
 
 var _prepared_bridge: Node = null
 var _prepared_world: Node = null
+var _network: Node = null
 
 
 func reset_config() -> void:
@@ -62,3 +63,23 @@ func clear() -> void:
 func _detach(node: Node) -> void:
 	if node != null and node.get_parent() != null:
 		node.get_parent().remove_child(node)
+
+
+## 大厅把已连上的多人网络节点交给对局场景持有，避免切场景时断线。
+func set_network(network: Node) -> void:
+	_network = network
+
+
+func has_network() -> bool:
+	return _network != null
+
+
+func take_network() -> Node:
+	var network := _network
+	_network = null
+	_detach(network)
+	return network
+
+
+func clear_network() -> void:
+	_network = null
