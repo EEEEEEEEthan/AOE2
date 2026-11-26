@@ -42,3 +42,11 @@ func group_ids(number: int) -> Array[int]:
 	if _groups.has(number):
 		result.assign(_groups[number])
 	return result
+
+
+func group_assignments() -> Dictionary:
+	var result: Dictionary = {}
+	for number in _groups:
+		for entity_id in _groups[number]:
+			result[int(entity_id)] = int(number)
+	return result

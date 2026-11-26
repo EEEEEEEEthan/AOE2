@@ -14,13 +14,13 @@ const TARGETABLE_KINDS := [KIND_UNIT, KIND_VILLAGER, KIND_RESOURCE_NODE, KIND_MO
 const CLICK_RADIUS := 28.0
 const DRAG_THRESHOLD := 6.0
 const DOUBLE_CLICK_MS := 350
-const MARKER_SECONDS := 0.45
 
 var bridge: GameBridge
 var world_view: WorldView
 var camera: IsoCamera
 var hud: GameHud
 var minimap: Minimap
+var overlay: UnitOverlay
 var selection := SelectionModel.new()
 
 var _entities: Array[Dictionary] = []
@@ -43,6 +43,8 @@ func setup(value: GameBridge) -> void:
 	camera = %Camera3D
 	hud = %Hud
 	minimap = %Minimap
+	overlay = %UnitOverlay
+	overlay.configure(camera, world_view)
 	_my_team = bridge.MyTeam
 	hud.setup(bridge)
 	hud.build_requested.connect(_start_placement)
@@ -106,6 +108,7 @@ func refresh() -> void:
 	_player = _find_player()
 	hud.refresh(_player, _selected_entries(), _my_team)
 	minimap.update_snapshot(batch, bridge.VisionStates(), _my_team)
+	overlay.update(_entities, selection.ids, selection.group_assignments())
 
 
 func _focus_on_start() -> void:
@@ -174,6 +177,7 @@ func _process(_delta: float) -> void:
 	if bridge == null:
 		return
 	if _placing_type >= 0:
+		hud.hide_unit_tooltip()
 		var mouse := get_viewport().get_mouse_position()
 		_hover_cell = _cell_at(mouse)
 		world_view.show_placement(
@@ -181,9 +185,16 @@ func _process(_delta: float) -> void:
 			bridge.CanPlaceBuilding(_placing_type, _hover_cell.x, _hover_cell.y))
 		return
 	if get_viewport().gui_get_hovered_control() != null:
+		hud.hide_unit_tooltip()
 		Input.set_default_cursor_shape(Input.CURSOR_ARROW)
 		return
-	var own := _pick(get_viewport().get_mouse_position(), true)
+	var mouse_position := get_viewport().get_mouse_position()
+	var hovered := _pick(mouse_position, false)
+	if hovered.is_empty() or not _is_selectable(hovered):
+		hud.hide_unit_tooltip()
+	else:
+		hud.show_unit_tooltip(hovered, mouse_position)
+	var own := _pick(mouse_position, true)
 	Input.set_default_cursor_shape(Input.CURSOR_POINTING_HAND if not own.is_empty() else Input.CURSOR_ARROW)
 
 
@@ -234,9 +245,7 @@ func _on_key(event: InputEventKey) -> void:
 		if _placing_type >= 0:
 			_cancel_placement()
 		else:
-			selection.clear()
-			world_view.set_selection(selection.ids)
-			_push_hud()
+			hud.open_pause_menu()
 		get_viewport().set_input_as_handled()
 		return
 	if key < KEY_0 or key > KEY_9:
@@ -494,15 +503,13 @@ func _jump_to(world_position: Vector2) -> void:
 
 
 func _flash(cell: Vector2i, color: Color) -> void:
-	var marker := world_view.show_order_marker(cell.x, cell.y, color)
-	await get_tree().create_timer(MARKER_SECONDS).timeout
-	if is_instance_valid(marker):
-		marker.queue_free()
+	overlay.show_flag(cell.x + 0.5, cell.y + 0.5, color)
 
 
 func _push_hud() -> void:
 	_player = _find_player()
 	hud.refresh(_player, _selected_entries(), _my_team)
+	overlay.update(_entities, selection.ids, selection.group_assignments())
 
 
 func _is_selectable(entry: Dictionary) -> bool:

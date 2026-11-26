@@ -1,4 +1,4 @@
-[gd_scene load_steps=9 format=3]
+[gd_scene load_steps=11 format=3]
 
 [ext_resource type="Script" path="res://presentation/main.gd" id="1_main"]
 [ext_resource type="Script" path="res://presentation/iso_camera.gd" id="2_camera"]
@@ -7,6 +7,8 @@
 [ext_resource type="Script" path="res://presentation/hud.gd" id="5_hud"]
 [ext_resource type="Script" path="res://presentation/minimap.gd" id="6_minimap"]
 [ext_resource type="Script" path="res://presentation/battle_controller.gd" id="7_controller"]
+[ext_resource type="Script" path="res://presentation/unit_overlay.gd" id="8_overlay"]
+[ext_resource type="Script" path="res://presentation/pause_menu.gd" id="9_pause"]
 
 [sub_resource type="Environment" id="Env_main"]
 background_mode = 1
@@ -41,21 +43,72 @@ script = ExtResource("7_controller")
 unique_name_in_owner = true
 script = ExtResource("5_hud")
 
-[node name="SurrenderButton" type="Button" parent="Hud"]
+[node name="UnitOverlay" type="Control" parent="Hud"]
 unique_name_in_owner = true
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+script = ExtResource("8_overlay")
+
+[node name="MenuBar" type="PanelContainer" parent="Hud"]
 offset_left = 16.0
 offset_top = 16.0
-offset_right = 104.0
+offset_right = 880.0
 offset_bottom = 52.0
-text = "投降"
 
-[node name="TechTreeButton" type="Button" parent="Hud"]
+[node name="Margin" type="MarginContainer" parent="Hud/MenuBar"]
+layout_mode = 2
+theme_override_constants/margin_left = 8
+theme_override_constants/margin_top = 4
+theme_override_constants/margin_right = 8
+theme_override_constants/margin_bottom = 4
+
+[node name="Row" type="HBoxContainer" parent="Hud/MenuBar/Margin"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="MenuButton" type="Button" parent="Hud/MenuBar/Margin/Row"]
+layout_mode = 2
+text = "游戏菜单"
+
+[node name="DiplomacyButton" type="Button" parent="Hud/MenuBar/Margin/Row"]
+layout_mode = 2
+text = "外交"
+
+[node name="ChatButton" type="Button" parent="Hud/MenuBar/Margin/Row"]
+layout_mode = 2
+text = "聊天"
+
+[node name="ObjectivesButton" type="Button" parent="Hud/MenuBar/Margin/Row"]
+layout_mode = 2
+text = "目标"
+
+[node name="TechTreeButton" type="Button" parent="Hud/MenuBar/Margin/Row"]
 unique_name_in_owner = true
-offset_left = 112.0
-offset_top = 16.0
-offset_right = 200.0
-offset_bottom = 52.0
+layout_mode = 2
 text = "科技树"
+
+[node name="SpeedLabel" type="Label" parent="Hud/MenuBar/Margin/Row"]
+layout_mode = 2
+text = "速度"
+
+[node name="SpeedOption" type="OptionButton" parent="Hud/MenuBar/Margin/Row"]
+unique_name_in_owner = true
+layout_mode = 2
+item_count = 4
+selected = 1
+popup/item_0/text = "0.5×"
+popup/item_0/id = 0
+popup/item_1/text = "1×"
+popup/item_1/id = 1
+popup/item_2/text = "1.5×"
+popup/item_2/id = 2
+popup/item_3/text = "2×"
+popup/item_3/id = 3
 
 [node name="TopBar" type="PanelContainer" parent="Hud"]
 offset_left = 16.0
@@ -88,6 +141,70 @@ text = "人口 0 / 0"
 unique_name_in_owner = true
 layout_mode = 2
 text = "黑暗时代"
+
+[node name="NoticeFeed" type="VBoxContainer" parent="Hud"]
+unique_name_in_owner = true
+layout_mode = 3
+anchors_preset = 1
+anchor_left = 1.0
+anchor_right = 1.0
+offset_left = -360.0
+offset_top = 60.0
+offset_right = -16.0
+offset_bottom = 280.0
+grow_horizontal = 0
+theme_override_constants/separation = 2
+
+[node name="FeedPlaceholder" type="Label" parent="Hud/NoticeFeed"]
+layout_mode = 2
+text = "系统：对局开始"
+horizontal_alignment = 2
+
+[node name="ChatPanel" type="PanelContainer" parent="Hud"]
+layout_mode = 3
+anchors_preset = 2
+anchor_top = 1.0
+anchor_bottom = 1.0
+offset_left = 16.0
+offset_top = -444.0
+offset_right = 252.0
+offset_bottom = -264.0
+grow_vertical = 0
+
+[node name="Margin" type="MarginContainer" parent="Hud/ChatPanel"]
+layout_mode = 2
+theme_override_constants/margin_left = 8
+theme_override_constants/margin_top = 6
+theme_override_constants/margin_right = 8
+theme_override_constants/margin_bottom = 6
+
+[node name="Content" type="VBoxContainer" parent="Hud/ChatPanel/Margin"]
+layout_mode = 2
+theme_override_constants/separation = 4
+
+[node name="ChatTitle" type="Label" parent="Hud/ChatPanel/Margin/Content"]
+layout_mode = 2
+text = "聊天"
+
+[node name="ChatLog" type="RichTextLabel" parent="Hud/ChatPanel/Margin/Content"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_vertical = 3
+text = "[系统] 对局开始"
+
+[node name="ChatRow" type="HBoxContainer" parent="Hud/ChatPanel/Margin/Content"]
+layout_mode = 2
+theme_override_constants/separation = 4
+
+[node name="ChatInput" type="LineEdit" parent="Hud/ChatPanel/Margin/Content/ChatRow"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+placeholder_text = "输入消息…"
+
+[node name="ChatSend" type="Button" parent="Hud/ChatPanel/Margin/Content/ChatRow"]
+layout_mode = 2
+text = "发送"
 
 [node name="NoticeLabel" type="Label" parent="Hud"]
 unique_name_in_owner = true
@@ -168,7 +285,7 @@ anchor_top = 1.0
 anchor_right = 1.0
 anchor_bottom = 1.0
 offset_left = -636.0
-offset_top = -360.0
+offset_top = -430.0
 offset_right = -16.0
 offset_bottom = -16.0
 
@@ -182,6 +299,47 @@ theme_override_constants/margin_bottom = 6
 [node name="Content" type="VBoxContainer" parent="Hud/CommandPanel/Margin"]
 layout_mode = 2
 theme_override_constants/separation = 4
+
+[node name="UtilityTitle" type="Label" parent="Hud/CommandPanel/Margin/Content"]
+layout_mode = 2
+text = "快捷"
+
+[node name="UtilityRow" type="HBoxContainer" parent="Hud/CommandPanel/Margin/Content"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="IdleVillagerButton" type="Button" parent="Hud/CommandPanel/Margin/Content/UtilityRow"]
+layout_mode = 2
+text = "闲置村民"
+
+[node name="TownBellButton" type="Button" parent="Hud/CommandPanel/Margin/Content/UtilityRow"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "城镇警钟"
+
+[node name="FormationRow" type="HBoxContainer" parent="Hud/CommandPanel/Margin/Content"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="FormationLabel" type="Label" parent="Hud/CommandPanel/Margin/Content/FormationRow"]
+layout_mode = 2
+text = "阵型"
+
+[node name="LineFormationButton" type="Button" parent="Hud/CommandPanel/Margin/Content/FormationRow"]
+layout_mode = 2
+text = "线列"
+
+[node name="WedgeFormationButton" type="Button" parent="Hud/CommandPanel/Margin/Content/FormationRow"]
+layout_mode = 2
+text = "楔形"
+
+[node name="BoxFormationButton" type="Button" parent="Hud/CommandPanel/Margin/Content/FormationRow"]
+layout_mode = 2
+text = "方阵"
+
+[node name="StaggeredFormationButton" type="Button" parent="Hud/CommandPanel/Margin/Content/FormationRow"]
+layout_mode = 2
+text = "散开"
 
 [node name="BuildTitle" type="Label" parent="Hud/CommandPanel/Margin/Content"]
 layout_mode = 2
@@ -580,11 +738,130 @@ unique_name_in_owner = true
 layout_mode = 2
 text = "返回主菜单"
 
+[node name="TooltipPanel" type="PanelContainer" parent="Hud"]
+unique_name_in_owner = true
+offset_left = 120.0
+offset_top = 120.0
+offset_right = 320.0
+offset_bottom = 180.0
+mouse_filter = 2
+
+[node name="Margin" type="MarginContainer" parent="Hud/TooltipPanel"]
+layout_mode = 2
+theme_override_constants/margin_left = 8
+theme_override_constants/margin_top = 4
+theme_override_constants/margin_right = 8
+theme_override_constants/margin_bottom = 4
+
+[node name="Content" type="VBoxContainer" parent="Hud/TooltipPanel/Margin"]
+layout_mode = 2
+theme_override_constants/separation = 2
+
+[node name="TooltipTitle" type="Label" parent="Hud/TooltipPanel/Margin/Content"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "单位"
+
+[node name="TooltipBody" type="Label" parent="Hud/TooltipPanel/Margin/Content"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "生命 0 / 0"
+
+[node name="PauseMenu" type="Control" parent="Hud"]
+unique_name_in_owner = true
+process_mode = 3
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("9_pause")
+
+[node name="Dim" type="ColorRect" parent="Hud/PauseMenu"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0, 0, 0, 0.55)
+
+[node name="Center" type="CenterContainer" parent="Hud/PauseMenu"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="PausePanel" type="PanelContainer" parent="Hud/PauseMenu/Center"]
+layout_mode = 2
+
+[node name="Margin" type="MarginContainer" parent="Hud/PauseMenu/Center/PausePanel"]
+layout_mode = 2
+theme_override_constants/margin_left = 24
+theme_override_constants/margin_top = 16
+theme_override_constants/margin_right = 24
+theme_override_constants/margin_bottom = 16
+
+[node name="Content" type="VBoxContainer" parent="Hud/PauseMenu/Center/PausePanel/Margin"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="PauseTitle" type="Label" parent="Hud/PauseMenu/Center/PausePanel/Margin/Content"]
+layout_mode = 2
+text = "已暂停"
+horizontal_alignment = 1
+
+[node name="ResumeButton" type="Button" parent="Hud/PauseMenu/Center/PausePanel/Margin/Content"]
+layout_mode = 2
+text = "继续游戏"
+
+[node name="SaveButton" type="Button" parent="Hud/PauseMenu/Center/PausePanel/Margin/Content"]
+layout_mode = 2
+text = "保存游戏"
+
+[node name="RestartButton" type="Button" parent="Hud/PauseMenu/Center/PausePanel/Margin/Content"]
+layout_mode = 2
+text = "重新开始"
+
+[node name="SurrenderButton" type="Button" parent="Hud/PauseMenu/Center/PausePanel/Margin/Content"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "投降"
+
+[node name="PauseExitButton" type="Button" parent="Hud/PauseMenu/Center/PausePanel/Margin/Content"]
+layout_mode = 2
+text = "退出到主菜单"
+
+[node name="PauseUnavailableDialog" type="AcceptDialog" parent="Hud/PauseMenu"]
+unique_name_in_owner = true
+title = "开发中"
+dialog_text = "该功能正在开发中，敬请期待。"
+
+[node name="UnavailableDialog" type="AcceptDialog" parent="Hud"]
+unique_name_in_owner = true
+title = "开发中"
+dialog_text = "该功能正在开发中，敬请期待。"
+
 [node name="TechTree" parent="." instance=ExtResource("4_tech")]
 unique_name_in_owner = true
 
-[connection signal="pressed" from="Hud/SurrenderButton" to="." method="_on_surrender_pressed"]
-[connection signal="pressed" from="Hud/TechTreeButton" to="." method="_on_tech_tree_pressed"]
+[connection signal="pressed" from="Hud/MenuBar/Margin/Row/MenuButton" to="Hud" method="_on_menu_pressed"]
+[connection signal="pressed" from="Hud/MenuBar/Margin/Row/DiplomacyButton" to="Hud" method="_on_diplomacy_pressed"]
+[connection signal="pressed" from="Hud/MenuBar/Margin/Row/ChatButton" to="Hud" method="_on_chat_button_pressed"]
+[connection signal="pressed" from="Hud/MenuBar/Margin/Row/ObjectivesButton" to="Hud" method="_on_objectives_pressed"]
+[connection signal="pressed" from="Hud/MenuBar/Margin/Row/TechTreeButton" to="." method="_on_tech_tree_pressed"]
+[connection signal="item_selected" from="Hud/MenuBar/Margin/Row/SpeedOption" to="Hud" method="_on_speed_selected"]
+[connection signal="pressed" from="Hud/ChatPanel/Margin/Content/ChatRow/ChatSend" to="Hud" method="_on_chat_send_pressed"]
+[connection signal="text_submitted" from="Hud/ChatPanel/Margin/Content/ChatRow/ChatInput" to="Hud" method="_on_chat_submitted"]
+[connection signal="pressed" from="Hud/CommandPanel/Margin/Content/UtilityRow/IdleVillagerButton" to="Hud" method="_on_idle_villager_pressed"]
+[connection signal="pressed" from="Hud/CommandPanel/Margin/Content/UtilityRow/TownBellButton" to="Hud" method="_on_town_bell_pressed"]
+[connection signal="pressed" from="Hud/CommandPanel/Margin/Content/FormationRow/LineFormationButton" to="Hud" method="_on_formation_pressed" binds=[0]]
+[connection signal="pressed" from="Hud/CommandPanel/Margin/Content/FormationRow/WedgeFormationButton" to="Hud" method="_on_formation_pressed" binds=[1]]
+[connection signal="pressed" from="Hud/CommandPanel/Margin/Content/FormationRow/BoxFormationButton" to="Hud" method="_on_formation_pressed" binds=[2]]
+[connection signal="pressed" from="Hud/CommandPanel/Margin/Content/FormationRow/StaggeredFormationButton" to="Hud" method="_on_formation_pressed" binds=[3]]
 [connection signal="pressed" from="Hud/CommandPanel/Margin/Content/BuildGrid/TownCenter" to="Hud" method="_on_build_button_pressed" binds=[1]]
 [connection signal="pressed" from="Hud/CommandPanel/Margin/Content/BuildGrid/House" to="Hud" method="_on_build_button_pressed" binds=[2]]
 [connection signal="pressed" from="Hud/CommandPanel/Margin/Content/BuildGrid/Barracks" to="Hud" method="_on_build_button_pressed" binds=[3]]
@@ -613,4 +890,11 @@ unique_name_in_owner = true
 [connection signal="pressed" from="Hud/CommandPanel/Margin/Content/ActionRow/StopButton" to="Hud" method="_on_stop_pressed"]
 [connection signal="pressed" from="Hud/CommandPanel/Margin/Content/ActionRow/CancelPlacementButton" to="Hud" method="_on_cancel_placement_pressed"]
 [connection signal="pressed" from="Hud/ResultPanel/Margin/Content/ExitButton" to="." method="_on_return_to_menu_pressed"]
+[connection signal="pressed" from="Hud/PauseMenu/Center/PausePanel/Margin/Content/ResumeButton" to="Hud/PauseMenu" method="_on_resume_pressed"]
+[connection signal="pressed" from="Hud/PauseMenu/Center/PausePanel/Margin/Content/SaveButton" to="Hud/PauseMenu" method="_on_save_pressed"]
+[connection signal="pressed" from="Hud/PauseMenu/Center/PausePanel/Margin/Content/RestartButton" to="Hud/PauseMenu" method="_on_restart_pressed"]
+[connection signal="pressed" from="Hud/PauseMenu/Center/PausePanel/Margin/Content/SurrenderButton" to="Hud/PauseMenu" method="_on_surrender_pressed"]
+[connection signal="pressed" from="Hud/PauseMenu/Center/PausePanel/Margin/Content/PauseExitButton" to="Hud/PauseMenu" method="_on_exit_pressed"]
+[connection signal="surrender_requested" from="Hud/PauseMenu" to="." method="_on_surrender_pressed"]
+[connection signal="return_to_menu_requested" from="Hud/PauseMenu" to="." method="_on_return_to_menu_pressed"]
 [connection signal="closed" from="TechTree" to="." method="_on_tech_tree_closed"]

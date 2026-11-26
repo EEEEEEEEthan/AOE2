@@ -14,6 +14,11 @@ func _capture() -> void:
 	while get_tree().current_scene == null and waited < 240:
 		await get_tree().process_frame
 		waited += 1
+	if get_tree().current_scene.get("bridge") == null:
+		await get_tree().process_frame
+		get_tree().change_scene_to_file("res://presentation/main.tscn")
+		await get_tree().process_frame
+		await get_tree().process_frame
 	var scene := get_tree().current_scene
 	get_window().size = Vector2i(1440, 900)
 	var bridge: Variant = scene.get("bridge")
@@ -43,6 +48,12 @@ func _capture() -> void:
 	for frame in SETTLE_FRAMES:
 		await get_tree().process_frame
 	await _save("ui_placement.png")
+	hud.emit_signal("placement_cancelled")
+	hud.call("open_pause_menu")
+	for frame in SETTLE_FRAMES:
+		await get_tree().process_frame
+	await _save("ui_pause.png")
+	hud.call("close_pause_menu")
 	get_tree().quit(0)
 
 
