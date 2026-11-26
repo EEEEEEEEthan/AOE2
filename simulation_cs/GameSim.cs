@@ -27,6 +27,7 @@ public sealed class GameSim
     private readonly LinkedList<long> _fieldRecency = new();
     private readonly Dictionary<long, long> _inventoryEntities = new();
     private readonly Dictionary<long, long> _progressEntities = new();
+    private bool _spatialReady;
 
     /// <summary>当前流场缓存中的条目数，供性能测试与监控断言。</summary>
     public int FieldCacheCount => _fields.Count;
@@ -939,11 +940,17 @@ public sealed class GameSim
         {
             return;
         }
+        if (!_spatialReady)
+        {
+            Spatial.Rebuild(World);
+            _spatialReady = true;
+        }
         GatherSystem.Step(World, InventoryForTeam);
         MonkSystem.Step(World);
         OrderSystem.Step(World, Spatial);
         BuildingSystem.Step(World, Grid, Terrain);
         MovementSystem.Step(World, Grid, Occupancy, FieldProvider, Terrain);
+        Spatial.Rebuild(World);
         List<long> dead = ProjectileSystem.Step(World);
         dead.AddRange(CombatSystem.Step(World, Spatial));
         ResolveDeaths(dead);

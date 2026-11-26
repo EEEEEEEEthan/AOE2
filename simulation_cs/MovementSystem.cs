@@ -35,12 +35,8 @@ public static class MovementSystem
             return;
         }
         occupancy.Rebuild(world);
-        foreach (long id in world.Entities())
+        foreach (long id in moveStore.ActiveIds())
         {
-            if (!moveStore.Has(id))
-            {
-                continue;
-            }
             if (moveStore.GetValue(id, SimComponents.Active) == 0)
             {
                 continue;

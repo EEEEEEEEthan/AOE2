@@ -5,21 +5,20 @@ namespace AoeSim;
 
 public static class CombatSystem
 {
+    [ThreadStatic]
+    private static List<long>? _candidates;
+
     public static List<long> Step(SimWorld world, SpatialHash spatial)
     {
-        spatial.Rebuild(world);
         var dead = new List<long>();
+        var deadSet = new HashSet<long>();
         ComponentStore combatStore = world.Store(SimComponents.Combat);
         if (combatStore.Count == 0)
         {
             return dead;
         }
-        foreach (long id in world.Entities())
+        foreach (long id in combatStore.ActiveIds())
         {
-            if (!combatStore.Has(id))
-            {
-                continue;
-            }
             if (!world.IsAlive(id))
             {
                 continue;
@@ -35,11 +34,11 @@ public static class CombatSystem
             {
                 if (InRange(world, id, explicitTarget))
                 {
-                    Attack(world, id, explicitTarget, dead);
+                    Attack(world, id, explicitTarget, dead, deadSet);
                 }
                 continue;
             }
-            AutoEngage(world, spatial, id, dead);
+            AutoEngage(world, spatial, id, dead, deadSet);
         }
         return dead;
     }
@@ -76,7 +75,12 @@ public static class CombatSystem
     /// 按姿态决定是否自主索敌与追击：禁止还击不索敌；驻守只打射程内；防御短距离追击；
     /// 进攻在较大仇恨半径内追击。玩家移动中的单位不主动接战。
     /// </summary>
-    private static void AutoEngage(SimWorld world, SpatialHash spatial, long attacker, List<long> dead)
+    private static void AutoEngage(
+        SimWorld world,
+        SpatialHash spatial,
+        long attacker,
+        List<long> dead,
+        HashSet<long> deadSet)
     {
         if (world.GetValue(attacker, SimComponents.Combat, SimComponents.RangeMax) <= 0)
         {
@@ -110,7 +114,7 @@ public static class CombatSystem
         if (InRange(world, attacker, target))
         {
             StopMoving(world, attacker);
-            Attack(world, attacker, target, dead);
+            Attack(world, attacker, target, dead, deadSet);
             return;
         }
         if (CombatStance.LeashTiles(stance) == 0)
@@ -256,7 +260,8 @@ public static class CombatSystem
         long x = world.GetValue(attacker, SimComponents.Position, SimComponents.X);
         long y = world.GetValue(attacker, SimComponents.Position, SimComponents.Y);
         long queryRadius = Fixed.Add(Fixed.FromInt(acquireMax * 2), Fixed.Half);
-        List<long> candidates = spatial.QueryRadius(x, y, queryRadius);
+        List<long> candidates = _candidates ??= new List<long>();
+        spatial.QueryRadius(x, y, queryRadius, candidates);
         int attackerCellX = (int)Fixed.ToInt(x);
         int attackerCellY = (int)Fixed.ToInt(y);
         long best = -1;
@@ -302,14 +307,19 @@ public static class CombatSystem
         return best;
     }
 
-    private static void Attack(SimWorld world, long attacker, long target, List<long> dead)
+    private static void Attack(
+        SimWorld world,
+        long attacker,
+        long target,
+        List<long> dead,
+        HashSet<long> deadSet)
     {
         long damage = ResolveDamage(world, attacker, target);
         long cooldown = world.GetValue(attacker, SimComponents.Combat, SimComponents.Cooldown);
         world.SetValue(attacker, SimComponents.Combat, SimComponents.CooldownLeft, Math.Max(1, cooldown));
         if (world.GetValue(attacker, SimComponents.Combat, SimComponents.IsRanged) == 0)
         {
-            ApplyDamage(world, target, damage, dead);
+            ApplyDamage(world, target, damage, dead, deadSet);
         }
         else
         {
@@ -348,11 +358,16 @@ public static class CombatSystem
             ? UnitArmorClass.Building
             : world.GetValue(target, SimComponents.Combat, SimComponents.ArmorClass);
 
-    private static void ApplyDamage(SimWorld world, long target, long damage, List<long> dead)
+    private static void ApplyDamage(
+        SimWorld world,
+        long target,
+        long damage,
+        List<long> dead,
+        HashSet<long> deadSet)
     {
         long hp = world.GetValue(target, SimComponents.Health, SimComponents.Hp) - damage;
         world.SetValue(target, SimComponents.Health, SimComponents.Hp, hp);
-        if (hp <= 0 && !dead.Contains(target))
+        if (hp <= 0 && deadSet.Add(target))
         {
             dead.Add(target);
         }

@@ -53,9 +53,10 @@ public sealed class OccupancyMap
     public void Rebuild(SimWorld world)
     {
         System.Array.Clear(_owner, 0, _owner.Length);
-        foreach (long id in world.Entities())
+        ComponentStore positionStore = world.Store(SimComponents.Position);
+        foreach (long id in positionStore.ActiveIds())
         {
-            if (!world.IsAlive(id) || !world.HasComponent(id, SimComponents.Position))
+            if (!world.IsAlive(id))
             {
                 continue;
             }

@@ -28,12 +28,9 @@ public static class ProjectileSystem
             return dead;
         }
         var spent = new List<long>();
-        foreach (long id in world.Entities())
+        var deadSet = new HashSet<long>();
+        foreach (long id in store.ActiveIds())
         {
-            if (!store.Has(id))
-            {
-                continue;
-            }
             long ticksLeft = store.GetValue(id, SimComponents.ProjectileTicksLeft) - 1;
             if (ticksLeft > 0)
             {
@@ -46,7 +43,7 @@ public static class ProjectileSystem
             {
                 long hp = world.GetValue(target, SimComponents.Health, SimComponents.Hp) - damage;
                 world.SetValue(target, SimComponents.Health, SimComponents.Hp, hp);
-                if (hp <= 0 && !dead.Contains(target))
+                if (hp <= 0 && deadSet.Add(target))
                 {
                     dead.Add(target);
                 }
