@@ -32,20 +32,20 @@ func _capture() -> void:
 	camera.set("grid_height", 12.0)
 	camera.set("focus", Vector3(9.5, 0.0, 6.5))
 	camera.set("ortho_size", 18.0)
-	camera.call("_apply_view")
+	camera.call("refresh_view")
 	for frame in WARMUP_FRAMES:
 		await get_tree().process_frame
 	await _save("building_showcase.png")
 
 	camera.set("focus", Vector3(9.5, 0.0, 3.8))
 	camera.set("ortho_size", 12.0)
-	camera.call("_apply_view")
+	camera.call("refresh_view")
 	for frame in SETTLE_FRAMES:
 		await get_tree().process_frame
 	await _save("building_showcase_team_blue.png")
 
 	camera.set("focus", Vector3(9.5, 0.0, 9.5))
-	camera.call("_apply_view")
+	camera.call("refresh_view")
 	for frame in SETTLE_FRAMES:
 		await get_tree().process_frame
 	await _save("building_showcase_team_red.png")
@@ -59,7 +59,7 @@ func _capture() -> void:
 	camera.set("grid_height", height)
 	camera.set("focus", Vector3(width * 0.25, 0.0, height * 0.5))
 	camera.set("ortho_size", 16.0)
-	camera.call("_apply_view")
+	camera.call("refresh_view")
 	for frame in WARMUP_FRAMES:
 		await get_tree().process_frame
 	await _save("building_generated_base.png")
