@@ -124,6 +124,7 @@ public readonly struct EntitySnapshot
     public readonly long GarrisonCapacity;
     public readonly long RepairState;
     public readonly long RepairTarget;
+    public readonly long GateState;
 
     public EntitySnapshot(
         long id,
@@ -146,7 +147,8 @@ public readonly struct EntitySnapshot
         long garrisonCount,
         long garrisonCapacity,
         long repairState,
-        long repairTarget)
+        long repairTarget,
+        long gateState)
     {
         Id = id;
         X = x;
@@ -169,6 +171,7 @@ public readonly struct EntitySnapshot
         GarrisonCapacity = garrisonCapacity;
         RepairState = repairState;
         RepairTarget = repairTarget;
+        GateState = gateState;
     }
 }
 
@@ -309,6 +312,7 @@ public sealed class SnapshotFrame
             long garrisonCapacity = 0;
             long repairState = 0;
             long repairTarget = -1;
+            long gateState = BuildingSystem.GateClosed;
             if (kind == EntityKind.Villager && world.HasComponent(id, SimComponents.Repair))
             {
                 repairState = world.GetValue(id, SimComponents.Repair, SimComponents.State);
@@ -322,6 +326,10 @@ public sealed class SnapshotFrame
                 buildingState = world.GetValue(id, SimComponents.Building, SimComponents.State);
                 buildingProgress = world.GetValue(id, SimComponents.Building, SimComponents.Progress);
                 buildingMaxProgress = world.GetValue(id, SimComponents.Building, SimComponents.MaxProgress);
+                if (BuildingTypes.IsGate(buildingType))
+                {
+                    gateState = world.GetValue(id, SimComponents.Building, SimComponents.GateState);
+                }
                 if (world.HasComponent(id, SimComponents.Garrison))
                 {
                     garrisonCount = world.GetValue(id, SimComponents.Garrison, SimComponents.Count);
@@ -349,7 +357,8 @@ public sealed class SnapshotFrame
                 garrisonCount,
                 garrisonCapacity,
                 repairState,
-                repairTarget));
+                repairTarget,
+                gateState));
         }
         var frame = new SnapshotFrame { Tick = world.Tick, Turn = turn, Entities = entities.ToArray() };
         if (vision != null)
@@ -561,6 +570,7 @@ public sealed class SnapshotFrame
                 writer.Write(entity.GarrisonCapacity);
                 writer.Write(entity.RepairState);
                 writer.Write(entity.RepairTarget);
+                writer.Write(entity.GateState);
             }
             writer.Write(VisionWidth);
             writer.Write(VisionHeight);
@@ -676,6 +686,7 @@ public sealed class SnapshotFrame
         for (int index = 0; index < count; index++)
         {
             entities[index] = new EntitySnapshot(
+                reader.ReadInt64(),
                 reader.ReadInt64(),
                 reader.ReadInt64(),
                 reader.ReadInt64(),

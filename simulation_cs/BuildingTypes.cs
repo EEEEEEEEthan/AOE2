@@ -15,6 +15,9 @@ public static class BuildingTypes
     public const long LumberCamp = 9;
     public const long Mill = 10;
     public const long MiningCamp = 11;
+    public const long PalisadeWall = 12;
+    public const long Gate = 13;
+    public const long FortifiedWall = 14;
 
     /// <summary>一块农田完工后挂载的食物节点总量，耗尽后需重播。</summary>
     public const long FarmFoodAmount = 250;
@@ -22,7 +25,13 @@ public static class BuildingTypes
     /// <summary>空田手动重播消耗的木材。</summary>
     public const long FarmReseedCost = 60;
 
-    public static bool IsKnown(long type) => type >= TownCenter && type <= MiningCamp;
+    public static bool IsKnown(long type) => type >= TownCenter && type <= FortifiedWall;
+
+    /// <summary>是否属于城墙体系（木栅栏/石墙/城门/加固墙），共享 1×1 占地与封闭语义。</summary>
+    public static bool IsWallLike(long type) =>
+        type == Wall || type == PalisadeWall || type == Gate || type == FortifiedWall;
+
+    public static bool IsGate(long type) => type == Gate;
 
     /// <summary>建筑所属时代：升城堡/帝国时统计上一时代的已完成建筑数量。</summary>
     public static long AgeOf(long type) => type switch
@@ -38,6 +47,9 @@ public static class BuildingTypes
         LumberCamp => TechCatalog.AgeDark,
         Mill => TechCatalog.AgeDark,
         MiningCamp => TechCatalog.AgeDark,
+        PalisadeWall => TechCatalog.AgeDark,
+        Gate => TechCatalog.AgeFeudal,
+        FortifiedWall => TechCatalog.AgeCastle,
         _ => TechCatalog.AgeDark,
     };
 
@@ -54,6 +66,9 @@ public static class BuildingTypes
         LumberCamp => 2,
         Mill => 2,
         MiningCamp => 2,
+        PalisadeWall => 1,
+        Gate => 1,
+        FortifiedWall => 1,
         _ => 0,
     };
 
@@ -70,6 +85,9 @@ public static class BuildingTypes
         LumberCamp => 2,
         Mill => 2,
         MiningCamp => 2,
+        PalisadeWall => 1,
+        Gate => 1,
+        FortifiedWall => 1,
         _ => 0,
     };
 
@@ -86,6 +104,9 @@ public static class BuildingTypes
         LumberCamp => 600,
         Mill => 600,
         MiningCamp => 600,
+        PalisadeWall => 250,
+        Gate => 800,
+        FortifiedWall => 1200,
         _ => 0,
     };
 
@@ -102,6 +123,9 @@ public static class BuildingTypes
         LumberCamp => 60,
         Mill => 60,
         MiningCamp => 60,
+        PalisadeWall => 16,
+        Gate => 48,
+        FortifiedWall => 36,
         _ => 0,
     };
 
@@ -127,6 +151,9 @@ public static class BuildingTypes
         LumberCamp => new ResourceCost(wood: 100, food: 0, gold: 0, stone: 0),
         Mill => new ResourceCost(wood: 100, food: 0, gold: 0, stone: 0),
         MiningCamp => new ResourceCost(wood: 100, food: 0, gold: 0, stone: 0),
+        PalisadeWall => new ResourceCost(wood: 3, food: 0, gold: 0, stone: 0),
+        Gate => new ResourceCost(wood: 0, food: 0, gold: 0, stone: 30),
+        FortifiedWall => new ResourceCost(wood: 0, food: 0, gold: 0, stone: 8),
         _ => default,
     };
 

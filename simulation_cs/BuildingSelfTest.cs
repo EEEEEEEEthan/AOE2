@@ -26,6 +26,10 @@ public static class BuildingSelfTest
         CheckRepairResourceShortage(failures);
         CheckRepairRejects(failures);
         CheckRepairDeterminism(failures);
+        CheckWallTypes(failures);
+        CheckGateTogglePathing(failures);
+        CheckGateDestroyGap(failures);
+        CheckGateSnapshotAndDeterminism(failures);
         CheckDeterminism(failures);
         CheckCommandRoundtrip(failures);
         return failures;
@@ -506,6 +510,134 @@ public static class BuildingSelfTest
         return default;
     }
 
+    private static void CheckWallTypes(List<string> failures)
+    {
+        Expect(failures, BuildingTypes.IsKnown(BuildingTypes.PalisadeWall), "palisade wall is a known building");
+        Expect(failures, BuildingTypes.IsKnown(BuildingTypes.Gate), "gate is a known building");
+        Expect(failures, BuildingTypes.IsKnown(BuildingTypes.FortifiedWall), "fortified wall is a known building");
+        Expect(failures,
+            BuildingTypes.SizeWidth(BuildingTypes.PalisadeWall) == 1
+                && BuildingTypes.SizeHeight(BuildingTypes.Gate) == 1,
+            "palisade wall and gate use a 1x1 footprint");
+        Expect(failures,
+            BuildingTypes.Cost(BuildingTypes.PalisadeWall).Wood > 0
+                && BuildingTypes.Cost(BuildingTypes.PalisadeWall).Stone == 0,
+            "palisade wall costs wood only");
+        Expect(failures,
+            BuildingTypes.Cost(BuildingTypes.Gate).Stone > 0
+                && BuildingTypes.Cost(BuildingTypes.FortifiedWall).Stone
+                    > BuildingTypes.Cost(BuildingTypes.Wall).Stone,
+            "gate and fortified wall cost stone, fortified above plain wall");
+        Expect(failures,
+            BuildingTypes.MaxHp(BuildingTypes.PalisadeWall) < BuildingTypes.MaxHp(BuildingTypes.Wall)
+                && BuildingTypes.MaxHp(BuildingTypes.FortifiedWall) > BuildingTypes.MaxHp(BuildingTypes.Wall),
+            "wall hp ladder: palisade < stone < fortified");
+
+        var sim = new GameSim(new NavGrid(16, 16), 540);
+        sim.AddResource(0, GameSim.ResourceWood, 100);
+        long palisade = sim.IssuePlaceBuilding(BuildingTypes.PalisadeWall, 3, 3, 0);
+        Expect(failures, palisade >= 0, "palisade placed with wood only");
+        Expect(failures,
+            sim.Resource(0, GameSim.ResourceWood) == 100 - BuildingTypes.Cost(BuildingTypes.PalisadeWall).Wood,
+            "palisade deducts wood");
+        Expect(failures, sim.Grid.IsBuildingBlocked(3, 3), "palisade blocks pathing");
+    }
+
+    private static void CheckGateTogglePathing(List<string> failures)
+    {
+        var grid = new NavGrid(16, 16);
+        var sim = new GameSim(grid, 541);
+        sim.AddResource(0, GameSim.ResourceStone, 200);
+        long gate = sim.IssuePlaceBuilding(BuildingTypes.Gate, 5, 5, 0);
+        Expect(failures, gate >= 0, "gate placed with stone");
+        Expect(failures, grid.IsBuildingBlocked(5, 5), "gate foundation blocks pathing");
+        Expect(failures,
+            !sim.IssueToggleGate(gate, 0, BuildingSystem.GateOpen),
+            "foundation gate rejects toggle");
+        BuildingSystem.Complete(sim.World, gate);
+        Expect(failures,
+            sim.World.GetValue(gate, SimComponents.Building, SimComponents.GateState)
+                == BuildingSystem.GateClosed,
+            "completed gate defaults to closed");
+        Expect(failures, grid.IsStructureBlocked(5, 5), "closed gate blocks movement");
+
+        Expect(failures, sim.IssueToggleGate(gate, 0, BuildingSystem.GateOpen), "owning player opens gate");
+        Expect(failures, !grid.IsStructureBlocked(5, 5), "open gate lets units through");
+        Expect(failures, !grid.IsBlocked(5, 5), "open gate leaves pathing union open");
+        Expect(failures, grid.IsBuildingBlocked(5, 5), "open gate keeps its footprint occupied");
+        Expect(failures,
+            sim.IssuePlaceBuilding(BuildingTypes.House, 5, 5, 0) == -1,
+            "open gate footprint still rejects overlapping building");
+
+        Expect(failures, sim.IssueToggleGate(gate, 0, BuildingSystem.GateLocked), "gate can be locked");
+        Expect(failures, grid.IsStructureBlocked(5, 5), "locked gate blocks movement");
+        Expect(failures,
+            sim.World.GetValue(gate, SimComponents.Building, SimComponents.GateState)
+                == BuildingSystem.GateLocked,
+            "locked state written to building");
+        Expect(failures, sim.IssueToggleGate(gate, 0, BuildingSystem.GateClosed), "gate can close again");
+        Expect(failures, grid.IsStructureBlocked(5, 5), "closed gate blocks again");
+        Expect(failures, !sim.IssueToggleGate(gate, 1, BuildingSystem.GateOpen), "enemy cannot toggle gate");
+        Expect(failures, !sim.IssueToggleGate(gate, 0, 3), "invalid gate state rejected");
+    }
+
+    private static void CheckGateDestroyGap(List<string> failures)
+    {
+        var grid = new NavGrid(16, 16);
+        var sim = new GameSim(grid, 542);
+        sim.AddResource(0, GameSim.ResourceStone, 200);
+        long gate = sim.IssuePlaceBuilding(BuildingTypes.Gate, 5, 5, 0);
+        BuildingSystem.Complete(sim.World, gate);
+        Expect(failures, grid.IsBlocked(5, 5), "closed gate blocks before attack");
+        sim.SpawnUnit(6, 5, 1, 100, 500, 1.0, 1.0, 0.0);
+        for (int tick = 0; tick < 300; tick++)
+        {
+            sim.SimulateTick();
+        }
+        Expect(failures,
+            sim.World.GetValue(gate, SimComponents.Building, SimComponents.State)
+                == BuildingSystem.StateRuins,
+            "attacked gate collapses into ruins");
+        Expect(failures, !grid.IsBuildingBlocked(5, 5), "ruined gate releases its footprint");
+        Expect(failures, !grid.IsBlocked(5, 5), "ruined gate leaves a walkable gap");
+        Expect(failures, sim.FieldFor(5, 5).Reachable(8, 5), "path reopens through the breach");
+    }
+
+    private static void CheckGateSnapshotAndDeterminism(List<string> failures)
+    {
+        long first = RunGateCycle();
+        long second = RunGateCycle();
+        Expect(failures, first == second, "identical gate cycles share checksum");
+
+        var grid = new NavGrid(16, 16);
+        var sim = new GameSim(grid, 543);
+        sim.AddResource(0, GameSim.ResourceStone, 200);
+        long gate = sim.IssuePlaceBuilding(BuildingTypes.Gate, 5, 5, 0);
+        BuildingSystem.Complete(sim.World, gate);
+        sim.IssueToggleGate(gate, 0, BuildingSystem.GateOpen);
+        SnapshotFrame frame = SnapshotFrame.Build(sim.World, sim.Lockstep.Turn);
+        EntitySnapshot snapshot = FindEntity(frame, gate);
+        Expect(failures, snapshot.GateState == BuildingSystem.GateOpen, "snapshot carries open gate state");
+        SnapshotFrame decoded = SnapshotFrame.Decode(frame.Encode());
+        EntitySnapshot restored = FindEntity(decoded, gate);
+        Expect(failures, restored.GateState == BuildingSystem.GateOpen, "gate state survives snapshot roundtrip");
+    }
+
+    private static long RunGateCycle()
+    {
+        var sim = new GameSim(new NavGrid(16, 16), 544);
+        sim.AddResource(0, GameSim.ResourceStone, 200);
+        long gate = sim.IssuePlaceBuilding(BuildingTypes.Gate, 5, 5, 0);
+        BuildingSystem.Complete(sim.World, gate);
+        sim.IssueToggleGate(gate, 0, BuildingSystem.GateOpen);
+        sim.IssueToggleGate(gate, 0, BuildingSystem.GateLocked);
+        for (int tick = 0; tick < 20; tick++)
+        {
+            sim.SimulateTick();
+        }
+        return sim.Checksum();
+    }
+
     private static void CheckDeterminism(List<string> failures)
     {
         Expect(failures, RunBuildCycle() == RunBuildCycle(), "identical build cycles share checksum");
@@ -558,6 +690,15 @@ public static class BuildingSelfTest
                 && repairRestored.Entity == 4
                 && repairRestored.TargetEntity == 5,
             "repair command survives array roundtrip");
+
+        var toggle = new LockstepCommand(
+            0, LockstepCommand.KindToggleGate, 7, 0, 0, -1, -1, -1, 0, 0, BuildingSystem.GateOpen, 0);
+        LockstepCommand toggleRestored = LockstepCommand.FromArray(toggle.ToArray());
+        Expect(failures,
+            toggleRestored.Kind == LockstepCommand.KindToggleGate
+                && toggleRestored.Entity == 7
+                && toggleRestored.Aux == BuildingSystem.GateOpen,
+            "gate toggle command survives array roundtrip");
 
         var sim = new GameSim(new NavGrid(12, 12), 506);
         sim.AddResource(place.Player, GameSim.ResourceWood, 200);

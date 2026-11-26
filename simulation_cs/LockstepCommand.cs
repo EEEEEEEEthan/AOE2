@@ -32,6 +32,7 @@ public sealed class LockstepCommand
     public const long KindMarketSell = 27;
     public const long KindTribute = 28;
     public const long KindTradeRoute = 29;
+    public const long KindToggleGate = 30;
 
     public const int FieldCount = 12;
 

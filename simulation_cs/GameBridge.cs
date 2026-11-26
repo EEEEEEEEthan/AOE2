@@ -58,8 +58,8 @@ public partial class GameBridge : Node
     /// <summary>预览/截图专用：把所有建筑类型按双方阵营摆成两排，验收建筑外观。</summary>
     public void StartBuildingShowcase()
     {
-        var grid = new AoeSim.NavGrid(24, 12);
-        var terrain = AoeSim.TerrainGrid.Flat(24, 12);
+        var grid = new AoeSim.NavGrid(28, 12);
+        var terrain = AoeSim.TerrainGrid.Flat(28, 12);
         var sim = new AoeSim.GameSim(grid, 7, 2, 6, AoeSim.MatchConfig.Standard, terrain);
         _grid = grid;
         _terrain = terrain;
@@ -72,8 +72,11 @@ public partial class GameBridge : Node
             AoeSim.BuildingTypes.Tower,
             AoeSim.BuildingTypes.Market,
             AoeSim.BuildingTypes.Farm,
+            AoeSim.BuildingTypes.PalisadeWall,
+            AoeSim.BuildingTypes.Gate,
+            AoeSim.BuildingTypes.FortifiedWall,
         };
-        int[] originsX = { 0, 5, 8, 12, 14, 16, 20 };
+        int[] originsX = { 0, 5, 8, 12, 14, 16, 20, 23, 24, 25 };
         for (int team = 0; team < 2; team++)
         {
             int originY = team == 0 ? 2 : 8;
@@ -348,6 +351,7 @@ public partial class GameBridge : Node
                 { "garrison_capacity", entity.GarrisonCapacity },
                 { "repair_state", entity.RepairState },
                 { "repair_target", entity.RepairTarget },
+                { "gate_state", entity.GateState },
             });
         }
         return result;
@@ -394,6 +398,7 @@ public partial class GameBridge : Node
         var garrisonCapacities = new int[count];
         var repairStates = new int[count];
         var repairTargets = new int[count];
+        var gateStates = new int[count];
         for (int index = 0; index < count; index++)
         {
             AoeSim.EntitySnapshot entity = entities[index];
@@ -415,6 +420,7 @@ public partial class GameBridge : Node
             garrisonCapacities[index] = (int)entity.GarrisonCapacity;
             repairStates[index] = (int)entity.RepairState;
             repairTargets[index] = (int)entity.RepairTarget;
+            gateStates[index] = (int)entity.GateState;
         }
         _batch = new Godot.Collections.Dictionary
         {
@@ -438,6 +444,7 @@ public partial class GameBridge : Node
             { "garrison_capacity", garrisonCapacities },
             { "repair_state", repairStates },
             { "repair_target", repairTargets },
+            { "gate_state", gateStates },
         };
         _batchTick = frame.Tick;
         return _batch;

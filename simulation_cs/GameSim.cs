@@ -841,6 +841,28 @@ public sealed class GameSim
         return id;
     }
 
+    /// <summary>
+    /// 城门开合/锁定：只允许本方已完工城门，targetState 取 0 关 / 1 开 / 2 锁定；
+    /// 成功后重建流场，让寻路立刻按新通行性生效。
+    /// </summary>
+    public bool IssueToggleGate(long gate, long player, long targetState)
+    {
+        if (!World.IsAlive(gate) || !World.HasComponent(gate, SimComponents.Building))
+        {
+            return false;
+        }
+        if (World.GetValue(gate, SimComponents.Team, SimComponents.TeamId) != player)
+        {
+            return false;
+        }
+        if (!BuildingSystem.SetGateState(World, Grid, gate, targetState))
+        {
+            return false;
+        }
+        InvalidateFields();
+        return true;
+    }
+
     /// <summary>空田手动重播：仅本方已完工且耗尽的农田可用，扣木材后重填食物节点。</summary>
     public bool IssueReseedFarm(long building, long player)
     {
@@ -1185,7 +1207,8 @@ public sealed class GameSim
         || kind == LockstepCommand.KindGarrison
         || kind == LockstepCommand.KindUngarrison
         || kind == LockstepCommand.KindRepair
-        || kind == LockstepCommand.KindTradeRoute;
+        || kind == LockstepCommand.KindTradeRoute
+        || kind == LockstepCommand.KindToggleGate;
 
     public bool ApplyCommand(LockstepCommand command)
     {
@@ -1287,6 +1310,9 @@ public sealed class GameSim
                     this, command.Player, command.Aux, command.CellX, command.CellY);
             case LockstepCommand.KindTradeRoute:
                 IssueTradeRoute(command.Entity, command.TargetEntity, command.DropEntity);
+                break;
+            case LockstepCommand.KindToggleGate:
+                IssueToggleGate(command.Entity, command.Player, command.Aux);
                 break;
         }
         return true;

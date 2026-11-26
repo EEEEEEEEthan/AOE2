@@ -22,6 +22,7 @@ public static class SimComponents
     public const string PlayerProgress = "player_progress";
     public const string King = "king";
     public const string Building = "building";
+    public const string GateState = "gate_state";
     public const string Construct = "construct";
     public const string Repair = "repair";
     public const string Wonder = "wonder";

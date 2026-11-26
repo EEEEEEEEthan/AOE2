@@ -9,7 +9,7 @@ public static class Traversal
 {
     public static bool CellPassable(NavGrid grid, TerrainGrid? terrain, int x, int y, long domain)
     {
-        if (!grid.InBounds(x, y) || grid.IsBuildingBlocked(x, y))
+        if (!grid.InBounds(x, y) || grid.IsStructureBlocked(x, y))
         {
             return false;
         }
