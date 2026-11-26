@@ -19,6 +19,7 @@ public sealed class SimulationServer
     private const int TurnLookahead = 8;
 
     private readonly Dictionary<long, List<LockstepCommand>[]> _turns = new();
+    private readonly List<ComputerPlayer> _computerPlayers = new();
     private readonly object _gate = new();
     private long _rejectedCommands;
     private long _acceptedCommands;
@@ -68,6 +69,38 @@ public sealed class SimulationServer
     public SimulationServer(GameSim sim)
     {
         Sim = sim;
+    }
+
+    /// <summary>挂载电脑玩家；同队已存在则忽略，按队伍升序在回合边界依次决策。</summary>
+    public void AddComputerPlayer(ComputerPlayer player)
+    {
+        lock (_gate)
+        {
+            if (player.Team < 0 || player.Team >= Sim.Lockstep.PlayerCount)
+            {
+                return;
+            }
+            foreach (ComputerPlayer existing in _computerPlayers)
+            {
+                if (existing.Team == player.Team)
+                {
+                    return;
+                }
+            }
+            _computerPlayers.Add(player);
+            _computerPlayers.Sort((left, right) => left.Team.CompareTo(right.Team));
+        }
+    }
+
+    public int ComputerPlayerCount
+    {
+        get
+        {
+            lock (_gate)
+            {
+                return _computerPlayers.Count;
+            }
+        }
     }
 
     /// <summary>本地/可信调用：以帧里声明的 Player 作为来源玩家。</summary>
@@ -153,6 +186,7 @@ public sealed class SimulationServer
         {
             if (_turnTicks == 0)
             {
+                RunComputerPlayers(Sim.Lockstep.Turn);
                 ApplyTurnCommands(Sim.Lockstep.Turn);
             }
             Sim.SimulateTick();
@@ -192,6 +226,26 @@ public sealed class SimulationServer
         lock (_gate)
         {
             return Sim.World.Checksum();
+        }
+    }
+
+    /// <summary>回合开始时让各电脑玩家决策，指令仍走归属校验与录像录制路径。</summary>
+    private void RunComputerPlayers(long turn)
+    {
+        if (_computerPlayers.Count == 0 || (Sim.Match != null && Sim.Match.Ended))
+        {
+            return;
+        }
+        foreach (ComputerPlayer player in _computerPlayers)
+        {
+            List<LockstepCommand> commands = player.Think(turn);
+            if (commands.Count == 0)
+            {
+                continue;
+            }
+            Enqueue(
+                new CommandFrame { Player = player.Team, Turn = turn, Commands = commands.ToArray() },
+                player.Team);
         }
     }
 

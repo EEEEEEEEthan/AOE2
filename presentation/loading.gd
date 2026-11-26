@@ -71,7 +71,8 @@ func _run_loading() -> void:
 	_bridge.StartGeneratedMatch(
 		int(config.get("seed", MatchSetup.DEFAULT_SEED)),
 		int(config.get("player_count", MatchSetup.DEFAULT_PLAYER_COUNT)),
-		int(config.get("map_type", MatchSetup.ARABIA_MAP_TYPE)))
+		int(config.get("map_type", MatchSetup.ARABIA_MAP_TYPE)),
+		int(config.get("ai_difficulty", 1)))
 
 	if not _bridge.HasSession or _bridge.TerrainWidth <= 0 or _bridge.TerrainHeight <= 0:
 		_fail("生成地图失败：未能建立对局会话。")

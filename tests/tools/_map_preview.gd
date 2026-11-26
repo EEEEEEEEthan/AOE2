@@ -23,7 +23,7 @@ func _capture() -> void:
 		bridge = scene.get("bridge")
 		waited += 1
 
-	bridge.call("StartGeneratedMatch", SEED, PLAYERS)
+	bridge.call("StartGeneratedMatch", SEED, PLAYERS, 0, -1)
 	bridge.call("RevealAllVision")
 	var world: Node3D = scene.get_node("WorldView")
 	for child in world.get_children():
