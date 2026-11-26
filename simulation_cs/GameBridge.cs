@@ -150,6 +150,41 @@ public partial class GameBridge : Node
 
     public bool MatchEnded() => MatchPhase() == AoeSim.MatchState.PhaseEnded;
 
+    public int CivilizationCount => (int)AoeSim.CivilizationCatalog.Count;
+
+    public int TechCount => (int)AoeSim.TechCatalog.TechCount;
+
+    public string CivilizationName(long civ) => AoeSim.CivilizationCatalog.Name(civ);
+
+    /// <summary>
+    /// 只读科技树数据：按科技 id 顺序给出名称、时代、前置建筑、造价、研发 tick
+    /// 与本文明是否可用，供表现层渲染，不触及对局状态。
+    /// </summary>
+    public Godot.Collections.Array<Godot.Collections.Dictionary> TechTree(long civ)
+    {
+        var result = new Godot.Collections.Array<Godot.Collections.Dictionary>();
+        for (long techId = 0; techId < AoeSim.TechCatalog.TechCount; techId++)
+        {
+            long requiredAge = AoeSim.TechCatalog.RequiredAge(techId);
+            long requiredBuilding = AoeSim.TechCatalog.RequiredBuilding(techId);
+            result.Add(new Godot.Collections.Dictionary
+            {
+                { "id", techId },
+                { "name", AoeSim.TechCatalog.TechName(techId) },
+                { "description", AoeSim.TechCatalog.TechDescription(techId) },
+                { "required_age", requiredAge },
+                { "required_age_name", AoeSim.TechCatalog.AgeName(requiredAge) },
+                { "required_building", requiredBuilding },
+                { "required_building_name", AoeSim.BuildingTypes.DisplayName(requiredBuilding) },
+                { "food", AoeSim.TechCatalog.TechFoodCostOf(techId) },
+                { "gold", AoeSim.TechCatalog.TechGoldCostOf(techId) },
+                { "research_ticks", AoeSim.TechCatalog.TechResearchTicksFor(techId) },
+                { "available", AoeSim.TechCatalog.IsAvailable(civ, techId) },
+            });
+        }
+        return result;
+    }
+
     public Godot.Collections.Array<Godot.Collections.Dictionary> PlayerStates()
     {
         var result = new Godot.Collections.Array<Godot.Collections.Dictionary>();

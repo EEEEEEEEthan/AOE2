@@ -27,6 +27,26 @@ public static class BuildingTypes
 
     public static bool IsKnown(long type) => type >= TownCenter && type <= FortifiedWall;
 
+    /// <summary>建筑中文名，供科技树等只读界面展示分组；未知类型返回空串。</summary>
+    public static string DisplayName(long type) => type switch
+    {
+        TownCenter => "城镇中心",
+        House => "房屋",
+        Barracks => "兵营",
+        Wall => "石墙",
+        Tower => "箭塔",
+        Market => "市场",
+        Farm => "农田",
+        Dock => "码头",
+        LumberCamp => "伐木场",
+        Mill => "磨坊",
+        MiningCamp => "采矿营",
+        PalisadeWall => "木栅栏",
+        Gate => "城门",
+        FortifiedWall => "加固墙",
+        _ => "",
+    };
+
     /// <summary>是否属于城墙体系（木栅栏/石墙/城门/加固墙），共享 1×1 占地与封闭语义。</summary>
     public static bool IsWallLike(long type) =>
         type == Wall || type == PalisadeWall || type == Gate || type == FortifiedWall;
