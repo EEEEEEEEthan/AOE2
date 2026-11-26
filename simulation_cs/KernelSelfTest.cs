@@ -164,6 +164,50 @@ public static class KernelSelfTest
             Fixed.ToInt(sim.World.GetValue(id, SimComponents.Position, SimComponents.X)) == 13
             && Fixed.ToInt(sim.World.GetValue(id, SimComponents.Position, SimComponents.Y)) == 8,
             "unit routes around wall");
+
+        var gapField = new FlowField(walled);
+        Expect(failures, gapField.Compute(walled, 13, 8) && gapField.Reachable(2, 8),
+            "flow field crosses single-cell gap");
+
+        var cornerGrid = new NavGrid(8, 8);
+        cornerGrid.SetBlocked(6, 5, true);
+        var cornerField = new FlowField(cornerGrid);
+        cornerField.Compute(cornerGrid, 3, 3);
+        GridDirection cornerDirection = cornerField.DirectionAt(5, 5);
+        Expect(failures, !(cornerDirection.X == 1 && cornerDirection.Y == 1),
+            "flow field does not cut blocked corner");
+
+        var openSim = new GameSim(new NavGrid(16, 16), 17);
+        long walker = openSim.SpawnUnit(2, 2, 0, 50, 0, 0.0, 0.0, 0.5);
+        openSim.IssueMove(walker, 12, 12);
+        int previousCost = int.MaxValue;
+        bool costMonotonic = true;
+        for (int tick = 0; tick < 400; tick++)
+        {
+            openSim.SimulateTick();
+            int walkerX = (int)Fixed.ToInt(
+                openSim.World.GetValue(walker, SimComponents.Position, SimComponents.X));
+            int walkerY = (int)Fixed.ToInt(
+                openSim.World.GetValue(walker, SimComponents.Position, SimComponents.Y));
+            int walkerCost = openSim.FieldFor(12, 12).CostAt(walkerX, walkerY);
+            if (walkerCost < 0 || walkerCost > previousCost)
+            {
+                costMonotonic = false;
+            }
+            previousCost = walkerCost;
+        }
+        long settledX = openSim.World.GetValue(walker, SimComponents.Position, SimComponents.X);
+        long settledY = openSim.World.GetValue(walker, SimComponents.Position, SimComponents.Y);
+        for (int tick = 0; tick < 10; tick++)
+        {
+            openSim.SimulateTick();
+        }
+        Expect(failures,
+            Fixed.ToInt(settledX) == 12 && Fixed.ToInt(settledY) == 12
+            && openSim.World.GetValue(walker, SimComponents.Position, SimComponents.X) == settledX
+            && openSim.World.GetValue(walker, SimComponents.Position, SimComponents.Y) == settledY,
+            "unit reaches open-field goal without jitter");
+        Expect(failures, costMonotonic, "unit flow-field cost never increases");
     }
 
     private static void CheckFlowFieldCache(List<string> failures)
