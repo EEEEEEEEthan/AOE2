@@ -8,6 +8,22 @@ const MODEL_PATHS := [
 	"res://assets/vox/soldier.vox",
 	"res://assets/vox/tree.vox",
 	"res://assets/vox/town_center.vox",
+	"res://assets/vox/town_center_hall.vox",
+	"res://assets/vox/house.vox",
+	"res://assets/vox/barracks.vox",
+	"res://assets/vox/wall.vox",
+	"res://assets/vox/tower.vox",
+	"res://assets/vox/market.vox",
+]
+
+# BuildingTypes TownCenter..Market 各自一个模型文件。
+const BUILDING_MODEL_PATHS := [
+	"res://assets/vox/town_center_hall.vox",
+	"res://assets/vox/house.vox",
+	"res://assets/vox/barracks.vox",
+	"res://assets/vox/wall.vox",
+	"res://assets/vox/tower.vox",
+	"res://assets/vox/market.vox",
 ]
 
 
@@ -31,3 +47,11 @@ func run() -> void:
 		if mesh != null:
 			check_eq((mesh as ArrayMesh).get_surface_count(), 1, "%s one surface" % path)
 			check((mesh as ArrayMesh).get_aabb().size.length() > 0.0, "%s has volume" % path)
+
+	check_eq(BUILDING_MODEL_PATHS.size(), 6, "six building types have a model")
+	for path: String in BUILDING_MODEL_PATHS:
+		var model: Dictionary = MODEL.load_model(path, Color(0.82, 0.22, 0.2), 0.125)
+		var mesh: Variant = model["mesh"]
+		check(mesh != null, "building model %s loads" % path)
+		if mesh != null:
+			check((mesh as ArrayMesh).get_aabb().size.length() > 0.0, "building model %s has volume" % path)
