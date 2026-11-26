@@ -24,6 +24,7 @@ public sealed class LockstepCommand
     public const long KindConstruct = 19;
     public const long KindCancelResearch = 20;
     public const long KindReseedFarm = 21;
+    public const long KindRepair = 22;
 
     public const int FieldCount = 12;
 

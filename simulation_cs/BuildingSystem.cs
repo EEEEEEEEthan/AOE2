@@ -227,7 +227,7 @@ public static class BuildingSystem
         return world.GetValue(buildingId, SimComponents.Building, SimComponents.State) == StateFoundation;
     }
 
-    private static bool IsAdjacent(
+    internal static bool IsAdjacent(
         int workerX, int workerY, int originX, int originY, int sizeWidth, int sizeHeight)
     {
         int nearX = System.Math.Clamp(workerX, originX, originX + sizeWidth - 1);
@@ -267,7 +267,7 @@ public static class BuildingSystem
         PopulationSystem.AddCap(world, team, cap * sign);
     }
 
-    private static void Approach(
+    internal static void Approach(
         SimWorld world,
         NavGrid grid,
         TerrainGrid terrain,
@@ -344,7 +344,7 @@ public static class BuildingSystem
         cellX >= originX && cellX < originX + sizeWidth
         && cellY >= originY && cellY < originY + sizeHeight;
 
-    private static void StopWorker(SimWorld world, long id)
+    internal static void StopWorker(SimWorld world, long id)
     {
         world.SetValue(id, SimComponents.Move, SimComponents.Active, 0);
         world.SetValue(id, SimComponents.Velocity, SimComponents.X, 0);
