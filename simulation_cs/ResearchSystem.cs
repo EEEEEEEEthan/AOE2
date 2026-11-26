@@ -66,6 +66,7 @@ public static class ResearchSystem
             return false;
         }
         if (TechCatalog.IsResearched(sim.PlayerResearch(team), techId)
+            || !TechCatalog.IsAvailable(sim.Civ(team), techId)
             || sim.PlayerAge(team) < TechCatalog.RequiredAge(techId))
         {
             return false;

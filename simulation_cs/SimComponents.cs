@@ -106,6 +106,7 @@ public static class SimComponents
 
     public const string Age = "age";
     public const string Research = "research";
+    public const string Civ = "civ";
     public const string ResearchKind = "research_kind";
     public const string ResearchTarget = "research_target";
     public const string ResearchProgress = "research_progress";

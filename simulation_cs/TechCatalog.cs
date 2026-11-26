@@ -58,6 +58,9 @@ public static class TechCatalog
 
     public static bool IsValidTech(long techId) => techId >= 0 && techId < TechCount;
 
+    /// <summary>本文明是否可研究该科技：全局合法且不在该文明的禁用清单内。</summary>
+    public static bool IsAvailable(long civ, long techId) => CivilizationCatalog.IsTechEnabled(civ, techId);
+
     public static long RequiredAge(long techId) => TechRequiredAge[techId];
 
     public static long RequiredBuilding(long techId) => TechRequiredBuilding[techId];
@@ -99,4 +102,10 @@ public static class TechCatalog
 
     public static long EffectiveStat(long age, long researchMask, long stat, long baseValue) =>
         baseValue + AgeBonus(age, stat) + TechBonus(researchMask, stat);
+
+    /// <summary>在时代与科技加成之上再叠加文明全局加成。</summary>
+    public static long EffectiveStat(
+        long civ, long age, long researchMask, long stat, long baseValue) =>
+        EffectiveStat(age, researchMask, stat, baseValue)
+        + CivilizationCatalog.StatBonus(civ, stat);
 }

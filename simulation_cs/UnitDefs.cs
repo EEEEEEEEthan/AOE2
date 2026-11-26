@@ -45,6 +45,12 @@ public static class UnitDefs
     public const long Archer = 2;
     public const long Knight = 3;
 
+    /// <summary>通用兵种数量：0..BaseUnitCount-1 所有文明都可用，其后为文明独特单位。</summary>
+    public const long BaseUnitCount = 4;
+
+    /// <summary>不列颠独特单位：射程更远的精锐长弓兵。</summary>
+    public const long Longbowman = 4;
+
     private static readonly UnitDef[] Table =
     {
         new UnitDef
@@ -71,10 +77,27 @@ public static class UnitDefs
             IsRanged = false, MinRangeTiles = 1.0, MaxRangeTiles = 1.0, SpeedTilesPerTick = 0.12, Cooldown = 6,
             ArmorMelee = 2, ArmorPierce = 1, ArmorSiege = 0,
         },
+        new UnitDef
+        {
+            MaxHp = 45, AttackDamage = 7, AttackClass = UnitAttackClass.Pierce, ArmorClass = UnitArmorClass.Archer,
+            IsRanged = true, MinRangeTiles = 1.0, MaxRangeTiles = 7.0, SpeedTilesPerTick = 0.09, Cooldown = 8,
+            ArmorMelee = 0, ArmorPierce = 1, ArmorSiege = 0,
+        },
     };
 
     public static UnitDef Get(long unitType) =>
         unitType >= 0 && unitType < Table.Length ? Table[(int)unitType] : Table[Swordsman];
+
+    /// <summary>通用兵种所有文明可用；独特单位只有其所属文明可造。</summary>
+    public static bool IsUnitAvailable(long civ, long unitType)
+    {
+        if (unitType < 0 || unitType >= Table.Length)
+        {
+            return false;
+        }
+        return unitType < BaseUnitCount
+            || CivilizationCatalog.UniqueUnit(civ) == unitType;
+    }
 
     /// <summary>攻击方兵种对目标护甲类型的附加伤害。</summary>
     public static long BonusDamage(long attackerType, long targetArmorClass) => attackerType switch
