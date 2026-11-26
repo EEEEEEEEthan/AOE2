@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 
 namespace AoeSim;
@@ -13,8 +14,12 @@ public sealed class SimWorld
     public SimRng Rng { get; }
 
     private readonly List<bool> _alive = new();
-    private readonly Dictionary<string, ComponentStore> _stores = new();
-    private long[] _aliveCache = System.Array.Empty<long>();
+    private readonly List<ComponentStore> _stores = new();
+    private readonly Dictionary<string, int> _storeIds = new(StringComparer.Ordinal);
+    private readonly NameIdCache _storeCache = new(256);
+    private List<string>? _sortedComponentNames;
+    private int[] _sortedComponentIds = Array.Empty<int>();
+    private long[] _aliveCache = Array.Empty<long>();
     private bool _cacheDirty = true;
 
     public SimWorld(long seed = 1)
@@ -43,9 +48,9 @@ public sealed class SimWorld
         }
         _alive[(int)id] = false;
         _cacheDirty = true;
-        foreach (ComponentStore store in _stores.Values)
+        for (int index = 0; index < _stores.Count; index++)
         {
-            store.Remove(id);
+            _stores[index].Remove(id);
         }
     }
 
@@ -71,12 +76,35 @@ public sealed class SimWorld
 
     public ComponentStore Store(string name)
     {
-        if (!_stores.TryGetValue(name, out ComponentStore? store))
+        int componentId = ComponentId(name, create: true);
+        return _stores[componentId];
+    }
+
+    public ComponentStore Store(int componentId) => _stores[componentId];
+
+    public int ComponentId(string component) => ComponentId(component, create: false);
+
+    public int ComponentId(string component, bool create)
+    {
+        if (_storeCache.TryGet(component, out int cached))
         {
-            store = new ComponentStore();
-            _stores[name] = store;
+            return cached;
         }
-        return store;
+        if (_storeIds.TryGetValue(component, out int componentId))
+        {
+            _storeCache.Set(component, componentId);
+            return componentId;
+        }
+        if (!create)
+        {
+            return -1;
+        }
+        componentId = _stores.Count;
+        _stores.Add(new ComponentStore());
+        _storeIds.Add(component, componentId);
+        _storeCache.Set(component, componentId);
+        _sortedComponentNames = null;
+        return componentId;
     }
 
     public void Attach(long id, string component) => Store(component).Add(id);
@@ -86,17 +114,35 @@ public sealed class SimWorld
     public void SetValue(long id, string component, string column, long value) =>
         Store(component).SetValue(id, column, value);
 
+    public void SetValue(long id, int componentId, int columnId, long value) =>
+        Store(componentId).SetValue(id, columnId, value);
+
     public long GetValue(long id, string component, string column) =>
         Store(component).GetValue(id, column);
 
-    public bool HasComponent(long id, string component) =>
-        _stores.TryGetValue(component, out ComponentStore? store) && store.Has(id);
+    public long GetValue(long id, int componentId, int columnId) =>
+        Store(componentId).GetValue(id, columnId);
+
+    public bool HasComponent(long id, string component)
+    {
+        int componentId = ComponentId(component, create: false);
+        return componentId >= 0 && _stores[componentId].Has(id);
+    }
 
     public List<string> ComponentNamesSorted()
     {
-        var names = new List<string>(_stores.Keys);
-        names.Sort(System.StringComparer.Ordinal);
-        return names;
+        if (_sortedComponentNames == null)
+        {
+            var names = new List<string>(_storeIds.Keys);
+            names.Sort(StringComparer.Ordinal);
+            _sortedComponentNames = names;
+            _sortedComponentIds = new int[names.Count];
+            for (int index = 0; index < names.Count; index++)
+            {
+                _sortedComponentIds[index] = _storeIds[names[index]];
+            }
+        }
+        return _sortedComponentNames;
     }
 
     public long Checksum()
@@ -105,22 +151,19 @@ public sealed class SimWorld
         hash = HashInt(hash, Tick);
         hash = HashInt(hash, NextEntity);
         hash = HashInt(hash, Rng.State);
+        List<string> componentNames = ComponentNamesSorted();
         foreach (long id in Entities())
         {
             hash = HashInt(hash, id);
-            foreach (string componentText in ComponentNamesSorted())
+            for (int componentIndex = 0; componentIndex < componentNames.Count; componentIndex++)
             {
-                ComponentStore store = _stores[componentText];
+                ComponentStore store = _stores[_sortedComponentIds[componentIndex]];
                 if (!store.Has(id))
                 {
                     continue;
                 }
-                hash = HashText(hash, componentText);
-                foreach (string columnText in store.ColumnsSorted())
-                {
-                    hash = HashText(hash, columnText);
-                    hash = HashInt(hash, store.GetValue(id, columnText));
-                }
+                hash = HashText(hash, componentNames[componentIndex]);
+                hash = store.HashEntity(hash, id);
             }
         }
         return hash;
