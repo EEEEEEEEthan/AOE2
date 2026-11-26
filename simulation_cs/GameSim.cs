@@ -1579,7 +1579,7 @@ public sealed class GameSim
         }
         if (!_spatialReady)
         {
-            Spatial.Rebuild(World);
+            Spatial.Sync(World);
             _spatialReady = true;
         }
         GatherSystem.Step(World, InventoryForTeam, Grid, Terrain);
@@ -1590,7 +1590,7 @@ public sealed class GameSim
         RepairSystem.Step(World, Grid, Terrain, this);
         TradeSystem.Step(World, Grid, Terrain, this);
         MovementSystem.Step(World, Grid, Occupancy, FieldProvider, Terrain);
-        Spatial.Rebuild(World);
+        Spatial.Sync(World);
         List<long> dead = ProjectileSystem.Step(World);
         dead.AddRange(CombatSystem.Step(World, Spatial));
         ResolveDeaths(dead);

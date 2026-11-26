@@ -34,7 +34,7 @@ public static class MovementSystem
         {
             return;
         }
-        occupancy.Rebuild(world);
+        occupancy.Sync(world);
         foreach (long id in moveStore.ActiveIds())
         {
             if (moveStore.GetValue(id, SimComponents.Active) == 0)

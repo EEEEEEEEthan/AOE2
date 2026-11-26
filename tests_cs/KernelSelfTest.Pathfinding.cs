@@ -134,6 +134,30 @@ public static partial class KernelSelfTest
         Expect(failures, leaderX == 8 && leaderY == 5, "occupancy leading unit reaches goal");
     }
 
+    /// <summary>大量静止实体时，占位层与空间哈希每 tick 处理量为 0，不再全量重建。</summary>
+    private static void CheckIncrementalSpatial(List<string> failures)
+    {
+        var sim = new GameSim(new NavGrid(32, 32), 7031);
+        for (int index = 0; index < 300; index++)
+        {
+            int cellX = index % 32;
+            int cellY = index / 32;
+            sim.SpawnUnit(cellX, cellY, 0, 40, 0, 0.0, 0.0, 0.0);
+        }
+        sim.SimulateTick();
+        sim.SimulateTick();
+        int occupancyWork = 0;
+        int spatialWork = 0;
+        for (int tick = 0; tick < 5; tick++)
+        {
+            sim.SimulateTick();
+            occupancyWork += sim.Occupancy.LastSyncedEntities;
+            spatialWork += sim.Spatial.LastSyncedEntities;
+        }
+        Expect(failures, occupancyWork == 0, "静止实体占位层每 tick 无重建");
+        Expect(failures, spatialWork == 0, "静止实体空间哈希每 tick 无重建");
+    }
+
     private static void CheckGridRange(List<string> failures)
     {
         var meleeFar = new GameSim(new NavGrid(16, 16), 62);
