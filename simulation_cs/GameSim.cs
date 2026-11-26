@@ -997,6 +997,25 @@ public sealed class GameSim
 
     public void IssueHold(long id) => OrderSystem.IssueHold(World, id, false);
 
+    /// <summary>把己方单位收入城镇中心或塔楼，驻军提升建筑攻击。</summary>
+    public bool IssueGarrison(long unit, long building) =>
+        GarrisonSystem.TryGarrison(World, unit, building, false);
+
+    /// <summary>解除单个单位的驻军，在建筑周边就近落位。</summary>
+    public bool IssueUngarrison(long unit) => GarrisonSystem.Release(World, Grid, Terrain, unit);
+
+    /// <summary>城镇警钟：召集本玩家村民进最近的城镇中心；dismiss 为真时解除并恢复其原工作。</summary>
+    public int IssueTownBell(long player, bool dismiss)
+    {
+        if (player < 0 || player >= Lockstep.PlayerCount)
+        {
+            return 0;
+        }
+        return dismiss
+            ? GarrisonSystem.DismissTownBell(World, Grid, Terrain, player)
+            : GarrisonSystem.SummonTownBell(World, Grid, Terrain, player);
+    }
+
     public void IssueSetRally(long building, long cellX, long cellY, long target) =>
         OrderSystem.SetRally(World, building, cellX, cellY, target);
 
@@ -1031,6 +1050,7 @@ public sealed class GameSim
         || kind == LockstepCommand.KindResearch
         || kind == LockstepCommand.KindCancelResearch
         || kind == LockstepCommand.KindPlaceBuilding
+        || kind == LockstepCommand.KindTownBell
         || kind == LockstepCommand.KindMarketBuy
         || kind == LockstepCommand.KindMarketSell
         || kind == LockstepCommand.KindTribute;
@@ -1053,6 +1073,8 @@ public sealed class GameSim
         || kind == LockstepCommand.KindSetRally
         || kind == LockstepCommand.KindConstruct
         || kind == LockstepCommand.KindReseedFarm
+        || kind == LockstepCommand.KindGarrison
+        || kind == LockstepCommand.KindUngarrison
         || kind == LockstepCommand.KindRepair
         || kind == LockstepCommand.KindTradeRoute;
 
@@ -1135,6 +1157,15 @@ public sealed class GameSim
             case LockstepCommand.KindReseedFarm:
                 IssueReseedFarm(command.Entity, command.Player);
                 break;
+            case LockstepCommand.KindGarrison:
+                IssueGarrison(command.Entity, command.TargetEntity);
+                break;
+            case LockstepCommand.KindUngarrison:
+                IssueUngarrison(command.Entity);
+                break;
+            case LockstepCommand.KindTownBell:
+                IssueTownBell(command.Player, command.Aux != 0);
+                break;
             case LockstepCommand.KindRepair:
                 IssueRepair(command.Entity, command.TargetEntity, command.Player);
                 break;
@@ -1168,6 +1199,7 @@ public sealed class GameSim
         MonkSystem.Step(World);
         OrderSystem.Step(World, Spatial);
         BuildingSystem.Step(World, Grid, Terrain);
+        GarrisonSystem.Step(World);
         RepairSystem.Step(World, Grid, Terrain, this);
         TradeSystem.Step(World, Grid, Terrain, this);
         MovementSystem.Step(World, Grid, Occupancy, FieldProvider, Terrain);
@@ -1196,6 +1228,7 @@ public sealed class GameSim
             }
             if (World.HasComponent(id, SimComponents.Building))
             {
+                GarrisonSystem.ReleaseAll(World, Grid, Terrain, id);
                 BuildingSystem.Ruin(World, Grid, id);
                 fieldsChanged = true;
                 continue;

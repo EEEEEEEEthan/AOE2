@@ -100,4 +100,37 @@ public static class BuildingTypes
         Farm => 60,
         _ => 0,
     };
+
+    /// <summary>只有城镇中心与塔楼可驻军，后者也承担城镇警钟的召集目标。</summary>
+    public static bool IsGarrisonable(long type) => type == TownCenter || type == Tower;
+
+    /// <summary>驻军容量：城镇中心 15、塔楼 5，与占地的规模一致。</summary>
+    public static long GarrisonCapacity(long type) => type switch
+    {
+        TownCenter => 15,
+        Tower => 5,
+        _ => 0,
+    };
+
+    /// <summary>无驻军时的基础攻击射程（格）：城镇中心 6、塔楼 8。</summary>
+    public static long AttackRange(long type) => type switch
+    {
+        TownCenter => 6,
+        Tower => 8,
+        _ => 0,
+    };
+
+    public static long AttackDamage(long type) => type switch
+    {
+        TownCenter => 3,
+        Tower => 5,
+        _ => 0,
+    };
+
+    public static long AttackCooldown(long type) => type switch
+    {
+        TownCenter => 12,
+        Tower => 8,
+        _ => 0,
+    };
 }

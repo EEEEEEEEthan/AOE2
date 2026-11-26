@@ -23,6 +23,11 @@ public static class CombatSystem
             {
                 continue;
             }
+            // 驻军中的单位已移出世界占位，不再参与索敌与射击。
+            if (world.HasComponent(id, SimComponents.Garrisoned))
+            {
+                continue;
+            }
             long explicitTarget = LockedTarget(world, id);
             long cooldownLeft = world.GetValue(id, SimComponents.Combat, SimComponents.CooldownLeft);
             if (cooldownLeft > 0)
