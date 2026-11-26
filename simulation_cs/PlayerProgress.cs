@@ -29,6 +29,10 @@ public sealed class PlayerProgress
 
     public static long FindEntity(SimWorld world, long team)
     {
+        if (world.TryGetPlayerEntity(SimComponents.PlayerProgress, team, out long indexed))
+        {
+            return indexed;
+        }
         ComponentStore store = world.Store(SimComponents.PlayerProgress);
         if (store.Count == 0)
         {
@@ -42,6 +46,7 @@ public sealed class PlayerProgress
             }
             if (world.GetValue(id, SimComponents.Team, SimComponents.TeamId) == team)
             {
+                world.RegisterPlayerEntity(SimComponents.PlayerProgress, team, id);
                 return id;
             }
         }

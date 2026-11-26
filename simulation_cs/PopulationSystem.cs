@@ -23,11 +23,16 @@ public static class PopulationSystem
         world.SetValue(id, SimComponents.Population, SimComponents.Used, 0);
         world.SetValue(id, SimComponents.Population, SimComponents.Cap, 0);
         world.SetValue(id, SimComponents.Population, SimComponents.CapMax, DefaultCapMax);
+        world.RegisterPlayerEntity(SimComponents.Population, team, id);
         return id;
     }
 
     public static long FindLedger(SimWorld world, long team)
     {
+        if (world.TryGetPlayerEntity(SimComponents.Population, team, out long indexed))
+        {
+            return indexed;
+        }
         foreach (long id in world.Entities())
         {
             if (!world.IsAlive(id) || !world.HasComponent(id, SimComponents.Population))
@@ -36,6 +41,7 @@ public static class PopulationSystem
             }
             if (world.GetValue(id, SimComponents.Team, SimComponents.TeamId) == team)
             {
+                world.RegisterPlayerEntity(SimComponents.Population, team, id);
                 return id;
             }
         }
