@@ -1,0 +1,221 @@
+[gd_scene load_steps=4 format=3]
+
+[ext_resource type="Script" path="res://tools/map_editor.gd" id="1_editor"]
+[ext_resource type="Script" path="res://presentation/iso_camera.gd" id="2_camera"]
+
+[sub_resource type="Environment" id="Env_map"]
+background_mode = 1
+background_color = Color(0.09, 0.11, 0.15, 1)
+ambient_light_source = 2
+ambient_light_color = Color(0.62, 0.66, 0.74, 1)
+ambient_light_energy = 0.7
+
+[node name="MapEditor" type="Node3D"]
+script = ExtResource("1_editor")
+
+[node name="WorldEnvironment" type="WorldEnvironment" parent="."]
+environment = SubResource("Env_map")
+
+[node name="DirectionalLight3D" type="DirectionalLight3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 0.5, -0.866, 0, 0.866, 0.5, 0, 20, 0)
+light_energy = 1.1
+
+[node name="TerrainRoot" type="Node3D" parent="."]
+unique_name_in_owner = true
+
+[node name="MarkerRoot" type="Node3D" parent="."]
+unique_name_in_owner = true
+
+[node name="Camera3D" type="Camera3D" parent="."]
+unique_name_in_owner = true
+script = ExtResource("2_camera")
+
+[node name="ValidationDialog" type="AcceptDialog" parent="."]
+unique_name_in_owner = true
+title = "地图校验"
+
+[node name="Hud" type="CanvasLayer" parent="."]
+
+[node name="ToolPanel" type="PanelContainer" parent="Hud"]
+offset_left = 16.0
+offset_top = 16.0
+offset_right = 336.0
+offset_bottom = 448.0
+
+[node name="Margin" type="MarginContainer" parent="Hud/ToolPanel"]
+layout_mode = 2
+
+[node name="Content" type="VBoxContainer" parent="Hud/ToolPanel/Margin"]
+layout_mode = 2
+
+[node name="ToolLabel" type="Label" parent="Hud/ToolPanel/Margin/Content"]
+layout_mode = 2
+text = "工具"
+
+[node name="ToolOption" type="OptionButton" parent="Hud/ToolPanel/Margin/Content"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+item_count = 11
+selected = 0
+popup/item_0/text = "抬升高度"
+popup/item_0/id = 0
+popup/item_1/text = "降低高度"
+popup/item_1/id = 1
+popup/item_2/text = "平滑高度"
+popup/item_2/id = 2
+popup/item_3/text = "涂抹地形"
+popup/item_3/id = 3
+popup/item_4/text = "标记悬崖"
+popup/item_4/id = 4
+popup/item_5/text = "放置出生点"
+popup/item_5/id = 5
+popup/item_6/text = "放置资源"
+popup/item_6/id = 6
+popup/item_7/text = "放置建筑"
+popup/item_7/id = 7
+popup/item_8/text = "移除放置"
+popup/item_8/id = 8
+popup/item_9/text = "标记障碍"
+popup/item_9/id = 9
+popup/item_10/text = "清除障碍"
+popup/item_10/id = 10
+
+[node name="RadiusRow" type="HBoxContainer" parent="Hud/ToolPanel/Margin/Content"]
+layout_mode = 2
+
+[node name="RadiusLabel" type="Label" parent="Hud/ToolPanel/Margin/Content/RadiusRow"]
+layout_mode = 2
+text = "半径"
+
+[node name="RadiusSpin" type="SpinBox" parent="Hud/ToolPanel/Margin/Content/RadiusRow"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+max_value = 8.0
+value = 1.0
+
+[node name="TypeRow" type="HBoxContainer" parent="Hud/ToolPanel/Margin/Content"]
+layout_mode = 2
+
+[node name="TypeLabel" type="Label" parent="Hud/ToolPanel/Margin/Content/TypeRow"]
+layout_mode = 2
+text = "地形类型"
+
+[node name="TypeOption" type="OptionButton" parent="Hud/ToolPanel/Margin/Content/TypeRow"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+item_count = 4
+selected = 0
+popup/item_0/text = "草地"
+popup/item_0/id = 0
+popup/item_1/text = "泥土"
+popup/item_1/id = 1
+popup/item_2/text = "水"
+popup/item_2/id = 2
+popup/item_3/text = "悬崖"
+popup/item_3/id = 3
+
+[node name="NodeRow" type="HBoxContainer" parent="Hud/ToolPanel/Margin/Content"]
+layout_mode = 2
+
+[node name="NodeLabel" type="Label" parent="Hud/ToolPanel/Margin/Content/NodeRow"]
+layout_mode = 2
+text = "资源类型"
+
+[node name="NodeOption" type="OptionButton" parent="Hud/ToolPanel/Margin/Content/NodeRow"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+item_count = 4
+selected = 0
+popup/item_0/text = "木材"
+popup/item_0/id = 0
+popup/item_1/text = "食物"
+popup/item_1/id = 1
+popup/item_2/text = "黄金"
+popup/item_2/id = 2
+popup/item_3/text = "石头"
+popup/item_3/id = 3
+
+[node name="TeamRow" type="HBoxContainer" parent="Hud/ToolPanel/Margin/Content"]
+layout_mode = 2
+
+[node name="TeamLabel" type="Label" parent="Hud/ToolPanel/Margin/Content/TeamRow"]
+layout_mode = 2
+text = "阵营"
+
+[node name="TeamOption" type="OptionButton" parent="Hud/ToolPanel/Margin/Content/TeamRow"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+item_count = 2
+selected = 0
+popup/item_0/text = "蓝方"
+popup/item_0/id = 0
+popup/item_1/text = "红方"
+popup/item_1/id = 1
+
+[node name="HistoryRow" type="HBoxContainer" parent="Hud/ToolPanel/Margin/Content"]
+layout_mode = 2
+
+[node name="UndoButton" type="Button" parent="Hud/ToolPanel/Margin/Content/HistoryRow"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+text = "撤销"
+
+[node name="RedoButton" type="Button" parent="Hud/ToolPanel/Margin/Content/HistoryRow"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+text = "重做"
+
+[node name="MapRow" type="HBoxContainer" parent="Hud/ToolPanel/Margin/Content"]
+layout_mode = 2
+
+[node name="ValidateButton" type="Button" parent="Hud/ToolPanel/Margin/Content/MapRow"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+text = "校验"
+
+[node name="NewButton" type="Button" parent="Hud/ToolPanel/Margin/Content/MapRow"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+text = "新建"
+
+[node name="PathRow" type="HBoxContainer" parent="Hud/ToolPanel/Margin/Content"]
+layout_mode = 2
+
+[node name="PathEdit" type="LineEdit" parent="Hud/ToolPanel/Margin/Content/PathRow"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+text = "res://maps/editor_map.json"
+
+[node name="SaveButton" type="Button" parent="Hud/ToolPanel/Margin/Content/PathRow"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "保存"
+
+[node name="LoadButton" type="Button" parent="Hud/ToolPanel/Margin/Content/PathRow"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "读取"
+
+[node name="StatusLabel" type="Label" parent="Hud/ToolPanel/Margin/Content"]
+unique_name_in_owner = true
+layout_mode = 2
+autowrap_mode = 2
+text = "就绪：左键拖动编辑，滚轮缩放，WASD 平移"
+
+[connection signal="item_selected" from="Hud/ToolPanel/Margin/Content/ToolOption" to="." method="_on_tool_selected"]
+[connection signal="pressed" from="Hud/ToolPanel/Margin/Content/HistoryRow/UndoButton" to="." method="_on_undo_pressed"]
+[connection signal="pressed" from="Hud/ToolPanel/Margin/Content/HistoryRow/RedoButton" to="." method="_on_redo_pressed"]
+[connection signal="pressed" from="Hud/ToolPanel/Margin/Content/MapRow/ValidateButton" to="." method="_on_validate_pressed"]
+[connection signal="pressed" from="Hud/ToolPanel/Margin/Content/MapRow/NewButton" to="." method="_on_new_pressed"]
+[connection signal="pressed" from="Hud/ToolPanel/Margin/Content/PathRow/SaveButton" to="." method="_on_save_pressed"]
+[connection signal="pressed" from="Hud/ToolPanel/Margin/Content/PathRow/LoadButton" to="." method="_on_load_pressed"]

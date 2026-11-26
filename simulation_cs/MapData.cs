@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Text.Json;
 
@@ -6,8 +7,9 @@ namespace AoeSim;
 
 /// <summary>
 /// 地图数据：把 TerrainGrid（高度/类型）与 NavGrid（建筑与障碍占位）打包成可存读的格式。
-/// JSON 里 terrain.types / terrain.heights / blocked 都是按行优先展开的扁平数组，
+/// JSON 里 terrain 的 types / heights / blocked 都是按行优先展开的扁平数组，
 /// 一份地图既有渲染用的高度，也有模拟用的可走性，但两个网格仍然互相独立。
+/// placements 是出生点/资源点/建筑等编辑器放置元数据，缺省为空且向后兼容。
 /// </summary>
 public sealed class MapData
 {
@@ -15,11 +17,19 @@ public sealed class MapData
     public long Seed { get; private set; }
     public TerrainGrid Terrain { get; }
     public NavGrid Nav { get; }
+    public IReadOnlyList<MapPlacement> Placements => _placements;
 
     public int Width => Terrain.Width;
     public int Height => Terrain.Height;
 
-    public MapData(string name, long seed, TerrainGrid terrain, NavGrid nav)
+    private readonly List<MapPlacement> _placements;
+
+    public MapData(
+        string name,
+        long seed,
+        TerrainGrid terrain,
+        NavGrid nav,
+        IEnumerable<MapPlacement>? placements = null)
     {
         if (terrain.Width != nav.Width || terrain.Height != nav.Height)
         {
@@ -29,6 +39,7 @@ public sealed class MapData
         Seed = seed;
         Terrain = terrain;
         Nav = nav;
+        _placements = placements == null ? new List<MapPlacement>() : new List<MapPlacement>(placements);
     }
 
     public string ToJson()
@@ -52,6 +63,7 @@ public sealed class MapData
             Types = types,
             Heights = heights,
             Blocked = blocked,
+            Placements = _placements.ConvertAll(placement => placement.Clone()).ToArray(),
         };
         return JsonSerializer.Serialize(dto, JsonOptions);
     }
@@ -79,7 +91,12 @@ public sealed class MapData
                 nav.Blocked[index] = dto.Blocked[index] != 0 ? NavGrid.CostBlocked : (byte)0;
             }
         }
-        return new MapData(dto.Name, dto.Seed, terrain, nav);
+        var placements = new List<MapPlacement>();
+        foreach (MapPlacement placement in dto.Placements ?? Array.Empty<MapPlacement>())
+        {
+            placements.Add(placement.Clone());
+        }
+        return new MapData(dto.Name, dto.Seed, terrain, nav, placements);
     }
 
     public static MapData Load(string path) => FromJson(File.ReadAllText(path));
@@ -102,5 +119,6 @@ public sealed class MapData
         public int[] Types { get; set; } = Array.Empty<int>();
         public int[] Heights { get; set; } = Array.Empty<int>();
         public int[] Blocked { get; set; } = Array.Empty<int>();
+        public MapPlacement[]? Placements { get; set; } = Array.Empty<MapPlacement>();
     }
 }

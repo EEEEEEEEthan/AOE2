@@ -43,10 +43,19 @@
 - 1 格 = 1 Godot 单位；取 4px 为 1 体素，即每格 8×8 体素，高度层 `1/8` 单位。普通地面可 0～2 层起伏，悬崖落差可达 8 层。
 - `TerrainGrid`（`simulation_cs/TerrainGrid.cs`）逐格存类型（草地/泥土/水/崖）与 uint8 高度层，**与 `NavGrid` 完全独立**：NavGrid 继续只描述建筑 footprint 与障碍，地形高度不写进去，避免与 AOE-5 冲突。
 - 寻路接高度差：`FlowField` 与 `MovementSystem` 通过 `TerrainGrid.CanTraverse` 判定，高度差超过 1 层、水或崖面不可通行，悬崖上下自然不通。
-- 地图格式由 `MapData`（`simulation_cs/MapData.cs`）组合 TerrainGrid 与 NavGrid；`maps/voxel_demo.json` 是示例，行优先扁平数组 `types` / `heights` / `blocked`。
+- 地图格式由 `MapData`（`simulation_cs/MapData.cs`）组合 TerrainGrid 与 NavGrid；`maps/voxel_demo.json` 是示例，行优先扁平数组 `types` / `heights` / `blocked`，另有可选的 `placements`（出生点/资源点/建筑）。
 - 表现层（`presentation/world_view.gd`）按高度场生成体素地形，`presentation/voxel_mesher.gd` 用贪心合并（greedy meshing）并只用顶点色；地形剔除下方面，单位保留全部六面（倒地时可看到底面）。
 - 自建体素模型在 `assets/vox/`（`.vox`），由 `tools/make_vox_models.py` 生成；`presentation/vox_model.gd` 解析 RIFF 的 `SIZE/XYZI/RGBA`，调色板索引 1 作阵营色。
 - 原作素材放在项目点开头的 `.reference/` 目录，**正常提交入库**（不加入 `.gitignore`），用于对照制作体素模型。
+
+## 地图编辑器
+
+独立场景 `tools/map_editor.tscn`（F6 直接运行），复用 `presentation/iso_camera.gd` 正交相机与地面平面拾格。
+
+- 工具：抬升/降低/平滑高度（半径可调）、涂抹地形类型、标记悬崖、放置出生点/资源/建筑、标记/清除障碍。
+- 编辑结果实时生成体素地形预览与放置标记；差分层面的撤销/重做（含地形格与放置项），支持 `Ctrl+Z` / `Ctrl+Y` / `Ctrl+S`。
+- 存读走 `simulation_cs/MapEditorBridge.cs`，与运行期共用同一 `MapData`：默认 `res://maps/editor_map.json`，格式含 `types` / `heights` / `blocked` / `placements`。
+- 校验用 `TerrainGrid` + `NavGrid` + `FlowField`：出生点须彼此连通，资源点须能从出生点到达。
 
 ## 对局与胜负
 
@@ -79,3 +88,4 @@ dotnet build AOE2Framework.sln           # 单独编译 C# 内核
 - [x] 对局流程：`MatchState`/`PlayerState`、可配置胜负条件、每 tick 确定性结算与结算界面
 - [x] 战争迷雾与视野：C# 视距网格、快照按玩家裁剪、瘦客户端迷雾渲染
 - [x] 体素地形与单位：TerrainGrid/MapData、高度差寻路、贪心合并体素渲染与自建 `.vox` 资产
+- [x] 地图编辑器：高度/地形/悬崖笔刷、出生点与资源放置、撤销重做、MapData 存读与连通校验
