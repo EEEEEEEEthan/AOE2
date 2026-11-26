@@ -1179,8 +1179,8 @@ public sealed class SnapshotFrame
 /// </summary>
 public sealed class SnapshotDelta
 {
-    /// <summary>实体全部 30 个可变字段的掩码（Id 恒写，不占位）。</summary>
-    public const uint AllFields = 0x3FFFFFFFu;
+    /// <summary>实体全部 31 个可变字段的掩码（Id 恒写，不占位）。</summary>
+    public const uint AllFields = 0x7FFFFFFFu;
 
     private readonly Dictionary<long, EntitySnapshot> _previous = new();
     private readonly HashSet<long> _currentIds = new();

@@ -18,6 +18,12 @@ public static class BuildingTypes
     public const long PalisadeWall = 12;
     public const long Gate = 13;
     public const long FortifiedWall = 14;
+    public const long ArcheryRange = 15;
+    public const long Stable = 16;
+    public const long Blacksmith = 17;
+    public const long Monastery = 18;
+    public const long University = 19;
+    public const long Castle = 20;
 
     /// <summary>一块农田完工后挂载的食物节点总量，耗尽后需重播。</summary>
     public const long FarmFoodAmount = 250;
@@ -25,7 +31,7 @@ public static class BuildingTypes
     /// <summary>空田手动重播消耗的木材。</summary>
     public const long FarmReseedCost = 60;
 
-    public static bool IsKnown(long type) => type >= TownCenter && type <= FortifiedWall;
+    public static bool IsKnown(long type) => type >= TownCenter && type <= Castle;
 
     /// <summary>建筑中文名，供科技树等只读界面展示分组；未知类型返回空串。</summary>
     public static string DisplayName(long type) => type switch
@@ -44,6 +50,12 @@ public static class BuildingTypes
         PalisadeWall => "木栅栏",
         Gate => "城门",
         FortifiedWall => "加固墙",
+        ArcheryRange => "靶场",
+        Stable => "马厩",
+        Blacksmith => "铁匠铺",
+        Monastery => "修道院",
+        University => "大学",
+        Castle => "城堡",
         _ => "",
     };
 
@@ -70,6 +82,12 @@ public static class BuildingTypes
         PalisadeWall => TechCatalog.AgeDark,
         Gate => TechCatalog.AgeFeudal,
         FortifiedWall => TechCatalog.AgeCastle,
+        ArcheryRange => TechCatalog.AgeFeudal,
+        Stable => TechCatalog.AgeFeudal,
+        Blacksmith => TechCatalog.AgeFeudal,
+        Monastery => TechCatalog.AgeCastle,
+        University => TechCatalog.AgeCastle,
+        Castle => TechCatalog.AgeCastle,
         _ => TechCatalog.AgeDark,
     };
 
@@ -89,6 +107,12 @@ public static class BuildingTypes
         PalisadeWall => 1,
         Gate => 1,
         FortifiedWall => 1,
+        ArcheryRange => 3,
+        Stable => 3,
+        Blacksmith => 3,
+        Monastery => 4,
+        University => 4,
+        Castle => 5,
         _ => 0,
     };
 
@@ -108,6 +132,12 @@ public static class BuildingTypes
         PalisadeWall => 1,
         Gate => 1,
         FortifiedWall => 1,
+        ArcheryRange => 3,
+        Stable => 3,
+        Blacksmith => 3,
+        Monastery => 4,
+        University => 4,
+        Castle => 5,
         _ => 0,
     };
 
@@ -127,6 +157,12 @@ public static class BuildingTypes
         PalisadeWall => 250,
         Gate => 800,
         FortifiedWall => 1200,
+        ArcheryRange => 1500,
+        Stable => 1500,
+        Blacksmith => 1500,
+        Monastery => 2100,
+        University => 2100,
+        Castle => 4800,
         _ => 0,
     };
 
@@ -146,6 +182,12 @@ public static class BuildingTypes
         PalisadeWall => 16,
         Gate => 48,
         FortifiedWall => 36,
+        ArcheryRange => 150,
+        Stable => 150,
+        Blacksmith => 150,
+        Monastery => 180,
+        University => 180,
+        Castle => 300,
         _ => 0,
     };
 
@@ -174,6 +216,12 @@ public static class BuildingTypes
         PalisadeWall => new ResourceCost(wood: 3, food: 0, gold: 0, stone: 0),
         Gate => new ResourceCost(wood: 0, food: 0, gold: 0, stone: 30),
         FortifiedWall => new ResourceCost(wood: 0, food: 0, gold: 0, stone: 8),
+        ArcheryRange => new ResourceCost(wood: 175, food: 0, gold: 0, stone: 0),
+        Stable => new ResourceCost(wood: 175, food: 0, gold: 0, stone: 0),
+        Blacksmith => new ResourceCost(wood: 150, food: 0, gold: 0, stone: 0),
+        Monastery => new ResourceCost(wood: 175, food: 0, gold: 0, stone: 0),
+        University => new ResourceCost(wood: 200, food: 0, gold: 0, stone: 0),
+        Castle => new ResourceCost(wood: 0, food: 0, gold: 0, stone: 650),
         _ => default,
     };
 
@@ -193,22 +241,25 @@ public static class BuildingTypes
 
     public static bool ProvidesDropSite(long type) => DropMask(type) != 0;
 
-    /// <summary>只有城镇中心与塔楼可驻军，后者也承担城镇警钟的召集目标。</summary>
-    public static bool IsGarrisonable(long type) => type == TownCenter || type == Tower;
+    /// <summary>只有城镇中心、塔楼与城堡可驻军，后者也承担城镇警钟的召集目标。</summary>
+    public static bool IsGarrisonable(long type) =>
+        type == TownCenter || type == Tower || type == Castle;
 
-    /// <summary>驻军容量：城镇中心 15、塔楼 5，与占地的规模一致。</summary>
+    /// <summary>驻军容量：城镇中心 15、塔楼 5、城堡 20，与占地的规模一致。</summary>
     public static long GarrisonCapacity(long type) => type switch
     {
         TownCenter => 15,
         Tower => 5,
+        Castle => 20,
         _ => 0,
     };
 
-    /// <summary>无驻军时的基础攻击射程（格）：城镇中心 6、塔楼 8。</summary>
+    /// <summary>无驻军时的基础攻击射程（格）：城镇中心 6、塔楼 8、城堡 8。</summary>
     public static long AttackRange(long type) => type switch
     {
         TownCenter => 6,
         Tower => 8,
+        Castle => 8,
         _ => 0,
     };
 
@@ -216,6 +267,7 @@ public static class BuildingTypes
     {
         TownCenter => 3,
         Tower => 5,
+        Castle => 11,
         _ => 0,
     };
 
@@ -223,6 +275,7 @@ public static class BuildingTypes
     {
         TownCenter => 12,
         Tower => 8,
+        Castle => 8,
         _ => 0,
     };
 }

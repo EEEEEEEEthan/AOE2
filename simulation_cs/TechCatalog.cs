@@ -63,12 +63,12 @@ public static class TechCatalog
         "帝王时代",
     };
 
-    /// <summary>科技承载建筑：一期建筑表没有铁匠铺，用兵营/市场做最小前置。</summary>
+    /// <summary>科技承载建筑：锻造/鳞甲在铁匠铺，锥形箭在靶场。</summary>
     private static readonly long[] TechRequiredBuilding =
     {
-        BuildingTypes.Barracks,
-        BuildingTypes.Market,
-        BuildingTypes.Barracks,
+        BuildingTypes.Blacksmith,
+        BuildingTypes.Blacksmith,
+        BuildingTypes.ArcheryRange,
     };
 
     public static bool IsValidAge(long age) => age >= AgeDark && age <= MaxAge;

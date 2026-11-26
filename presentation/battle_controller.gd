@@ -402,10 +402,13 @@ func _issue_order(position: Vector2) -> void:
 func _load_onto_transport(unit_ids: Array, ship_id: int, cell: Vector2i) -> bool:
 	var loaders: Array = []
 	for id in unit_ids:
-		if int(_entity_by_id[id]["kind"]) != KIND_TRANSPORT_SHIP:
+		if int(_entity_by_id[id]["kind"]) == KIND_TRANSPORT_SHIP:
+			continue
+		if bridge.CanTransportLoad(int(id), ship_id):
 			loaders.append(id)
 	if loaders.is_empty():
-		return false
+		hud.set_notice("无法登船：需靠岸或临码头，且船上有空位")
+		return true
 	bridge.LoadTransport(PackedInt64Array(loaders), ship_id)
 	var tracked: Array = _loaded_by_ship.get(ship_id, [])
 	for id in loaders:

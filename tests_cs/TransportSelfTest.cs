@@ -236,7 +236,16 @@ public static class TransportSelfTest
         long unit = sim.SpawnUnit(7, 4, 0, UnitDefs.Swordsman);
         SnapshotFrame before = SnapshotFrame.Build(sim.World, sim.Lockstep.Turn);
         var delta = new SnapshotDelta();
-        SnapshotFrame key = delta.Build(before);
+        SnapshotFrame key = SnapshotFrame.Decode(delta.Build(before).Encode());
+        bool keyHasCapacity = false;
+        foreach (EntitySnapshot entity in key.Entities)
+        {
+            if (entity.Id == ship)
+            {
+                keyHasCapacity = entity.TransportCapacity == TransportSystem.DefaultCapacity;
+            }
+        }
+        Expect(failures, keyHasCapacity, "keyframe roundtrip carries transport capacity");
         sim.IssueTransportLoad(unit, ship);
         SnapshotFrame fullWithCrew = SnapshotFrame.Build(sim.World, sim.Lockstep.Turn);
         SnapshotFrame changed = delta.Build(fullWithCrew);
