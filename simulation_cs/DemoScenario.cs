@@ -145,6 +145,7 @@ public static class DemoScenario
     /// <summary>一期建筑演示：兵营地基 + 村民施工，完整走放置→施工→完工闭环。</summary>
     private static void SpawnBuildingDemo(GameSim sim)
     {
+        sim.AddResource(0, GameSim.ResourceWood, 300);
         long building = sim.IssuePlaceBuilding(BuildingTypes.Barracks, 3, 3, 0);
         long builder = sim.SpawnVillager(8, 4, 0, 0.09, 20, 0.5);
         sim.IssueConstruct(builder, building);
