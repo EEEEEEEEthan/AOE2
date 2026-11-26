@@ -875,6 +875,53 @@ public sealed class GameSim
     }
 
     /// <summary>
+    /// 按段拖拽放置城墙体系：起止两格经 <see cref="WallSegment.Rasterize"/> 展开为整段，
+    /// 单回合内原子落位——任一格非法或总造价不足则整段拒绝、不扣费、不落地。
+    /// 走现有锁步指令通道（复用 CellX/CellY 存起点、Cell2X/Cell2Y 存终点），保证确定性同步。
+    /// </summary>
+    public long[] IssuePlaceWallSegment(
+        long type, int startX, int startY, int endX, int endY, long player)
+    {
+        if (!BuildingTypes.IsWallLike(type))
+        {
+            return System.Array.Empty<long>();
+        }
+        EnsureInventoryInitialized();
+        if (!_inventoryEntities.ContainsKey(player))
+        {
+            return System.Array.Empty<long>();
+        }
+        List<(int X, int Y)> cells = WallSegment.Rasterize(startX, startY, endX, endY);
+        foreach ((int cellX, int cellY) in cells)
+        {
+            if (!BuildingSystem.CanPlace(Grid, Terrain, type, cellX, cellY))
+            {
+                return System.Array.Empty<long>();
+            }
+        }
+        ResourceCost unitCost = BuildingTypes.Cost(type);
+        for (long resourceKind = ResourceWood; resourceKind <= ResourceStone; resourceKind++)
+        {
+            if (Resource(player, resourceKind) < unitCost.AmountOf(resourceKind) * cells.Count)
+            {
+                return System.Array.Empty<long>();
+            }
+        }
+        var ids = new long[cells.Count];
+        for (int index = 0; index < cells.Count; index++)
+        {
+            ids[index] = BuildingSystem.Place(
+                World, Grid, Terrain, type, cells[index].X, cells[index].Y, player);
+        }
+        for (long resourceKind = ResourceWood; resourceKind <= ResourceStone; resourceKind++)
+        {
+            AddResource(player, resourceKind, -unitCost.AmountOf(resourceKind) * cells.Count);
+        }
+        InvalidateFields();
+        return ids;
+    }
+
+    /// <summary>
     /// 城门开合/锁定：只允许本方已完工城门，targetState 取 0 关 / 1 开 / 2 锁定；
     /// 成功后重建流场，让寻路立刻按新通行性生效。
     /// </summary>
@@ -1214,6 +1261,7 @@ public sealed class GameSim
         || kind == LockstepCommand.KindResearch
         || kind == LockstepCommand.KindCancelResearch
         || kind == LockstepCommand.KindPlaceBuilding
+        || kind == LockstepCommand.KindPlaceWallSegment
         || kind == LockstepCommand.KindTownBell
         || kind == LockstepCommand.KindMarketBuy
         || kind == LockstepCommand.KindMarketSell
@@ -1315,6 +1363,15 @@ public sealed class GameSim
                 break;
             case LockstepCommand.KindPlaceBuilding:
                 IssuePlaceBuilding(command.Aux, (int)command.CellX, (int)command.CellY, command.Player);
+                break;
+            case LockstepCommand.KindPlaceWallSegment:
+                IssuePlaceWallSegment(
+                    command.Aux,
+                    (int)command.CellX,
+                    (int)command.CellY,
+                    (int)command.Cell2X,
+                    (int)command.Cell2Y,
+                    command.Player);
                 break;
             case LockstepCommand.KindConstruct:
                 IssueConstruct(command.Entity, command.TargetEntity);

@@ -34,6 +34,13 @@ public static class BuildingSelfTest
         CheckGateSnapshotAndDeterminism(failures);
         CheckDeterminism(failures);
         CheckCommandRoundtrip(failures);
+        CheckWallSegmentRasterize(failures);
+        CheckWallSegmentPlacement(failures);
+        CheckWallSegmentAtomicReject(failures);
+        CheckWallSegmentConnections(failures);
+        CheckWallSegmentClosedLoop(failures);
+        CheckWallSegmentDeterminism(failures);
+        CheckWallSegmentCommand(failures);
         return failures;
     }
 
@@ -699,5 +706,218 @@ public static class BuildingSelfTest
         sim.AddResource(place.Player, GameSim.ResourceStone, 200);
         sim.ApplyCommand(place);
         Expect(failures, sim.Grid.IsBuildingBlocked(7, 9), "place command reaches building system");
+    }
+
+    private static void CheckWallSegmentRasterize(List<string> failures)
+    {
+        var straight = WallSegment.Rasterize(2, 3, 6, 3);
+        Expect(failures, straight.Count == 5, "horizontal segment spans 5 cells");
+        Expect(failures,
+            straight[0] == (2, 3) && straight[^1] == (6, 3),
+            "horizontal segment keeps both endpoints");
+        Expect(failures, straight.TrueForAll(cell => cell.Y == 3), "horizontal segment stays on its row");
+
+        var vertical = WallSegment.Rasterize(4, 1, 4, 5);
+        Expect(failures,
+            vertical.Count == 5 && vertical[^1] == (4, 5),
+            "vertical segment spans 5 cells");
+        Expect(failures, WallSegment.Rasterize(3, 3, 3, 3).Count == 1, "single cell segment keeps one cell");
+
+        var corner = WallSegment.Rasterize(2, 2, 5, 4);
+        Expect(failures, corner.Count == 6, "L segment counts absX + absY + 1");
+        Expect(failures,
+            corner[0] == (2, 2) && corner[^1] == (5, 4) && corner.Contains((5, 2)),
+            "L segment turns at the dominant-axis corner");
+        Expect(failures, !corner.Contains((2, 3)), "L segment does not wander off its two axes");
+
+        var dominantY = WallSegment.Rasterize(2, 2, 3, 6);
+        Expect(failures,
+            dominantY.Count == 6 && dominantY[^1] == (3, 6) && dominantY.Contains((2, 6)),
+            "vertical-dominant L turns on its column first");
+
+        var reversed = WallSegment.Rasterize(5, 4, 2, 2);
+        Expect(failures,
+            reversed.Count == corner.Count && reversed[0] == (5, 4) && reversed[^1] == (2, 2),
+            "reversing endpoints keeps the same cell count");
+    }
+
+    private static void CheckWallSegmentPlacement(List<string> failures)
+    {
+        var sim = new GameSim(new NavGrid(20, 20), 510);
+        sim.AddResource(0, GameSim.ResourceStone, 1000);
+        long[] ids = sim.IssuePlaceWallSegment(BuildingTypes.Wall, 2, 2, 6, 2, 0);
+        Expect(failures, ids.Length == 5, "wall segment places one building per cell");
+        bool allBlocked = true;
+        for (int cellX = 2; cellX <= 6; cellX++)
+        {
+            allBlocked &= sim.Grid.IsBuildingBlocked(cellX, 2);
+        }
+        Expect(failures, allBlocked, "every wall cell blocks its footprint");
+        Expect(failures,
+            sim.Resource(0, GameSim.ResourceStone)
+                == 1000 - BuildingTypes.Cost(BuildingTypes.Wall).Stone * 5,
+            "wall segment deducts per-cell stone");
+
+        long[] corner = sim.IssuePlaceWallSegment(BuildingTypes.Wall, 8, 8, 10, 10, 0);
+        Expect(failures, corner.Length == 5, "corner segment places its L cells");
+        Expect(failures,
+            sim.Grid.IsBuildingBlocked(8, 8) && sim.Grid.IsBuildingBlocked(10, 10),
+            "corner segment blocks both endpoints");
+
+        Expect(failures,
+            sim.IssuePlaceWallSegment(BuildingTypes.House, 14, 14, 16, 14, 0).Length == 0,
+            "segment placement rejects non-wall types");
+        Expect(failures,
+            sim.IssuePlaceWallSegment(BuildingTypes.Wall, 14, 14, 16, 14, 5).Length == 0,
+            "segment placement rejects a player outside the match");
+    }
+
+    private static void CheckWallSegmentAtomicReject(List<string> failures)
+    {
+        var broke = new GameSim(new NavGrid(20, 20), 511);
+        broke.AddResource(0, GameSim.ResourceStone, 4);
+        Expect(failures,
+            broke.IssuePlaceWallSegment(BuildingTypes.Wall, 2, 2, 6, 2, 0).Length == 0,
+            "segment rejected when total cost is unaffordable");
+        Expect(failures, !broke.Grid.IsBuildingBlocked(2, 2), "rejected segment places nothing");
+        Expect(failures,
+            broke.Resource(0, GameSim.ResourceStone) == 4,
+            "rejected segment deducts nothing");
+
+        var blocked = new GameSim(new NavGrid(20, 20), 512);
+        blocked.AddResource(0, GameSim.ResourceWood, 100);
+        blocked.AddResource(0, GameSim.ResourceStone, 100);
+        long house = blocked.IssuePlaceBuilding(BuildingTypes.House, 10, 10, 0);
+        Expect(failures, house >= 0, "house sits in the segment path");
+        long stoneBefore = blocked.Resource(0, GameSim.ResourceStone);
+        Expect(failures,
+            blocked.IssuePlaceWallSegment(BuildingTypes.Wall, 8, 10, 12, 10, 0).Length == 0,
+            "segment rejected when one cell overlaps a building");
+        Expect(failures, !blocked.Grid.IsBuildingBlocked(8, 10), "no partial cells survive rejection");
+        Expect(failures,
+            blocked.Resource(0, GameSim.ResourceStone) == stoneBefore,
+            "overlapping segment refunds the whole cost");
+    }
+
+    private static void CheckWallSegmentConnections(List<string> failures)
+    {
+        var sim = new GameSim(new NavGrid(20, 20), 520);
+        sim.AddResource(0, GameSim.ResourceWood, 400);
+        sim.AddResource(0, GameSim.ResourceStone, 400);
+        long townCenter = sim.IssuePlaceBuilding(BuildingTypes.TownCenter, 2, 2, 0);
+        Expect(failures, townCenter >= 0, "town center placed for connection test");
+
+        var abutting = WallSegment.Rasterize(6, 2, 6, 2);
+        sim.IssuePlaceWallSegment(BuildingTypes.Wall, 6, 2, 6, 2, 0);
+        Expect(failures,
+            WallSegment.EndpointsConnected(sim.Grid, abutting),
+            "a wall cell touching a building footprint counts as connected");
+
+        var lone = WallSegment.Rasterize(12, 12, 12, 12);
+        sim.IssuePlaceWallSegment(BuildingTypes.Wall, 12, 12, 12, 12, 0);
+        Expect(failures,
+            !WallSegment.EndpointsConnected(sim.Grid, lone),
+            "an isolated wall cell is not connected");
+
+        var floating = WallSegment.Rasterize(14, 14, 15, 14);
+        sim.IssuePlaceWallSegment(BuildingTypes.Wall, 14, 14, 15, 14, 0);
+        Expect(failures,
+            !WallSegment.EndpointsConnected(sim.Grid, floating),
+            "a segment touching only itself is not externally connected");
+
+        var halfLinked = WallSegment.Rasterize(12, 13, 13, 13);
+        sim.IssuePlaceWallSegment(BuildingTypes.Wall, 12, 13, 13, 13, 0);
+        Expect(failures,
+            !WallSegment.EndpointsConnected(sim.Grid, halfLinked),
+            "one linked endpoint is not enough for a full connection");
+    }
+
+    private static void CheckWallSegmentClosedLoop(List<string> failures)
+    {
+        var sim = new GameSim(new NavGrid(20, 20), 530);
+        sim.AddResource(0, GameSim.ResourceStone, 1000);
+        Expect(failures,
+            sim.IssuePlaceWallSegment(BuildingTypes.Wall, 3, 3, 6, 3, 0).Length == 4,
+            "ring top segment placed");
+        Expect(failures,
+            sim.IssuePlaceWallSegment(BuildingTypes.Wall, 6, 4, 6, 6, 0).Length == 3,
+            "ring right segment placed");
+        Expect(failures,
+            sim.IssuePlaceWallSegment(BuildingTypes.Wall, 3, 6, 5, 6, 0).Length == 3,
+            "ring bottom segment placed");
+        Expect(failures,
+            sim.FieldFor(12, 12).Reachable(4, 4),
+            "interior stays reachable while the ring has a gap");
+
+        var closing = WallSegment.Rasterize(3, 4, 3, 5);
+        Expect(failures,
+            sim.IssuePlaceWallSegment(BuildingTypes.Wall, 3, 4, 3, 5, 0).Length == 2,
+            "ring left segment closes the loop");
+        Expect(failures,
+            WallSegment.EndpointsConnected(sim.Grid, closing),
+            "closing segment links both ends to the existing ring");
+        Expect(failures, sim.FieldFor(12, 12).Reachable(12, 11), "outside stays walkable");
+        Expect(failures,
+            !sim.FieldFor(12, 12).Reachable(4, 4)
+                && !sim.FieldFor(12, 12).Reachable(5, 5),
+            "completed legal ring seals its interior");
+    }
+
+    private static void CheckWallSegmentDeterminism(List<string> failures)
+    {
+        Expect(failures,
+            RunWallSegmentCycle() == RunWallSegmentCycle(),
+            "identical wall segment cycles share checksum");
+    }
+
+    private static long RunWallSegmentCycle()
+    {
+        var sim = new GameSim(new NavGrid(20, 20), 535);
+        sim.AddResource(0, GameSim.ResourceStone, 500);
+        sim.IssuePlaceWallSegment(BuildingTypes.Wall, 3, 3, 6, 3, 0);
+        sim.IssuePlaceWallSegment(BuildingTypes.Wall, 6, 4, 6, 6, 0);
+        for (int tick = 0; tick < 10; tick++)
+        {
+            sim.SimulateTick();
+        }
+        return sim.Checksum();
+    }
+
+    private static void CheckWallSegmentCommand(List<string> failures)
+    {
+        Expect(failures, LockstepCommand.KindPlaceWallSegment == 31, "wall segment kind keeps its wire number");
+        var command = new LockstepCommand(
+            0,
+            LockstepCommand.KindPlaceWallSegment,
+            -1,
+            2,
+            2,
+            -1,
+            -1,
+            -1,
+            6,
+            2,
+            BuildingTypes.Wall,
+            0);
+        LockstepCommand restored = LockstepCommand.FromArray(command.ToArray());
+        Expect(failures,
+            restored.Kind == LockstepCommand.KindPlaceWallSegment
+                && restored.CellX == 2
+                && restored.CellY == 2
+                && restored.Cell2X == 6
+                && restored.Cell2Y == 2
+                && restored.Aux == BuildingTypes.Wall,
+            "wall segment command survives array roundtrip");
+
+        var sim = new GameSim(new NavGrid(12, 12), 545);
+        sim.AddResource(0, GameSim.ResourceStone, 500);
+        Expect(failures, sim.IsCommandAllowed(command), "wall segment command is a player command");
+        sim.ApplyCommand(command);
+        bool allBlocked = true;
+        for (int cellX = 2; cellX <= 6; cellX++)
+        {
+            allBlocked &= sim.Grid.IsBuildingBlocked(cellX, 2);
+        }
+        Expect(failures, allBlocked, "wall segment command reaches the building system");
     }
 }
