@@ -107,14 +107,17 @@ public static class TransportSystem
         return true;
     }
 
+    /// <summary>船上有人且已靠岸或临本方码头时才允许卸载，供 UI 判断按钮可用性。</summary>
+    public static bool CanUnload(SimWorld world, NavGrid grid, TerrainGrid terrain, long ship) =>
+        world.IsAlive(ship)
+        && world.HasComponent(ship, SimComponents.Transport)
+        && Count(world, ship) > 0
+        && IsAtShoreOrDock(world, grid, terrain, ship);
+
     /// <summary>在船体周边寻找合法陆地落点，按实体 id 升序放出乘员；落点用完或船未靠岸即停止。</summary>
     public static int TryUnload(SimWorld world, NavGrid grid, TerrainGrid terrain, long ship)
     {
-        if (!world.IsAlive(ship) || !world.HasComponent(ship, SimComponents.Transport))
-        {
-            return 0;
-        }
-        if (!IsAtShoreOrDock(world, grid, terrain, ship))
+        if (!CanUnload(world, grid, terrain, ship))
         {
             return 0;
         }

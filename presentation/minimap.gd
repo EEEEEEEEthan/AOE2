@@ -20,6 +20,7 @@ const KIND_RESOURCE_NODE := 2
 const KIND_BUILDING := 8
 const KIND_TRADE_CART := 9
 const KIND_HUNTING_ANIMAL := 10
+const KIND_TRANSPORT_SHIP := 11
 
 var _camera: IsoCamera
 var _ids: PackedInt64Array = PackedInt64Array()
@@ -73,7 +74,7 @@ func _draw() -> void:
 				draw_rect(Rect2(origin + Vector2(tile_x, tile_y) * cell_size, Vector2(cell_size, cell_size)), color)
 	for index in _ids.size():
 		var kind: int = _kinds[index]
-		if kind != KIND_UNIT and kind != KIND_VILLAGER and kind != KIND_BUILDING and kind != KIND_TRADE_CART and kind != KIND_HUNTING_ANIMAL:
+		if kind != KIND_UNIT and kind != KIND_VILLAGER and kind != KIND_BUILDING and kind != KIND_TRADE_CART and kind != KIND_HUNTING_ANIMAL and kind != KIND_TRANSPORT_SHIP:
 			if kind == KIND_RESOURCE_NODE:
 				draw_rect(Rect2(origin + Vector2(_positions_x[index], _positions_y[index]) * cell_size, Vector2.ONE * maxf(1.0, cell_size * 0.5)), RESOURCE_COLOR)
 			continue
@@ -84,7 +85,7 @@ func _draw() -> void:
 		if team == _my_team:
 			color = color.lightened(0.2)
 		var point := origin + Vector2(_positions_x[index], _positions_y[index]) * cell_size
-		var extent := 2.0 if kind == KIND_UNIT or kind == KIND_VILLAGER else 3.5
+		var extent := 2.0 if kind == KIND_UNIT or kind == KIND_VILLAGER or kind == KIND_TRANSPORT_SHIP else 3.5
 		draw_rect(Rect2(point - Vector2.ONE * extent * 0.5, Vector2.ONE * extent), color)
 	draw_rect(Rect2(origin, Vector2(_width, _height) * cell_size), Color(0.35, 0.4, 0.46, 0.8), false, 1.0)
 	_draw_camera(origin, cell_size)

@@ -13,6 +13,7 @@ signal formation_requested(formation: int)
 signal market_buy_requested(resource: int, amount: int)
 signal market_sell_requested(resource: int, amount: int)
 signal tribute_requested(target: int, resource: int, amount: int)
+signal transport_unload_requested(ship_id: int)
 
 const AGE_NAMES := ["黑暗时代", "封建时代", "城堡时代", "帝王时代"]
 const FORMATION_NAMES := ["线列", "楔形", "方阵", "散开"]
@@ -24,6 +25,7 @@ const KIND_BUILDING := 8
 const BUILDING_STATE_FOUNDATION := 0
 const BUILDING_STATE_COMPLETE := 1
 const VILLAGER_UNIT := -1
+const TRANSPORT_SHIP_UNIT := -2
 const SWORDSMAN_UNIT := 0
 const SPEARMAN_UNIT := 1
 const ARCHER_UNIT := 2
@@ -33,6 +35,8 @@ const MANGONEL_UNIT := 21
 const TOWN_CENTER := 1
 const BARRACKS := 3
 const MARKET := 6
+const DOCK := 8
+const KIND_TRANSPORT_SHIP := 11
 const ARCHERY_RANGE := 15
 const STABLE := 16
 const SIEGE_WORKSHOP := 21
@@ -52,6 +56,7 @@ var _notice_serial := 0
 var _town_bell_enabled := false
 var _bridge: GameBridge
 var _market_targets_signature := ""
+var _selected_transport_id := -1
 
 
 func _ready() -> void:
@@ -92,6 +97,7 @@ func refresh(player: Dictionary, selection: Array, my_team: int) -> void:
 	_update_train_buttons(player, selection, my_team)
 	_update_research_buttons(player)
 	_update_market(player, selection, my_team)
+	_update_transport_unload(selection, my_team)
 	show_selection(selection)
 
 
@@ -106,6 +112,8 @@ func show_selection(selection: Array) -> void:
 		var lines: PackedStringArray = ["生命 %d / %d" % [entry["hp"], entry["max_hp"]]]
 		if int(entry["kind"]) == KIND_BUILDING:
 			lines.append(_building_state_text(entry))
+		elif int(entry["kind"]) == KIND_TRANSPORT_SHIP:
+			lines.append(_transport_crew_text(entry))
 		%SelectionDetail.text = "\n".join(lines)
 		return
 	var counts: Dictionary = {}
@@ -151,6 +159,8 @@ func _update_train_buttons(player: Dictionary, selection: Array, my_team: int) -
 func _train_allowed(building_type: int, unit_type: int) -> bool:
 	if unit_type == VILLAGER_UNIT:
 		return building_type == TOWN_CENTER
+	if unit_type == TRANSPORT_SHIP_UNIT:
+		return building_type == DOCK
 	match building_type:
 		BARRACKS:
 			return unit_type == SWORDSMAN_UNIT or unit_type == SPEARMAN_UNIT
@@ -161,6 +171,21 @@ func _train_allowed(building_type: int, unit_type: int) -> bool:
 		SIEGE_WORKSHOP:
 			return unit_type == BATTERING_RAM_UNIT or unit_type == MANGONEL_UNIT
 	return false
+
+
+func _update_transport_unload(selection: Array, my_team: int) -> void:
+	var button: Button = %UnloadButton
+	_selected_transport_id = -1
+	button.visible = false
+	if selection.size() != 1:
+		return
+	var entry: Dictionary = selection[0]
+	if int(entry["kind"]) != KIND_TRANSPORT_SHIP or int(entry["team"]) != my_team:
+		return
+	_selected_transport_id = int(entry["id"])
+	button.visible = true
+	button.text = "卸载 %d/%d" % [entry["transport_count"], entry["transport_capacity"]]
+	button.disabled = not _bridge.CanTransportUnload(_selected_transport_id)
 
 
 func _update_research_buttons(player: Dictionary) -> void:
@@ -368,7 +393,13 @@ func _tooltip_body(entry: Dictionary) -> String:
 	var lines: PackedStringArray = ["生命 %d / %d" % [entry["hp"], entry["max_hp"]]]
 	if int(entry["kind"]) == KIND_BUILDING:
 		lines.append(_building_state_text(entry))
+	elif int(entry["kind"]) == KIND_TRANSPORT_SHIP:
+		lines.append(_transport_crew_text(entry))
 	return "\n".join(lines)
+
+
+func _transport_crew_text(entry: Dictionary) -> String:
+	return "乘员 %d / %d" % [entry["transport_count"], entry["transport_capacity"]]
 
 
 func _on_chat_submitted(text: String) -> void:
@@ -457,6 +488,11 @@ func _on_age_button_pressed(target_age: int) -> void:
 
 func _on_stop_pressed() -> void:
 	stop_requested.emit()
+
+
+func _on_unload_pressed() -> void:
+	if _selected_transport_id >= 0:
+		transport_unload_requested.emit(_selected_transport_id)
 
 
 func _on_cancel_placement_pressed() -> void:

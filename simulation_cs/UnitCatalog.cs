@@ -14,6 +14,7 @@ public static class UnitCatalog
     public const long Spearman = UnitDefs.Spearman;
     public const long Archer = UnitDefs.Archer;
     public const long Knight = UnitDefs.Knight;
+    public const long TransportShip = UnitDefs.TransportShip;
     public const long BatteringRam = UnitDefs.BatteringRam;
     public const long Mangonel = UnitDefs.Mangonel;
 
@@ -22,6 +23,10 @@ public static class UnitCatalog
         if (unitType == UnitDefs.Villager)
         {
             return buildingType == BuildingTypes.TownCenter;
+        }
+        if (unitType == UnitDefs.TransportShip)
+        {
+            return buildingType == BuildingTypes.Dock;
         }
         long civ = sim.Civ(team);
         if (!UnitDefs.IsUnitAvailable(civ, unitType) || !UnitFamilies.IsTrainableBase(unitType))
@@ -48,6 +53,7 @@ public static class UnitCatalog
     public static long Ticks(long unitType) => unitType switch
     {
         UnitDefs.Villager => 25,
+        UnitDefs.TransportShip => 40,
         UnitDefs.Swordsman => 21,
         UnitDefs.Spearman => 22,
         UnitDefs.Archer => 35,

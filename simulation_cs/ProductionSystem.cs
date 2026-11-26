@@ -51,7 +51,8 @@ public static class ProductionSystem
         || type == BuildingTypes.ArcheryRange
         || type == BuildingTypes.Stable
         || type == BuildingTypes.SiegeWorkshop
-        || type == BuildingTypes.Castle;
+        || type == BuildingTypes.Castle
+        || type == BuildingTypes.Dock;
 
     /// <summary>入队：校验建筑完工、兵种可造、队列未满、资源足够，立刻扣费后排队或直接开工。</summary>
     public static bool Train(GameSim sim, long building, long unitType)
@@ -205,7 +206,7 @@ public static class ProductionSystem
             world.SetValue(id, SimComponents.Production, SimComponents.ProdTicksLeft, 0);
             return;
         }
-        if (!TryFindSpawnCell(sim, id, out int cellX, out int cellY))
+        if (!TryFindSpawnCell(sim, id, unitType, out int cellX, out int cellY))
         {
             world.SetValue(id, SimComponents.Production, SimComponents.ProdTicksLeft, 0);
             return;
@@ -230,6 +231,10 @@ public static class ProductionSystem
             return sim.SpawnVillager(
                 cellX, cellY, team, MapSetup.VillagerSpeed,
                 MapSetup.VillagerCarryCapacity, MapSetup.VillagerGatherRate, pop);
+        }
+        if (unitType == UnitDefs.TransportShip)
+        {
+            return sim.SpawnTransportShip(cellX, cellY, team, popCost: pop);
         }
         // 队列里存家族基础兵，出生时按当前研究位图解析到最新等级。
         long resolved = UnitFamilies.ResolveUnit(sim.PlayerResearch(team), unitType);
@@ -361,11 +366,14 @@ public static class ProductionSystem
         }
     }
 
-    /// <summary>建筑 footprint 邻格首个可站立格：按 y、x 升序扫描，保证确定性。</summary>
-    private static bool TryFindSpawnCell(GameSim sim, long building, out int cellX, out int cellY)
+    /// <summary>建筑 footprint 邻格首个可站立格：按 y、x 升序扫描，保证确定性。
+    /// 运输船在水面域找格，其余单位在陆地找格。</summary>
+    private static bool TryFindSpawnCell(
+        GameSim sim, long building, long unitType, out int cellX, out int cellY)
     {
         cellX = -1;
         cellY = -1;
+        long domain = unitType == UnitDefs.TransportShip ? MovementDomain.Water : MovementDomain.Land;
         SimWorld world = sim.World;
         int originX = (int)Fixed.ToInt(world.GetValue(building, SimComponents.Position, SimComponents.X));
         int originY = (int)Fixed.ToInt(world.GetValue(building, SimComponents.Position, SimComponents.Y));
@@ -379,12 +387,7 @@ public static class ProductionSystem
                 {
                     continue;
                 }
-                if (!sim.Grid.InBounds(cellXIndex, cellYIndex)
-                    || sim.Grid.IsBlocked(cellXIndex, cellYIndex))
-                {
-                    continue;
-                }
-                if (!sim.Terrain.IsLandPassable(cellXIndex, cellYIndex))
+                if (!Traversal.CellPassable(sim.Grid, sim.Terrain, cellXIndex, cellYIndex, domain))
                 {
                     continue;
                 }

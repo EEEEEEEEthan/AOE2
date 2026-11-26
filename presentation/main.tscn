@@ -459,6 +459,11 @@ layout_mode = 2
 text = "骑士"
 metadata/unit_type = 3
 
+[node name="TransportShip" type="Button" parent="Hud/CommandPanel/Margin/Content/TrainRow"]
+layout_mode = 2
+text = "运输船"
+metadata/unit_type = -2
+
 [node name="BatteringRam" type="Button" parent="Hud/CommandPanel/Margin/Content/TrainRow"]
 layout_mode = 2
 text = "冲车"
@@ -521,6 +526,12 @@ theme_override_constants/separation = 8
 unique_name_in_owner = true
 layout_mode = 2
 text = "停止"
+
+[node name="UnloadButton" type="Button" parent="Hud/CommandPanel/Margin/Content/ActionRow"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+text = "卸载"
 
 [node name="CancelPlacementButton" type="Button" parent="Hud/CommandPanel/Margin/Content/ActionRow"]
 unique_name_in_owner = true
@@ -902,6 +913,7 @@ unique_name_in_owner = true
 [connection signal="pressed" from="Hud/CommandPanel/Margin/Content/TrainRow/Spearman" to="Hud" method="_on_train_button_pressed" binds=[1]]
 [connection signal="pressed" from="Hud/CommandPanel/Margin/Content/TrainRow/Archer" to="Hud" method="_on_train_button_pressed" binds=[2]]
 [connection signal="pressed" from="Hud/CommandPanel/Margin/Content/TrainRow/Knight" to="Hud" method="_on_train_button_pressed" binds=[3]]
+[connection signal="pressed" from="Hud/CommandPanel/Margin/Content/TrainRow/TransportShip" to="Hud" method="_on_train_button_pressed" binds=[-2]]
 [connection signal="pressed" from="Hud/CommandPanel/Margin/Content/TrainRow/BatteringRam" to="Hud" method="_on_train_button_pressed" binds=[20]]
 [connection signal="pressed" from="Hud/CommandPanel/Margin/Content/TrainRow/Mangonel" to="Hud" method="_on_train_button_pressed" binds=[21]]
 [connection signal="pressed" from="Hud/CommandPanel/Margin/Content/AgeRow/Feudal" to="Hud" method="_on_age_button_pressed" binds=[1]]
@@ -911,6 +923,7 @@ unique_name_in_owner = true
 [connection signal="pressed" from="Hud/CommandPanel/Margin/Content/TechRow/ScaleMail" to="Hud" method="_on_tech_button_pressed" binds=[1]]
 [connection signal="pressed" from="Hud/CommandPanel/Margin/Content/TechRow/Fletching" to="Hud" method="_on_tech_button_pressed" binds=[2]]
 [connection signal="pressed" from="Hud/CommandPanel/Margin/Content/ActionRow/StopButton" to="Hud" method="_on_stop_pressed"]
+[connection signal="pressed" from="Hud/CommandPanel/Margin/Content/ActionRow/UnloadButton" to="Hud" method="_on_unload_pressed"]
 [connection signal="pressed" from="Hud/CommandPanel/Margin/Content/ActionRow/CancelPlacementButton" to="Hud" method="_on_cancel_placement_pressed"]
 [connection signal="pressed" from="Hud/ResultPanel/Margin/Content/ExitButton" to="." method="_on_return_to_menu_pressed"]
 [connection signal="pressed" from="Hud/ResultPanel/Margin/Content/SaveReplayButton" to="." method="_on_save_replay_pressed"]
