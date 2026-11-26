@@ -6,7 +6,7 @@ const TYPE_DIRT := 1
 const TYPE_WATER := 2
 const TYPE_CLIFF := 3
 
-const MAX_HEIGHT := 8
+const MAX_HEIGHT := 16
 
 const KIND_SPAWN := "spawn"
 const KIND_RESOURCE := "resource"
