@@ -3,6 +3,9 @@ extends Node3D
 const DEDICATED_FEATURE := "dedicated_server"
 const SERVER_ARGUMENT := "--server"
 const DEFAULT_PORT := 27015
+const DEFAULT_SEED := 20261127
+const DEFAULT_PLAYER_COUNT := 2
+const ARABIA_MAP_TYPE := 0
 const TEAM_NAMES := {
 	0: "蓝方",
 	1: "红方",
@@ -39,7 +42,7 @@ func _ready() -> void:
 
 
 func _start_session() -> void:
-	bridge.StartLocalMatch()
+	bridge.StartGeneratedMatch(DEFAULT_SEED, DEFAULT_PLAYER_COUNT, ARABIA_MAP_TYPE)
 
 
 func _process(delta: float) -> void:
@@ -117,8 +120,8 @@ func _on_surrender_pressed() -> void:
 	bridge.Surrender()
 
 
-func _on_exit_pressed() -> void:
-	get_tree().quit()
+func _on_return_to_menu_pressed() -> void:
+	get_tree().change_scene_to_file("res://presentation/main_menu.tscn")
 
 
 func _is_dedicated() -> bool:

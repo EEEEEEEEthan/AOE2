@@ -1,0 +1,118 @@
+[gd_scene load_steps=2 format=3]
+
+[ext_resource type="Script" path="res://presentation/main_menu.gd" id="1_menu"]
+
+[node name="MainMenu" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1_menu")
+
+[node name="Background" type="ColorRect" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+color = Color(0.05, 0.07, 0.11, 1)
+
+[node name="Center" type="CenterContainer" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="Content" type="VBoxContainer" parent="Center"]
+layout_mode = 2
+
+[node name="Title" type="Label" parent="Center/Content"]
+layout_mode = 2
+text = "帝国时代 II 复刻"
+horizontal_alignment = 1
+
+[node name="Subtitle" type="Label" parent="Center/Content"]
+layout_mode = 2
+text = "确定性锁步 RTS 框架"
+horizontal_alignment = 1
+
+[node name="Spacer" type="Control" parent="Center/Content"]
+custom_minimum_size = Vector2(0, 24)
+layout_mode = 2
+
+[node name="StandardGameButton" type="Button" parent="Center/Content"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(280, 44)
+layout_mode = 2
+text = "标准游戏"
+
+[node name="CampaignButton" type="Button" parent="Center/Content"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(280, 44)
+layout_mode = 2
+text = "战役"
+
+[node name="MultiplayerButton" type="Button" parent="Center/Content"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(280, 44)
+layout_mode = 2
+text = "多人游戏"
+
+[node name="TechTreeButton" type="Button" parent="Center/Content"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(280, 44)
+layout_mode = 2
+text = "科技树"
+
+[node name="MapEditorButton" type="Button" parent="Center/Content"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(280, 44)
+layout_mode = 2
+text = "场景编辑器"
+
+[node name="OptionsButton" type="Button" parent="Center/Content"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(280, 44)
+layout_mode = 2
+text = "选项"
+
+[node name="QuitButton" type="Button" parent="Center/Content"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(280, 44)
+layout_mode = 2
+text = "退出"
+
+[node name="VersionLabel" type="Label" parent="."]
+layout_mode = 1
+anchors_preset = 3
+anchor_left = 1.0
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = -160.0
+offset_top = -40.0
+offset_right = -16.0
+offset_bottom = -12.0
+grow_horizontal = 0
+grow_vertical = 0
+text = "版本 0.1"
+horizontal_alignment = 2
+vertical_alignment = 1
+
+[node name="UnavailableDialog" type="AcceptDialog" parent="."]
+unique_name_in_owner = true
+title = "开发中"
+dialog_text = "该功能正在开发中，敬请期待。"
+
+[connection signal="pressed" from="Center/Content/StandardGameButton" to="." method="_on_standard_game_pressed"]
+[connection signal="pressed" from="Center/Content/CampaignButton" to="." method="_on_unavailable_pressed"]
+[connection signal="pressed" from="Center/Content/MultiplayerButton" to="." method="_on_unavailable_pressed"]
+[connection signal="pressed" from="Center/Content/TechTreeButton" to="." method="_on_unavailable_pressed"]
+[connection signal="pressed" from="Center/Content/MapEditorButton" to="." method="_on_map_editor_pressed"]
+[connection signal="pressed" from="Center/Content/OptionsButton" to="." method="_on_unavailable_pressed"]
+[connection signal="pressed" from="Center/Content/QuitButton" to="." method="_on_quit_pressed"]

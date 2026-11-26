@@ -116,6 +116,12 @@
 - 兵种生成前校验 `UnitDefs.IsUnitAvailable(civ, unitType)`，独特单位非所属文明不可造；属性走 `TechCatalog.EffectiveStat(civ, ...)`，在时代/科技加成之上叠加文明加成。
 - 研究前校验 `TechCatalog.IsAvailable(civ, techId)`，被本文明禁用的科技不可研究。
 
+## 启动与主菜单
+
+- 启动进入主菜单 `presentation/main_menu.tscn`，菜单只负责导航，不自动开局。
+- 标准游戏 → `presentation/main.tscn`，以固定种子生成阿拉伯标准对局；场景编辑器 → `tools/map_editor.tscn`；战役/多人/科技树/选项为占位提示。
+- 对局结算面板与地图编辑器都可返回主菜单；dedicated server（`--server`）绕过菜单直接开局。
+
 ## 运行与测试
 
 ```text
@@ -143,3 +149,4 @@ dotnet build AOE2Framework.sln           # 单独编译 C# 内核
 - [x] 水上玩法：群岛水域地图与鱼群、陆/水通行域、码头临水放置、渔船采集与战船水战
 - [x] 水上运输：运输船装载/卸载与跨岛登陆，沉船乘员一并损失
 - [x] 陆地自然资源与狩猎：资源子类型分簇、羊/鹿/野猪可击杀转尸体、尸体腐烂与采集差异
+- [x] 场外 UI：主菜单与启动流程，标准游戏/场景编辑器入口，对局与编辑器往返主菜单

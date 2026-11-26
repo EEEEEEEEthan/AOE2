@@ -36,6 +36,18 @@ title = "地图校验"
 
 [node name="Hud" type="CanvasLayer" parent="."]
 
+[node name="MainMenuButton" type="Button" parent="Hud"]
+unique_name_in_owner = true
+anchors_preset = 1
+anchor_left = 1.0
+anchor_right = 1.0
+offset_left = -136.0
+offset_top = 16.0
+offset_right = -16.0
+offset_bottom = 52.0
+grow_horizontal = 0
+text = "主菜单"
+
 [node name="ToolPanel" type="PanelContainer" parent="Hud"]
 offset_left = 16.0
 offset_top = 16.0
@@ -212,6 +224,7 @@ layout_mode = 2
 autowrap_mode = 2
 text = "就绪：左键拖动编辑，滚轮缩放，WASD 平移"
 
+[connection signal="pressed" from="Hud/MainMenuButton" to="." method="_on_main_menu_pressed"]
 [connection signal="item_selected" from="Hud/ToolPanel/Margin/Content/ToolOption" to="." method="_on_tool_selected"]
 [connection signal="pressed" from="Hud/ToolPanel/Margin/Content/HistoryRow/UndoButton" to="." method="_on_undo_pressed"]
 [connection signal="pressed" from="Hud/ToolPanel/Margin/Content/HistoryRow/RedoButton" to="." method="_on_redo_pressed"]

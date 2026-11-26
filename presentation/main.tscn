@@ -401,7 +401,7 @@ horizontal_alignment = 1
 [node name="ExitButton" type="Button" parent="Hud/ResultPanel/Margin/Content"]
 unique_name_in_owner = true
 layout_mode = 2
-text = "退出"
+text = "返回主菜单"
 
 [node name="TechTree" parent="." instance=ExtResource("4_tech")]
 unique_name_in_owner = true
@@ -435,5 +435,5 @@ unique_name_in_owner = true
 [connection signal="pressed" from="Hud/CommandPanel/Margin/Content/TechRow/Fletching" to="Hud" method="_on_tech_button_pressed" binds=[2]]
 [connection signal="pressed" from="Hud/CommandPanel/Margin/Content/ActionRow/StopButton" to="Hud" method="_on_stop_pressed"]
 [connection signal="pressed" from="Hud/CommandPanel/Margin/Content/ActionRow/CancelPlacementButton" to="Hud" method="_on_cancel_placement_pressed"]
-[connection signal="pressed" from="Hud/ResultPanel/Margin/Content/ExitButton" to="." method="_on_exit_pressed"]
+[connection signal="pressed" from="Hud/ResultPanel/Margin/Content/ExitButton" to="." method="_on_return_to_menu_pressed"]
 [connection signal="closed" from="TechTree" to="." method="_on_tech_tree_closed"]
