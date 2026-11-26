@@ -328,6 +328,8 @@ public partial class GameBridge : Node
                 { "building_state", entity.BuildingState },
                 { "building_progress", entity.BuildingProgress },
                 { "building_max_progress", entity.BuildingMaxProgress },
+                { "garrison_count", entity.GarrisonCount },
+                { "garrison_capacity", entity.GarrisonCapacity },
             });
         }
         return result;
@@ -370,6 +372,8 @@ public partial class GameBridge : Node
         var buildingStates = new int[count];
         var buildingProgresses = new float[count];
         var buildingMaxProgresses = new float[count];
+        var garrisonCounts = new int[count];
+        var garrisonCapacities = new int[count];
         for (int index = 0; index < count; index++)
         {
             AoeSim.EntitySnapshot entity = entities[index];
@@ -387,6 +391,8 @@ public partial class GameBridge : Node
             buildingStates[index] = (int)entity.BuildingState;
             buildingProgresses[index] = (float)AoeSim.Fixed.ToFloat(entity.BuildingProgress);
             buildingMaxProgresses[index] = (float)AoeSim.Fixed.ToFloat(entity.BuildingMaxProgress);
+            garrisonCounts[index] = (int)entity.GarrisonCount;
+            garrisonCapacities[index] = (int)entity.GarrisonCapacity;
         }
         _batch = new Godot.Collections.Dictionary
         {
@@ -406,6 +412,8 @@ public partial class GameBridge : Node
             { "building_state", buildingStates },
             { "building_progress", buildingProgresses },
             { "building_max_progress", buildingMaxProgresses },
+            { "garrison_count", garrisonCounts },
+            { "garrison_capacity", garrisonCapacities },
         };
         _batchTick = frame.Tick;
         return _batch;
