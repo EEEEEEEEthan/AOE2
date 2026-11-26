@@ -14,6 +14,8 @@ public partial class GameBridge : Node
     private AoeSim.NavGrid? _grid;
     private AoeSim.TerrainGrid? _terrain;
     private double _accumulator;
+    private Godot.Collections.Dictionary? _batch;
+    private long _batchTick = long.MinValue;
 
     public bool HasSession => _session != null;
 
@@ -36,6 +38,7 @@ public partial class GameBridge : Node
         _terrain = sim.Terrain;
         _session = new AoeSim.LocalSession(sim);
         _accumulator = 0.0;
+        ResetBatchCache();
         // 先推一帧快照，保证渲染首帧就有数据。
         _session.Step();
     }
@@ -48,6 +51,7 @@ public partial class GameBridge : Node
         _terrain = sim.Terrain;
         _session = new AoeSim.LocalSession(sim);
         _accumulator = 0.0;
+        ResetBatchCache();
         _session.Step();
     }
 
@@ -83,6 +87,7 @@ public partial class GameBridge : Node
         }
         _session = new AoeSim.LocalSession(sim);
         _accumulator = 0.0;
+        ResetBatchCache();
         _session.Step();
     }
 
@@ -321,4 +326,83 @@ public partial class GameBridge : Node
         }
         return result;
     }
+
+    private void ResetBatchCache()
+    {
+        _batch = null;
+        _batchTick = long.MinValue;
+    }
+
+    /// <summary>
+    /// 批量快照：按列打包实体，前端按下标读取，避免每实体一个 Dictionary。
+    /// 同一 tick 复用上次结果，模拟未推进时不重复封装。
+    /// </summary>
+    public Godot.Collections.Dictionary SnapshotBatch()
+    {
+        AoeSim.SnapshotFrame? frame = _session?.Client.Latest;
+        if (frame == null)
+        {
+            return new Godot.Collections.Dictionary();
+        }
+        if (_batch != null && _batchTick == frame.Tick)
+        {
+            return _batch;
+        }
+        AoeSim.EntitySnapshot[] entities = frame.Entities;
+        int count = entities.Length;
+        var ids = new long[count];
+        var positionsX = new float[count];
+        var positionsY = new float[count];
+        var teams = new int[count];
+        var kinds = new int[count];
+        var hitPoints = new int[count];
+        var nodeTypes = new int[count];
+        var nodeRemainings = new int[count];
+        var buildingTypes = new int[count];
+        var widths = new int[count];
+        var heights = new int[count];
+        var buildingStates = new int[count];
+        var buildingProgresses = new float[count];
+        var buildingMaxProgresses = new float[count];
+        for (int index = 0; index < count; index++)
+        {
+            AoeSim.EntitySnapshot entity = entities[index];
+            ids[index] = entity.Id;
+            positionsX[index] = (float)AoeSim.Fixed.ToFloat(entity.X);
+            positionsY[index] = (float)AoeSim.Fixed.ToFloat(entity.Y);
+            teams[index] = (int)entity.Team;
+            kinds[index] = (int)entity.Kind;
+            hitPoints[index] = (int)entity.Hp;
+            nodeTypes[index] = (int)entity.NodeType;
+            nodeRemainings[index] = (int)entity.NodeRemaining;
+            buildingTypes[index] = (int)entity.BuildingType;
+            widths[index] = (int)entity.Width;
+            heights[index] = (int)entity.Height;
+            buildingStates[index] = (int)entity.BuildingState;
+            buildingProgresses[index] = (float)AoeSim.Fixed.ToFloat(entity.BuildingProgress);
+            buildingMaxProgresses[index] = (float)AoeSim.Fixed.ToFloat(entity.BuildingMaxProgress);
+        }
+        _batch = new Godot.Collections.Dictionary
+        {
+            { "tick", frame.Tick },
+            { "count", count },
+            { "ids", ids },
+            { "x", positionsX },
+            { "y", positionsY },
+            { "team", teams },
+            { "kind", kinds },
+            { "hp", hitPoints },
+            { "node_type", nodeTypes },
+            { "node_remaining", nodeRemainings },
+            { "building_type", buildingTypes },
+            { "width", widths },
+            { "height", heights },
+            { "building_state", buildingStates },
+            { "building_progress", buildingProgresses },
+            { "building_max_progress", buildingMaxProgresses },
+        };
+        _batchTick = frame.Tick;
+        return _batch;
+    }
 }
+
