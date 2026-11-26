@@ -7,7 +7,10 @@ namespace AoeSim;
 /// </summary>
 public static class InputTiming
 {
-    /// <summary>与 <see cref="SimulationServer"/> 的未来帧接受窗口保持一致的上限。</summary>
+    /// <summary>
+    /// 未来帧接受窗口的唯一来源：<see cref="SimulationServer"/> 与客户端提前量共用此上限，
+    /// 改动此处即同时影响服务器接受窗口与客户端提交回合，避免两处魔数各自漂移。
+    /// </summary>
     public const int MaxLookaheadTurns = 8;
 
     /// <summary>

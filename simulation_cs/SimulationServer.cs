@@ -15,9 +15,6 @@ public interface ICommandRecorder
 /// </summary>
 public sealed class SimulationServer
 {
-    /// <summary>允许客户端提前提交的回合数上限，避免伪造超远回合占满内部队列。</summary>
-    private const int TurnLookahead = 8;
-
     private readonly Dictionary<long, List<LockstepCommand>[]> _turns = new();
     private readonly List<ComputerPlayer> _computerPlayers = new();
     private readonly object _gate = new();
@@ -120,7 +117,7 @@ public sealed class SimulationServer
                 return;
             }
             long current = Sim.Lockstep.Turn;
-            if (frame.Turn < current || frame.Turn > current + TurnLookahead)
+            if (frame.Turn < current || frame.Turn > current + InputTiming.MaxLookaheadTurns)
             {
                 _rejectedCommands += frame.Commands.Length;
                 return;
