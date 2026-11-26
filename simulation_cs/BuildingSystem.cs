@@ -23,6 +23,7 @@ public static class BuildingSystem
         int sizeHeight = BuildingTypes.SizeHeight(type);
         int footprintMinHeight = int.MaxValue;
         int footprintMaxHeight = int.MinValue;
+        bool waterAdjacent = false;
         for (int cellY = originY; cellY < originY + sizeHeight; cellY++)
         {
             for (int cellX = originX; cellX < originX + sizeWidth; cellX++)
@@ -41,10 +42,25 @@ public static class BuildingSystem
                 }
                 footprintMinHeight = System.Math.Min(footprintMinHeight, terrain.CellMinHeight(cellX, cellY));
                 footprintMaxHeight = System.Math.Max(footprintMaxHeight, terrain.CellMaxHeight(cellX, cellY));
+                if (!waterAdjacent && HasAdjacentWater(terrain, cellX, cellY))
+                {
+                    waterAdjacent = true;
+                }
             }
+        }
+        if (type == BuildingTypes.Dock && !waterAdjacent)
+        {
+            return false;
         }
         return footprintMaxHeight - footprintMinHeight <= TerrainGrid.MaxWalkableSlope;
     }
+
+    /// <summary>码头必须临水：四邻中至少一格是水面。</summary>
+    private static bool HasAdjacentWater(TerrainGrid terrain, int cellX, int cellY) =>
+        terrain.IsWater(cellX + 1, cellY)
+        || terrain.IsWater(cellX - 1, cellY)
+        || terrain.IsWater(cellX, cellY + 1)
+        || terrain.IsWater(cellX, cellY - 1);
 
     private static bool IsBuildableGround(TerrainGrid terrain, int cellX, int cellY)
     {
@@ -117,7 +133,19 @@ public static class BuildingSystem
         world.SetValue(id, SimComponents.Building, SimComponents.Progress, maxProgress);
         world.SetValue(id, SimComponents.Building, SimComponents.State, StateComplete);
         AddPopulationCap(world, id);
+        AttachDockDropSite(world, id);
         GarrisonSystem.EnsureBuildingCombat(world, id);
+    }
+
+    /// <summary>码头完工后作为海上投放点：渔船把食物直接卸进码头。</summary>
+    private static void AttachDockDropSite(SimWorld world, long id)
+    {
+        if (world.GetValue(id, SimComponents.Building, SimComponents.BuildingType) != BuildingTypes.Dock)
+        {
+            return;
+        }
+        world.Attach(id, SimComponents.DropSite);
+        world.SetValue(id, SimComponents.DropSite, SimComponents.AcceptMask, 0b1111);
     }
 
     public static void Ruin(SimWorld world, NavGrid grid, long id)
@@ -139,6 +167,7 @@ public static class BuildingSystem
         world.Detach(id, SimComponents.Health);
         world.Detach(id, SimComponents.Footprint);
         world.Detach(id, SimComponents.ResourceNode);
+        world.Detach(id, SimComponents.DropSite);
         world.Detach(id, SimComponents.Combat);
         world.Detach(id, SimComponents.Garrison);
         SetBlock(world, grid, id, false);

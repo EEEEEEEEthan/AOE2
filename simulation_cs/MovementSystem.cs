@@ -26,7 +26,7 @@ public static class MovementSystem
         SimWorld world,
         NavGrid grid,
         OccupancyMap occupancy,
-        Func<int, int, FlowField> fieldProvider,
+        Func<int, int, long, FlowField> fieldProvider,
         TerrainGrid? terrain = null)
     {
         ComponentStore moveStore = world.Store(SimComponents.Move);
@@ -50,7 +50,7 @@ public static class MovementSystem
         long id,
         NavGrid grid,
         OccupancyMap occupancy,
-        Func<int, int, FlowField> fieldProvider,
+        Func<int, int, long, FlowField> fieldProvider,
         TerrainGrid? terrain)
     {
         long x = world.GetValue(id, SimComponents.Position, SimComponents.X);
@@ -66,13 +66,14 @@ public static class MovementSystem
             Stop(world, id);
             return;
         }
-        FlowField? field = fieldProvider(targetX, targetY);
+        long domain = Traversal.DomainOf(world, id);
+        FlowField? field = fieldProvider(targetX, targetY, domain);
         if (field == null || !field.Reachable(cellX, cellY))
         {
             Stop(world, id);
             return;
         }
-        if (!ChooseNextCell(id, grid, occupancy, field, cellX, cellY, terrain, out int nextX, out int nextY))
+        if (!ChooseNextCell(id, grid, occupancy, field, cellX, cellY, terrain, domain, out int nextX, out int nextY))
         {
             world.SetValue(id, SimComponents.Velocity, SimComponents.X, 0);
             world.SetValue(id, SimComponents.Velocity, SimComponents.Y, 0);
@@ -117,6 +118,7 @@ public static class MovementSystem
         int cellX,
         int cellY,
         TerrainGrid? terrain,
+        long domain,
         out int nextX,
         out int nextY)
     {
@@ -136,16 +138,17 @@ public static class MovementSystem
             int offsetY = Neighbors[index, 1];
             int candidateX = cellX + offsetX;
             int candidateY = cellY + offsetY;
-            if (!grid.InBounds(candidateX, candidateY) || grid.IsBlocked(candidateX, candidateY))
+            if (!Traversal.CellPassable(grid, terrain, candidateX, candidateY, domain))
             {
                 continue;
             }
             if (offsetX != 0 && offsetY != 0
-                && (grid.IsBlocked(cellX + offsetX, cellY) || grid.IsBlocked(cellX, cellY + offsetY)))
+                && (!Traversal.CellPassable(grid, terrain, cellX + offsetX, cellY, domain)
+                    || !Traversal.CellPassable(grid, terrain, cellX, cellY + offsetY, domain)))
             {
                 continue;
             }
-            if (terrain != null && !terrain.CanTraverse(cellX, cellY, candidateX, candidateY))
+            if (terrain != null && !terrain.CanTraverse(cellX, cellY, candidateX, candidateY, domain))
             {
                 continue;
             }

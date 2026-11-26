@@ -43,10 +43,10 @@ public partial class GameBridge : Node
         _session.Step();
     }
 
-    public void StartGeneratedMatch(long seed = 20261127, int playerCount = 2)
+    public void StartGeneratedMatch(
+        long seed = 20261127, int playerCount = 2, AoeSim.MapType mapType = AoeSim.MapType.Arabia)
     {
-        AoeSim.GameSim sim = AoeSim.MapSetup.BuildGeneratedMatch(
-            AoeSim.MapType.Arabia, seed, playerCount);
+        AoeSim.GameSim sim = AoeSim.MapSetup.BuildGeneratedMatch(mapType, seed, playerCount);
         _grid = sim.Grid;
         _terrain = sim.Terrain;
         _session = new AoeSim.LocalSession(sim);
@@ -292,8 +292,9 @@ public partial class GameBridge : Node
 
     public string DemoMapJson() => AoeSim.DemoScenario.BuildMap().ToJson();
 
-    public string GeneratedMapJson(long seed = 20261127, int playerCount = 2) =>
-        AoeSim.MapGenerator.Generate(AoeSim.MapType.Arabia, seed, playerCount).ToJson();
+    public string GeneratedMapJson(
+        long seed = 20261127, int playerCount = 2, AoeSim.MapType mapType = AoeSim.MapType.Arabia) =>
+        AoeSim.MapGenerator.Generate(mapType, seed, playerCount).ToJson();
 
     /// <summary>预览/截图专用：把观察方视野整张揭示后推一帧快照，便于一次看到完整地图。</summary>
     public void RevealAllVision()

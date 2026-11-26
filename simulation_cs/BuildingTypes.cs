@@ -11,6 +11,7 @@ public static class BuildingTypes
     public const long Tower = 5;
     public const long Market = 6;
     public const long Farm = 7;
+    public const long Dock = 8;
 
     /// <summary>一块农田完工后挂载的食物节点总量，耗尽后需重播。</summary>
     public const long FarmFoodAmount = 250;
@@ -18,7 +19,7 @@ public static class BuildingTypes
     /// <summary>空田手动重播消耗的木材。</summary>
     public const long FarmReseedCost = 60;
 
-    public static bool IsKnown(long type) => type >= TownCenter && type <= Farm;
+    public static bool IsKnown(long type) => type >= TownCenter && type <= Dock;
 
     /// <summary>建筑所属时代：升城堡/帝国时统计上一时代的已完成建筑数量。</summary>
     public static long AgeOf(long type) => type switch
@@ -30,6 +31,7 @@ public static class BuildingTypes
         Tower => TechCatalog.AgeCastle,
         Market => TechCatalog.AgeFeudal,
         Farm => TechCatalog.AgeDark,
+        Dock => TechCatalog.AgeDark,
         _ => TechCatalog.AgeDark,
     };
 
@@ -42,6 +44,7 @@ public static class BuildingTypes
         Tower => 2,
         Market => 4,
         Farm => 3,
+        Dock => 3,
         _ => 0,
     };
 
@@ -54,6 +57,7 @@ public static class BuildingTypes
         Tower => 2,
         Market => 3,
         Farm => 3,
+        Dock => 3,
         _ => 0,
     };
 
@@ -66,6 +70,7 @@ public static class BuildingTypes
         Tower => 1000,
         Market => 1500,
         Farm => 480,
+        Dock => 1500,
         _ => 0,
     };
 
@@ -78,6 +83,7 @@ public static class BuildingTypes
         Tower => 120,
         Market => 180,
         Farm => 90,
+        Dock => 120,
         _ => 0,
     };
 
@@ -99,6 +105,7 @@ public static class BuildingTypes
         Tower => new ResourceCost(wood: 25, food: 0, gold: 0, stone: 125),
         Market => new ResourceCost(wood: 175, food: 0, gold: 0, stone: 0),
         Farm => new ResourceCost(wood: 60, food: 0, gold: 0, stone: 0),
+        Dock => new ResourceCost(wood: 150, food: 0, gold: 0, stone: 0),
         _ => default,
     };
 

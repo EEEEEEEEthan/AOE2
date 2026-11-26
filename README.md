@@ -69,6 +69,14 @@
 - `MapSetup`（`simulation_cs/MapSetup.cs`）把地图落进模拟层：静态阻塞随 `NavGrid` 进入寻路，资源点生成资源实体，起始位置由建筑/经济系统摆放已完工城镇中心、投放点与初始村民。
 - `MapSelfTest` 覆盖同种子一致、双方资源镜像、地形与阻塞一致、起点可建、资源点合法、JSON 往返与生成对局落地；`tests/tools/_map_preview.gd` 抓取全景与起始基地截图。
 
+## 水上玩法：码头、渔船与水战
+
+- 通行域：单位分为陆地与水面两域。`TerrainGrid.CanTraverse` 增加按域判定（陆地：非水非崖；水面：水且平坦），`FlowField` 按「目标格 + 域」缓存、`MovementSystem` 读取实体的 `domain` 组件（缺省为陆地），陆船互不越界。`NavGrid` 仍把水面当作陆地单位的静态阻塞，水面域改由地形水格判定。
+- 码头：新增 `BuildingTypes.Dock`（3×3，完工后作为海上投放点），`BuildingSystem.CanPlace` 要求码头占地临水（四邻至少一格水面）才可放置；渔船把食物直接卸进码头。
+- 渔船与战船：`GameSim.SpawnFishingShip` 复用采集系统对「鱼群」节点采集食物并返码头投放；`GameSim.SpawnWarship` 复用现有战斗/护甲/弹道体系，水战即单位对射。
+- 地图：`MapType.Islands` 群岛生成器整图水面打底、每位玩家草地小岛，岛上产木/食/金/石，近岸水面成簇生成鱼群，同种子确定性一致。
+- 自测：`WaterSelfTest`（`tests/water.gd`）覆盖群岛确定性、鱼群落水、陆/水互不通行、码头临水放置、渔船往返交付与战船水面对射。
+
 ## 市场交易、商队与进贡
 
 - 市场不再是空建筑：`MarketSystem`（`simulation_cs/MarketSystem.cs`）为每个玩家维护木/食/金/石的整数基准价，买入价与卖出价按固定价差展开；每次成交按数量推动基准价，并夹在上下限内，全部整数运算。
@@ -116,3 +124,4 @@ dotnet build AOE2Framework.sln           # 单独编译 C# 内核
 - [x] 体素地形与单位：TerrainGrid/MapData、每格四顶点高度与悬崖坡度寻路、贪心合并体素渲染与自建 `.vox` 资产
 - [x] 地图编辑器：高度/地形/悬崖笔刷、出生点与资源放置、撤销重做、MapData 存读与连通校验
 - [x] 地图生成与起始资源：确定性阿拉伯生成器、镜像起始资源、TC/村民/资源点落地与自测
+- [x] 水上玩法：群岛水域地图与鱼群、陆/水通行域、码头临水放置、渔船采集与战船水战

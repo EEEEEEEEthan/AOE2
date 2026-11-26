@@ -467,6 +467,63 @@ public sealed class GameSim
         return id;
     }
 
+    /// <summary>陆地/水面通行域标记；未挂域组件的实体一律按陆地处理。</summary>
+    private void AttachDomain(long id, long domain)
+    {
+        World.Attach(id, SimComponents.Domain);
+        World.SetValue(id, SimComponents.Domain, SimComponents.DomainId, domain);
+    }
+
+    /// <summary>渔船：水面移动，对鱼群资源节点采集食物并返回码头投放。</summary>
+    public long SpawnFishingShip(
+        int cellX,
+        int cellY,
+        long team,
+        double speedTilesPerTick = 0.10,
+        long carryCapacity = 10,
+        double gatherRatePerTick = 0.45,
+        long popCost = 1)
+    {
+        long id = SpawnVillager(cellX, cellY, team, speedTilesPerTick, carryCapacity, gatherRatePerTick, popCost);
+        if (id >= 0)
+        {
+            AttachDomain(id, MovementDomain.Water);
+        }
+        return id;
+    }
+
+    /// <summary>战船：水面作战单位，纳入现有战斗/护甲/弹道体系，水战即单位对射。</summary>
+    public long SpawnWarship(
+        int cellX,
+        int cellY,
+        long team,
+        long maxHp = 140,
+        long damage = 12,
+        double rangeMaxTiles = 6.0,
+        double speedTilesPerTick = 0.11,
+        long popCost = 1)
+    {
+        long id = SpawnUnit(
+            cellX, cellY, team, maxHp, damage, 1.0, rangeMaxTiles, speedTilesPerTick,
+            CombatStance.Aggressive, popCost);
+        if (id >= 0)
+        {
+            AttachDomain(id, MovementDomain.Water);
+        }
+        return id;
+    }
+
+    /// <summary>放置并完工一座码头（临水校验在 <see cref="BuildingSystem.CanPlace"/>）。</summary>
+    public long SpawnDock(int cellX, int cellY, long team)
+    {
+        long id = BuildingSystem.Place(World, Grid, Terrain, BuildingTypes.Dock, cellX, cellY, team);
+        if (id >= 0)
+        {
+            BuildingSystem.Complete(World, id);
+        }
+        return id;
+    }
+
     /// <summary>陆路贸易车：无战斗能力，靠市场路线指令往返产金，生产入口待单位训练合入后接入。</summary>
     public long SpawnTradeCart(int cellX, int cellY, long team)
     {
@@ -1229,7 +1286,7 @@ public sealed class GameSim
             Spatial.Rebuild(World);
             _spatialReady = true;
         }
-        GatherSystem.Step(World, InventoryForTeam, Grid);
+        GatherSystem.Step(World, InventoryForTeam, Grid, Terrain);
         MonkSystem.Step(World);
         OrderSystem.Step(World, Spatial);
         BuildingSystem.Step(World, Grid, Terrain);
@@ -1293,7 +1350,11 @@ public sealed class GameSim
         return hash;
     }
 
-    public FlowField FieldFor(int targetX, int targetY) => FieldProvider(targetX, targetY);
+    public FlowField FieldFor(int targetX, int targetY) =>
+        FieldProvider(targetX, targetY, MovementDomain.Land);
+
+    public FlowField FieldFor(int targetX, int targetY, long domain) =>
+        FieldProvider(targetX, targetY, domain);
 
     public void InvalidateFields()
     {
@@ -1330,9 +1391,9 @@ public sealed class GameSim
     /// 单位各自按所在格取方向，不能为分摊落点生成多张流场，否则一次移动会触发多张全图 BFS。
     /// 流场是派生数据、不进校验和，淘汰后重建结果完全一致。
     /// </summary>
-    private FlowField FieldProvider(int targetX, int targetY)
+    private FlowField FieldProvider(int targetX, int targetY, long domain)
     {
-        long key = ((long)targetX << 32) ^ (targetY & 0xFFFF_FFFFL);
+        long key = ((long)targetX << 40) ^ ((long)targetY << 16) ^ (domain & 0xFFFFL);
         if (_fields.TryGetValue(key, out FlowField? field))
         {
             LinkedListNode<long> node = _fieldNodes[key];
@@ -1340,7 +1401,7 @@ public sealed class GameSim
             _fieldRecency.AddLast(node);
             return field;
         }
-        field = new FlowField(Grid, Terrain);
+        field = new FlowField(Grid, Terrain, domain);
         field.Compute(Grid, targetX, targetY);
         if (_fields.Count >= FieldCacheCapacity)
         {
