@@ -93,7 +93,7 @@ public static class CivilizationSelfTest
             sim.Progress(0).Age = TechCatalog.AgeFeudal;
             sim.AddResource(0, GameSim.ResourceFood, 5000);
             sim.AddResource(0, GameSim.ResourceGold, 5000);
-            SpawnCompleteBuilding(sim, BuildingTypes.Market, 8, 8, 0);
+            SpawnCompleteBuilding(sim, BuildingTypes.Blacksmith, 8, 8, 0);
         }
         Expect(failures, generic.Research(0, TechCatalog.TechScaleMail),
             "generic scale mail research starts");

@@ -13,6 +13,7 @@ public static class ProductionSelfTest
     {
         var failures = new List<string>();
         CheckEnqueueDeduct(failures);
+        CheckBuildingUnitMapping(failures);
         CheckInsufficientResources(failures);
         CheckQueueLimit(failures);
         CheckTimerSpawns(failures);
@@ -101,6 +102,21 @@ public static class ProductionSelfTest
         Expect(failures, !sim.Train(building, UnitDefs.Villager), "barracks cannot train villager");
     }
 
+    private static void CheckBuildingUnitMapping(List<string> failures)
+    {
+        var sim = NewSim(613);
+        long barracks = sim.SpawnCompletedBuilding(2, 2, 0, BuildingTypes.Barracks);
+        long archery = sim.SpawnCompletedBuilding(6, 2, 0, BuildingTypes.ArcheryRange);
+        long stable = sim.SpawnCompletedBuilding(10, 2, 0, BuildingTypes.Stable);
+        Expect(failures, sim.Train(barracks, UnitDefs.Swordsman), "barracks trains swordsman");
+        Expect(failures, sim.Train(barracks, UnitDefs.Spearman), "barracks trains spearman");
+        Expect(failures, !sim.Train(barracks, UnitDefs.Archer), "barracks cannot train archer");
+        Expect(failures, sim.Train(archery, UnitDefs.Archer), "archery range trains archer");
+        Expect(failures, !sim.Train(archery, UnitDefs.Swordsman), "archery range cannot train swordsman");
+        Expect(failures, sim.Train(stable, UnitDefs.Knight), "stable trains knight");
+        Expect(failures, !sim.Train(stable, UnitDefs.Archer), "stable cannot train archer");
+    }
+
     private static void CheckInsufficientResources(List<string> failures)
     {
         var sim = NewSim(602, withResources: false);
@@ -142,7 +158,7 @@ public static class ProductionSelfTest
         long building = Barracks(sim);
         sim.Train(building, UnitDefs.Swordsman);
         sim.Train(building, UnitDefs.Spearman);
-        sim.Train(building, UnitDefs.Archer);
+        sim.Train(building, UnitDefs.Spearman);
         Expect(failures, Prod(sim, building, SimComponents.ProdQueueCount) == 2, "two units queued behind current");
         for (int tick = 0; tick < 110; tick++)
         {
@@ -162,11 +178,14 @@ public static class ProductionSelfTest
         Expect(failures, sim.Resource(0, GameSim.ResourceFood) == foodBefore, "cancel current refunds food");
         Expect(failures, Prod(sim, building, SimComponents.ProdCurrent) < 0, "current cleared after cancel");
 
-        long archerGold = sim.Resource(0, GameSim.ResourceGold);
         sim.Train(building, UnitDefs.Spearman);
-        sim.Train(building, UnitDefs.Archer);
+        sim.Train(building, UnitDefs.Swordsman);
+        long foodAfterTrains = sim.Resource(0, GameSim.ResourceFood);
         Expect(failures, sim.CancelTraining(building, 1), "cancel queued slot accepted");
-        Expect(failures, sim.Resource(0, GameSim.ResourceGold) == archerGold, "cancel queued refunds archer gold");
+        Expect(failures,
+            sim.Resource(0, GameSim.ResourceFood)
+                == foodAfterTrains + Cost(sim, UnitDefs.Swordsman, GameSim.ResourceFood),
+            "cancel queued refunds swordsman food");
         Expect(failures, Prod(sim, building, SimComponents.ProdQueueCount) == 0, "cancel shifts queue");
     }
 
@@ -226,7 +245,7 @@ public static class ProductionSelfTest
     private static void CheckSnapshot(List<string> failures)
     {
         var sim = NewSim(610);
-        long building = Barracks(sim);
+        long building = sim.SpawnCompletedBuilding(4, 4, 0, BuildingTypes.ArcheryRange);
         sim.Train(building, UnitDefs.Archer);
         sim.Train(building, UnitDefs.Archer);
         SnapshotFrame frame = SnapshotFrame.Build(sim.World, sim.Lockstep.Turn);
@@ -275,7 +294,7 @@ public static class ProductionSelfTest
         long building = Barracks(sim);
         sim.IssueSetRally(building, 12, 12, -1);
         sim.Train(building, UnitDefs.Swordsman);
-        sim.Train(building, UnitDefs.Archer);
+        sim.Train(building, UnitDefs.Spearman);
         sim.SetRepeatProduction(building, true);
         for (int tick = 0; tick < 90; tick++)
         {

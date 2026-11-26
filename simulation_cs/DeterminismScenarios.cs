@@ -72,11 +72,11 @@ public static class DeterminismScenarios
         sim.SpawnUnit(2, 5, 1, 50, 5, 1.0, 1.0, 0.2);
         sim.AgeUp(0, TechCatalog.AgeFeudal);
         Run(sim, 200);
-        CompleteBuilding(sim, 0, BuildingTypes.Barracks, 6, 6);
+        CompleteBuilding(sim, 0, BuildingTypes.Blacksmith, 6, 6);
         sim.Research(0, TechCatalog.TechForging);
         Run(sim, 120);
         sim.SpawnUnit(4, 2, 0, 50, 5, 1.0, 2.0, 0.2);
-        CompleteBuilding(sim, 0, BuildingTypes.Market, 11, 6);
+        CompleteBuilding(sim, 0, BuildingTypes.ArcheryRange, 11, 6);
         sim.AgeUp(0, TechCatalog.AgeCastle);
         Run(sim, 260);
         sim.Research(0, TechCatalog.TechFletching);

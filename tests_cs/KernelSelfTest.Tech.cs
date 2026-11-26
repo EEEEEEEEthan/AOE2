@@ -56,8 +56,8 @@ public static partial class KernelSelfTest
 
         long foodBeforeResearch = sim.Resource(0, GameSim.ResourceFood);
         Expect(failures, !sim.Research(0, TechCatalog.TechForging), "research needs its prerequisite building");
-        SpawnCompleteBuilding(sim, BuildingTypes.Barracks, 6, 6, 0);
-        Expect(failures, sim.Research(0, TechCatalog.TechForging), "feudal research starts after barracks");
+        SpawnCompleteBuilding(sim, BuildingTypes.Blacksmith, 6, 6, 0);
+        Expect(failures, sim.Research(0, TechCatalog.TechForging), "feudal research starts after blacksmith");
         Expect(failures, !sim.IsResearched(0, TechCatalog.TechForging), "research not applied instantly");
         Expect(failures,
             sim.Resource(0, GameSim.ResourceFood)
@@ -84,6 +84,7 @@ public static partial class KernelSelfTest
         Expect(failures, sim.AgeUp(0, TechCatalog.AgeCastle), "castle age up needs two feudal buildings");
         AdvanceTicks(sim, 280);
         Expect(failures, sim.PlayerAge(0) == TechCatalog.AgeCastle, "castle age applies after research ticks");
+        SpawnCompleteBuilding(sim, BuildingTypes.ArcheryRange, 2, 12, 0);
         Expect(failures, sim.Research(0, TechCatalog.TechFletching), "castle research starts");
         AdvanceTicks(sim, 140);
         Expect(failures, sim.IsResearched(0, TechCatalog.TechFletching), "castle research completes");
@@ -106,7 +107,7 @@ public static partial class KernelSelfTest
             "age up command starts research");
         AdvanceTicks(dispatch, 220);
         Expect(failures, dispatch.PlayerAge(0) == TechCatalog.AgeFeudal, "age up command completes");
-        SpawnCompleteBuilding(dispatch, BuildingTypes.Barracks, 6, 6, 0);
+        SpawnCompleteBuilding(dispatch, BuildingTypes.Blacksmith, 6, 6, 0);
         dispatch.ApplyCommand(new LockstepCommand(
             player: 0, kind: LockstepCommand.KindResearch, aux: TechCatalog.TechForging));
         Expect(failures,
@@ -131,7 +132,7 @@ public static partial class KernelSelfTest
         var ruinSim = new GameSim(new NavGrid(12, 12), 410, 2, 6);
         ruinSim.Progress(0).Age = TechCatalog.AgeFeudal;
         ruinSim.AddResource(0, GameSim.ResourceFood, 1000);
-        long ruinBarracks = SpawnCompleteBuilding(ruinSim, BuildingTypes.Barracks, 6, 6, 0);
+        long ruinBarracks = SpawnCompleteBuilding(ruinSim, BuildingTypes.Blacksmith, 6, 6, 0);
         long foodBeforeRuin = ruinSim.Resource(0, GameSim.ResourceFood);
         Expect(failures, ruinSim.Research(0, TechCatalog.TechForging), "ruin case starts research");
         ruinSim.World.SetValue(
@@ -158,7 +159,7 @@ public static partial class KernelSelfTest
             && frame.Players[1].ResearchKind == ResearchSystem.KindNone,
             "snapshot carries in-progress research");
         AdvanceTicks(snapshotSim, 220);
-        SpawnCompleteBuilding(snapshotSim, BuildingTypes.Barracks, 6, 6, 0);
+        SpawnCompleteBuilding(snapshotSim, BuildingTypes.Blacksmith, 6, 6, 0);
         snapshotSim.Research(0, TechCatalog.TechForging);
         AdvanceTicks(snapshotSim, 120);
         frame = SnapshotFrame.Build(
@@ -209,7 +210,7 @@ public static partial class KernelSelfTest
             sim.AddResource(0, GameSim.ResourceGold, 5000);
             sim.AgeUp(0, TechCatalog.AgeFeudal);
             AdvanceTicks(sim, 220);
-            SpawnCompleteBuilding(sim, BuildingTypes.Barracks, 6, 6, 0);
+            SpawnCompleteBuilding(sim, BuildingTypes.Blacksmith, 6, 6, 0);
             sim.Research(0, TechCatalog.TechForging);
             AdvanceTicks(sim, 120);
         }
