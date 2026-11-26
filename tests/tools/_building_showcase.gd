@@ -63,7 +63,7 @@ func _capture() -> void:
 		await get_tree().process_frame
 	await _save("building_showcase_walls_open.png")
 
-	bridge.call("StartGeneratedMatch", SEED, PLAYERS, 0)
+	bridge.call("StartGeneratedMatch", SEED, PLAYERS, 0, -1)
 	bridge.call("RevealAllVision")
 	_reset_world(scene, bridge)
 	var width := float(bridge.GridWidth)

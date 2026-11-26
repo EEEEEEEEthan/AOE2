@@ -6,6 +6,7 @@ const DEFAULT_PORT := 27015
 const DEFAULT_SEED := 20261127
 const DEFAULT_PLAYER_COUNT := 2
 const ARABIA_MAP_TYPE := 0
+const DEFAULT_AI_DIFFICULTY := 1
 const TEAM_NAMES := {
 	0: "蓝方",
 	1: "红方",
@@ -69,7 +70,7 @@ func _exit_tree() -> void:
 
 
 func _start_session() -> void:
-	bridge.StartGeneratedMatch(DEFAULT_SEED, DEFAULT_PLAYER_COUNT, ARABIA_MAP_TYPE)
+	bridge.StartGeneratedMatch(DEFAULT_SEED, DEFAULT_PLAYER_COUNT, ARABIA_MAP_TYPE, DEFAULT_AI_DIFFICULTY)
 
 
 func _process(delta: float) -> void:

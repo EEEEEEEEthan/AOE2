@@ -53,8 +53,13 @@ public partial class GameBridge : Node
         _session.Step();
     }
 
+    /// <summary>
+    /// 生成并开始一场对局。玩家 0 始终为本地人类；aiDifficulty 为负时关闭电脑对手，
+    /// 否则玩家 1 及之后由电脑控制器接管。
+    /// </summary>
     public void StartGeneratedMatch(
-        long seed = 20261127, int playerCount = 2, AoeSim.MapType mapType = AoeSim.MapType.Arabia)
+        long seed = 20261127, int playerCount = 2, AoeSim.MapType mapType = AoeSim.MapType.Arabia,
+        int aiDifficulty = 1)
     {
         StopPlayback();
         AoeSim.MapData map = AoeSim.MapGenerator.Generate(mapType, seed, playerCount);
@@ -67,6 +72,15 @@ public partial class GameBridge : Node
         ResetBatchCache();
         _recorder = new AoeSim.ReplayRecorder(map, seed, playerCount, sim.Lockstep.TicksPerTurn, sim.Match!.Config);
         session.Server.Recorder = _recorder;
+        if (aiDifficulty >= 0)
+        {
+            var difficulty = (AoeSim.AiDifficulty)aiDifficulty;
+            for (long team = 1; team < playerCount; team++)
+            {
+                session.Server.AddComputerPlayer(new AoeSim.ComputerPlayer(
+                    sim, team, difficulty, map.Starts, seed));
+            }
+        }
         _savedReplayPath = "";
         _session.Step();
         NoteRecordedTick(sim);

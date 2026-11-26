@@ -75,7 +75,7 @@ public static class ProductionSystem
             return false;
         }
         Pay(sim, team, unitType);
-        if (world.GetValue(building, SimComponents.Production, SimComponents.ProdCurrent) < 0)
+        if (world.GetValue(building, SimComponents.Production, SimComponents.ProdCurrent) == None)
         {
             Start(world, building, unitType);
         }
@@ -98,7 +98,7 @@ public static class ProductionSystem
         if (slot == 0)
         {
             long current = world.GetValue(building, SimComponents.Production, SimComponents.ProdCurrent);
-            if (current < 0)
+            if (current == None)
             {
                 return false;
             }
@@ -171,7 +171,7 @@ public static class ProductionSystem
         }
         long team = world.GetValue(id, SimComponents.Team, SimComponents.TeamId);
         long current = world.GetValue(id, SimComponents.Production, SimComponents.ProdCurrent);
-        if (current < 0)
+        if (current == None)
         {
             if (world.GetValue(id, SimComponents.Production, SimComponents.ProdQueueCount) > 0)
             {
@@ -237,7 +237,7 @@ public static class ProductionSystem
         }
         long repeatType =
             world.GetValue(id, SimComponents.Production, SimComponents.ProdRepeatType);
-        if (repeatType < 0 || !CanAfford(sim, team, repeatType))
+        if (repeatType == None || !CanAfford(sim, team, repeatType))
         {
             return;
         }
@@ -259,7 +259,7 @@ public static class ProductionSystem
     {
         long current = world.GetValue(building, SimComponents.Production, SimComponents.ProdCurrent);
         long count = world.GetValue(building, SimComponents.Production, SimComponents.ProdQueueCount);
-        return count + (current >= 0 ? 1 : 0);
+        return count + (current != None ? 1 : 0);
     }
 
     private static void Start(SimWorld world, long building, long unitType)
@@ -340,7 +340,7 @@ public static class ProductionSystem
 
     private static void Refund(GameSim sim, long team, long unitType)
     {
-        if (unitType < 0)
+        if (unitType == None)
         {
             return;
         }
