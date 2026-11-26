@@ -612,6 +612,7 @@ public static class KernelSelfTest
     {
         var sim = new GameSim(new NavGrid(24, 24), 601, 2, 6);
         sim.AddResource(0, GameSim.ResourceWood, 2000);
+        sim.AddResource(0, GameSim.ResourceStone, 2000);
         long tc = sim.IssuePlaceBuilding(BuildingTypes.TownCenter, 2, 2, 0);
         BuildingSystem.Complete(sim.World, tc);
         Expect(failures,
@@ -681,6 +682,7 @@ public static class KernelSelfTest
 
         var bell = new GameSim(new NavGrid(24, 24), 602, 2, 6);
         bell.AddResource(0, GameSim.ResourceWood, 2000);
+        bell.AddResource(0, GameSim.ResourceStone, 2000);
         long bellTc = bell.IssuePlaceBuilding(BuildingTypes.TownCenter, 2, 2, 0);
         BuildingSystem.Complete(bell.World, bellTc);
         long node = bell.SpawnResourceNode(12, 12, GameSim.ResourceWood, 500);
@@ -1229,7 +1231,11 @@ public static class KernelSelfTest
 
     private static long SpawnCompleteBuilding(GameSim sim, long type, int cellX, int cellY, long team)
     {
-        sim.AddResource(team, GameSim.ResourceWood, BuildingTypes.Cost(type));
+        ResourceCost cost = BuildingTypes.Cost(type);
+        for (long resourceKind = GameSim.ResourceWood; resourceKind <= GameSim.ResourceStone; resourceKind++)
+        {
+            sim.AddResource(team, resourceKind, cost.AmountOf(resourceKind));
+        }
         long id = sim.IssuePlaceBuilding(type, cellX, cellY, team);
         sim.World.SetValue(id, SimComponents.Building, SimComponents.Progress, BuildingTypes.BuildTicks(type));
         sim.World.SetValue(id, SimComponents.Building, SimComponents.State, BuildingSystem.StateComplete);

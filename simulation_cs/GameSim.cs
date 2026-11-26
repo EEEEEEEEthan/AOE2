@@ -763,17 +763,23 @@ public sealed class GameSim
         {
             return -1;
         }
-        long cost = BuildingTypes.Cost(type);
-        if (Resource(player, ResourceWood) < cost)
+        ResourceCost cost = BuildingTypes.Cost(type);
+        for (long resourceKind = ResourceWood; resourceKind <= ResourceStone; resourceKind++)
         {
-            return -1;
+            if (Resource(player, resourceKind) < cost.AmountOf(resourceKind))
+            {
+                return -1;
+            }
         }
         long id = BuildingSystem.Place(World, Grid, Terrain, type, cellX, cellY, player);
         if (id < 0)
         {
             return -1;
         }
-        AddResource(player, ResourceWood, -cost);
+        for (long resourceKind = ResourceWood; resourceKind <= ResourceStone; resourceKind++)
+        {
+            AddResource(player, resourceKind, -cost.AmountOf(resourceKind));
+        }
         InvalidateFields();
         return id;
     }

@@ -89,16 +89,17 @@ public static class BuildingTypes
         _ => 0,
     };
 
-    public static long Cost(long type) => type switch
+    /// <summary>按资源种类给出造价：城镇中心与塔含石料，城墙按石料计价。</summary>
+    public static ResourceCost Cost(long type) => type switch
     {
-        TownCenter => 275,
-        House => 25,
-        Barracks => 175,
-        Wall => 5,
-        Tower => 125,
-        Market => 175,
-        Farm => 60,
-        _ => 0,
+        TownCenter => new ResourceCost(wood: 275, food: 0, gold: 0, stone: 100),
+        House => new ResourceCost(wood: 25, food: 0, gold: 0, stone: 0),
+        Barracks => new ResourceCost(wood: 175, food: 0, gold: 0, stone: 0),
+        Wall => new ResourceCost(wood: 0, food: 0, gold: 0, stone: 5),
+        Tower => new ResourceCost(wood: 25, food: 0, gold: 0, stone: 125),
+        Market => new ResourceCost(wood: 175, food: 0, gold: 0, stone: 0),
+        Farm => new ResourceCost(wood: 60, food: 0, gold: 0, stone: 0),
+        _ => default,
     };
 
     /// <summary>只有城镇中心与塔楼可驻军，后者也承担城镇警钟的召集目标。</summary>
@@ -131,6 +132,32 @@ public static class BuildingTypes
     {
         TownCenter => 12,
         Tower => 8,
+        _ => 0,
+    };
+}
+
+/// <summary>一项建筑造价，按资源种类分列；数量为 0 表示不消耗该资源。</summary>
+public readonly struct ResourceCost
+{
+    public ResourceCost(long wood, long food, long gold, long stone)
+    {
+        Wood = wood;
+        Food = food;
+        Gold = gold;
+        Stone = stone;
+    }
+
+    public long Wood { get; }
+    public long Food { get; }
+    public long Gold { get; }
+    public long Stone { get; }
+
+    public long AmountOf(long resourceKind) => resourceKind switch
+    {
+        GameSim.ResourceWood => Wood,
+        GameSim.ResourceFood => Food,
+        GameSim.ResourceGold => Gold,
+        GameSim.ResourceStone => Stone,
         _ => 0,
     };
 }

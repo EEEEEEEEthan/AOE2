@@ -15,7 +15,9 @@ public static class BuildingSelfTest
         CheckConstruction(failures);
         CheckDestroyRuins(failures);
         CheckInsufficientResources(failures);
+        CheckMultiResourceShortage(failures);
         CheckPlaceDeductsCost(failures);
+        CheckPlaceDeductsByResourceKind(failures);
         CheckFarmLifecycle(failures);
         CheckFarmReseed(failures);
         CheckFarmRuin(failures);
@@ -155,7 +157,7 @@ public static class BuildingSelfTest
     {
         var grid = new NavGrid(16, 16);
         var sim = new GameSim(grid, 508);
-        sim.AddResource(0, GameSim.ResourceWood, BuildingTypes.Cost(BuildingTypes.House) - 1);
+        sim.AddResource(0, GameSim.ResourceWood, BuildingTypes.Cost(BuildingTypes.House).Wood - 1);
         long before = sim.Resource(0, GameSim.ResourceWood);
         long building = sim.IssuePlaceBuilding(BuildingTypes.House, 4, 4, 0);
         Expect(failures, building == -1, "insufficient resources reject placement");
@@ -163,10 +165,26 @@ public static class BuildingSelfTest
         Expect(failures, sim.Resource(0, GameSim.ResourceWood) == before, "rejected placement spends nothing");
     }
 
+    private static void CheckMultiResourceShortage(List<string> failures)
+    {
+        var sim = new GameSim(new NavGrid(16, 16), 513);
+        ResourceCost cost = BuildingTypes.Cost(BuildingTypes.Tower);
+        sim.AddResource(0, GameSim.ResourceWood, cost.Wood + 100);
+        sim.AddResource(0, GameSim.ResourceStone, cost.Stone - 1);
+        long woodBefore = sim.Resource(0, GameSim.ResourceWood);
+        long stoneBefore = sim.Resource(0, GameSim.ResourceStone);
+        long building = sim.IssuePlaceBuilding(BuildingTypes.Tower, 4, 4, 0);
+        Expect(failures, building == -1, "short stone rejects tower despite ample wood");
+        Expect(failures,
+            sim.Resource(0, GameSim.ResourceWood) == woodBefore
+                && sim.Resource(0, GameSim.ResourceStone) == stoneBefore,
+            "rejected multi-resource placement spends nothing");
+    }
+
     private static void CheckPlaceDeductsCost(List<string> failures)
     {
         var sim = new GameSim(new NavGrid(16, 16), 509);
-        long cost = BuildingTypes.Cost(BuildingTypes.House);
+        long cost = BuildingTypes.Cost(BuildingTypes.House).Wood;
         long before = cost + 100;
         sim.AddResource(0, GameSim.ResourceWood, before);
         long building = sim.IssuePlaceBuilding(BuildingTypes.House, 4, 4, 0);
@@ -174,6 +192,35 @@ public static class BuildingSelfTest
         Expect(failures,
             sim.Resource(0, GameSim.ResourceWood) == before - cost,
             "placement deducts the building cost");
+    }
+
+    private static void CheckPlaceDeductsByResourceKind(List<string> failures)
+    {
+        var sim = new GameSim(new NavGrid(16, 16), 514);
+        ResourceCost tower = BuildingTypes.Cost(BuildingTypes.Tower);
+        sim.AddResource(0, GameSim.ResourceWood, tower.Wood + 100);
+        sim.AddResource(0, GameSim.ResourceStone, tower.Stone + 100);
+        long woodBefore = sim.Resource(0, GameSim.ResourceWood);
+        long stoneBefore = sim.Resource(0, GameSim.ResourceStone);
+        long building = sim.IssuePlaceBuilding(BuildingTypes.Tower, 4, 4, 0);
+        Expect(failures, building >= 0, "affordable two-resource tower accepted");
+        Expect(failures,
+            sim.Resource(0, GameSim.ResourceWood) == woodBefore - tower.Wood
+                && sim.Resource(0, GameSim.ResourceStone) == stoneBefore - tower.Stone,
+            "tower cost deducts wood and stone separately");
+
+        var wallSim = new GameSim(new NavGrid(16, 16), 515);
+        ResourceCost wall = BuildingTypes.Cost(BuildingTypes.Wall);
+        wallSim.AddResource(0, GameSim.ResourceWood, 100);
+        wallSim.AddResource(0, GameSim.ResourceStone, wall.Stone + 100);
+        long wallWoodBefore = wallSim.Resource(0, GameSim.ResourceWood);
+        long wallStoneBefore = wallSim.Resource(0, GameSim.ResourceStone);
+        long wallId = wallSim.IssuePlaceBuilding(BuildingTypes.Wall, 4, 4, 0);
+        Expect(failures, wallId >= 0, "wall placeable with stone only");
+        Expect(failures,
+            wallSim.Resource(0, GameSim.ResourceWood) == wallWoodBefore
+                && wallSim.Resource(0, GameSim.ResourceStone) == wallStoneBefore - wall.Stone,
+            "wall cost comes from stone, not wood");
     }
 
     private static void CheckFarmLifecycle(List<string> failures)
@@ -307,7 +354,7 @@ public static class BuildingSelfTest
     private static void CheckRepairResourceShortage(List<string> failures)
     {
         var sim = new GameSim(new NavGrid(16, 16), 521);
-        sim.AddResource(0, GameSim.ResourceWood, BuildingTypes.Cost(BuildingTypes.House));
+        sim.AddResource(0, GameSim.ResourceWood, BuildingTypes.Cost(BuildingTypes.House).Wood);
         long building = sim.IssuePlaceBuilding(BuildingTypes.House, 5, 5, 0);
         sim.World.SetValue(building, SimComponents.Building, SimComponents.State, BuildingSystem.StateComplete);
         long maxHp = sim.World.GetValue(building, SimComponents.Health, SimComponents.MaxHp);
@@ -432,6 +479,7 @@ public static class BuildingSelfTest
 
         var sim = new GameSim(new NavGrid(12, 12), 506);
         sim.AddResource(place.Player, GameSim.ResourceWood, 200);
+        sim.AddResource(place.Player, GameSim.ResourceStone, 200);
         sim.ApplyCommand(place);
         Expect(failures, sim.Grid.IsBuildingBlocked(7, 9), "place command reaches building system");
     }
