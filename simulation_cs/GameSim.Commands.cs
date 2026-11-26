@@ -119,45 +119,24 @@ public sealed partial class GameSim
         return UnitDefs.IsUnitAvailable(Civ(player), unitType);
     }
 
+    /// <summary>训练指令入口：改为入队，由 <see cref="ProductionSystem"/> 计时后出生。</summary>
     public bool TrainUnit(long building, long player, long unitType)
     {
         if (!CanTrain(building, player, unitType))
         {
             return false;
         }
-        long popCost = UnitDefs.PopulationCost(unitType);
-        if (!PopulationSystem.CanSpawn(World, player, popCost))
-        {
-            return false;
-        }
-        ResourceCost cost = UnitDefs.Cost(unitType);
-        for (long resourceKind = ResourceWood; resourceKind <= ResourceStone; resourceKind++)
-        {
-            if (Resource(player, resourceKind) < cost.AmountOf(resourceKind))
-            {
-                return false;
-            }
-        }
-        if (!TryFindTrainCell(building, out int cellX, out int cellY))
-        {
-            return false;
-        }
-        long unit = unitType == UnitDefs.Villager
-            ? SpawnVillager(
-                cellX, cellY, player, MapSetup.VillagerSpeed,
-                MapSetup.VillagerCarryCapacity, MapSetup.VillagerGatherRate, popCost)
-            : SpawnUnit(cellX, cellY, player, unitType, CombatStance.Aggressive, popCost);
-        if (unit < 0)
-        {
-            return false;
-        }
-        for (long resourceKind = ResourceWood; resourceKind <= ResourceStone; resourceKind++)
-        {
-            AddResource(player, resourceKind, -cost.AmountOf(resourceKind));
-        }
-        ApplyRallyTo(building, unit);
-        return true;
+        return ProductionSystem.Train(this, building, unitType);
     }
+
+    /// <summary>在建筑生产队列里排入一个单位；成功后立即扣费。</summary>
+    public bool Train(long building, long unitType) => ProductionSystem.Train(this, building, unitType);
+
+    /// <summary>取消训练：slot 0 为进行中项，1..n 为排队位置（1 最前），按原价退款。</summary>
+    public bool CancelTraining(long building, long slot) => ProductionSystem.Cancel(this, building, slot);
+
+    public bool SetRepeatProduction(long building, bool repeat) =>
+        ProductionSystem.SetRepeat(World, building, repeat);
 
     private bool TryFindTrainCell(long building, out int cellX, out int cellY)
     {
@@ -660,7 +639,8 @@ public sealed partial class GameSim
         || kind == LockstepCommand.KindToggleGate
         || kind == LockstepCommand.KindTransportLoad
         || kind == LockstepCommand.KindTransportUnload
-        || kind == LockstepCommand.KindTrain;
+        || kind == LockstepCommand.KindTrain
+        || kind == LockstepCommand.KindCancelTrain;
 
     public bool ApplyCommand(LockstepCommand command)
     {
@@ -783,6 +763,9 @@ public sealed partial class GameSim
                 break;
             case LockstepCommand.KindTrain:
                 TrainUnit(command.Entity, command.Player, command.Aux);
+                break;
+            case LockstepCommand.KindCancelTrain:
+                CancelTraining(command.Entity, command.CellX);
                 break;
         }
         return true;
