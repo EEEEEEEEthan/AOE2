@@ -2,6 +2,13 @@ using System;
 
 namespace AoeSim;
 
+/// <summary>通行域：陆地单位只能在陆地走，船只只能在水面走，两域互不越界。</summary>
+public static class MovementDomain
+{
+    public const long Land = 0;
+    public const long Water = 1;
+}
+
 /// <summary>
 /// 带四顶点高度的地形：每格 4 个角各有一个高度，相邻格共享边上的顶点，
 /// 整体是一张 (宽 + 1) × (高 + 1) 的顶点高度场，格内高度由四角派生。
@@ -132,17 +139,32 @@ public sealed class TerrainGrid
     private static bool IsWalkableType(byte type) =>
         type != TypeWater && type != TypeCliff;
 
+    /// <summary>该格在陆地域可站立：非水非崖且不是陡坡。</summary>
+    public bool IsLandPassable(int x, int y) =>
+        InBounds(x, y) && IsWalkableType(TypeAt(x, y)) && !IsSteep(x, y);
+
+    /// <summary>该格在水域可航行：水且不是陡坡（水面保持平坦）。</summary>
+    public bool IsWaterPassable(int x, int y) =>
+        InBounds(x, y) && IsWater(x, y) && !IsSteep(x, y);
+
+    /// <summary>该格在给定通行域内可站立。</summary>
+    public bool IsPassableInDomain(int x, int y, long domain) =>
+        domain == MovementDomain.Water ? IsWaterPassable(x, y) : IsLandPassable(x, y);
+
     /// <summary>
-    /// 能否从一格走到相邻格：终点是水/崖、任一端格为陡坡，或两端代表高度差超过可通行坡度，均不可走。
-    /// 缓坡可通行；视觉断崖由陡坡格本身阻断，不会出现可穿行的悬崖。
+    /// 能否从一格走到相邻格：起点与终点都必须落在同一通行域内，且高差在可通行坡度内。
+    /// 默认陆地判定保持旧语义。
     /// </summary>
-    public bool CanTraverse(int fromX, int fromY, int toX, int toY)
+    public bool CanTraverse(int fromX, int fromY, int toX, int toY) =>
+        CanTraverse(fromX, fromY, toX, toY, MovementDomain.Land);
+
+    public bool CanTraverse(int fromX, int fromY, int toX, int toY, long domain)
     {
         if (!InBounds(fromX, fromY) || !InBounds(toX, toY))
         {
             return false;
         }
-        if (!IsWalkableType(TypeAt(fromX, fromY)) || !IsWalkableType(TypeAt(toX, toY)))
+        if (!IsPassableInDomain(fromX, fromY, domain) || !IsPassableInDomain(toX, toY, domain))
         {
             return false;
         }

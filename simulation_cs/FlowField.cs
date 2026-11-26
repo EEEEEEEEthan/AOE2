@@ -44,17 +44,22 @@ public sealed class FlowField
     public int[] DirY { get; }
 
     private readonly TerrainGrid? _terrain;
+    private readonly long _domain;
 
-    public FlowField(NavGrid grid, TerrainGrid? terrain = null)
+    public FlowField(NavGrid grid, TerrainGrid? terrain = null, long domain = MovementDomain.Land)
     {
         Width = grid.Width;
         Height = grid.Height;
         _terrain = terrain;
+        _domain = domain;
         Cost = new int[Width * Height];
         DirX = new int[Width * Height];
         DirY = new int[Width * Height];
         System.Array.Fill(Cost, -1);
     }
+
+    private bool Passable(NavGrid grid, int x, int y) =>
+        Traversal.CellPassable(grid, _terrain, x, y, _domain);
 
     public bool Compute(NavGrid grid, int targetX, int targetY)
     {
@@ -63,7 +68,7 @@ public sealed class FlowField
         System.Array.Fill(Cost, -1);
         System.Array.Fill(DirX, 0);
         System.Array.Fill(DirY, 0);
-        if (!grid.InBounds(targetX, targetY) || grid.IsBlocked(targetX, targetY))
+        if (!Passable(grid, targetX, targetY))
         {
             return false;
         }
@@ -85,19 +90,20 @@ public sealed class FlowField
                 int offsetY = NeighborsOffsets[neighborIndex, 1];
                 int neighborX = currentX + offsetX;
                 int neighborY = currentY + offsetY;
-                if (!grid.InBounds(neighborX, neighborY) || grid.IsBlocked(neighborX, neighborY))
+                if (!Passable(grid, neighborX, neighborY))
                 {
                     continue;
                 }
                 bool diagonal = offsetX != 0 && offsetY != 0;
                 if (diagonal)
                 {
-                    if (grid.IsBlocked(currentX + offsetX, currentY) || grid.IsBlocked(currentX, currentY + offsetY))
+                    if (!Passable(grid, currentX + offsetX, currentY)
+                        || !Passable(grid, currentX, currentY + offsetY))
                     {
                         continue;
                     }
                 }
-                if (_terrain != null && !_terrain.CanTraverse(currentX, currentY, neighborX, neighborY))
+                if (_terrain != null && !_terrain.CanTraverse(currentX, currentY, neighborX, neighborY, _domain))
                 {
                     continue;
                 }
@@ -163,12 +169,12 @@ public sealed class FlowField
                     }
                     if (offsetX != 0 && offsetY != 0)
                     {
-                        if (grid.IsBlocked(x + offsetX, y) || grid.IsBlocked(x, y + offsetY))
+                        if (!Passable(grid, x + offsetX, y) || !Passable(grid, x, y + offsetY))
                         {
                             continue;
                         }
                     }
-                    if (_terrain != null && !_terrain.CanTraverse(x, y, neighborX, neighborY))
+                    if (_terrain != null && !_terrain.CanTraverse(x, y, neighborX, neighborY, _domain))
                     {
                         continue;
                     }
