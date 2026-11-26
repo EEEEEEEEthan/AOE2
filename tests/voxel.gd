@@ -59,6 +59,23 @@ func run() -> void:
 	check(is_equal_approx(_max_y(flat_mesh) - _max_y(sunk_mesh), 0.125),
 		"sunken cell sits one layer below its neighbours")
 
+	# 缓坡：两格共享顶点从 0 抬到 2 层（<= MaxWalkableSlope），顶面应连续过渡、无台阶侧壁。
+	var ramp_heights := PackedInt32Array([0, 0, 0, 2, 2, 2])
+	var ramp_colors := PackedColorArray([Color.GREEN, Color.GREEN])
+	var ramp_sides := PackedColorArray([Color.DARK_GREEN, Color.DARK_GREEN])
+	var ramp_drops := PackedInt32Array([0, 0])
+	var ramp_mesh: ArrayMesh = MESHER.heightfield_mesh(
+		ramp_heights, 2, 1, 0.125, ramp_colors, ramp_sides, ramp_drops)
+	var ramp_up := _up_vertices(ramp_mesh)
+	var low_edge := _vertices_near(ramp_up, 2, 0.0)
+	var high_edge := _vertices_near(ramp_up, 2, 1.0)
+	check(low_edge.size() > 0 and _all_near(low_edge, 0.0),
+		"gentle ramp keeps shared low edge at 0 instead of flattening to max")
+	check(high_edge.size() > 0 and _all_near(high_edge, 0.25),
+		"gentle ramp keeps shared high edge at two layers")
+	check(_no_side_faces_at(ramp_mesh, 0, 1.0),
+		"gentle ramp has no vertical wall on the shared interior edge")
+
 	for path: String in MODEL_PATHS:
 		var model: Dictionary = MODEL.load_model(path, Color(0.82, 0.22, 0.2), 0.125)
 		var mesh: Variant = model["mesh"]
@@ -90,3 +107,57 @@ func _max_y(mesh: ArrayMesh) -> float:
 	for vertex in vertices:
 		highest = maxf(highest, vertex.y)
 	return highest
+
+
+func _up_vertices(mesh: ArrayMesh) -> PackedVector3Array:
+	var arrays: Array = mesh.surface_get_arrays(0)
+	var vertices: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
+	var normals: PackedVector3Array = arrays[Mesh.ARRAY_NORMAL]
+	var result := PackedVector3Array()
+	for index in vertices.size():
+		if normals[index].y > 0.9:
+			result.append(vertices[index])
+	return result
+
+
+func _vertices_near(vertices: PackedVector3Array, axis: int, value: float) -> PackedVector3Array:
+	var result := PackedVector3Array()
+	for vertex in vertices:
+		if is_equal_approx(_axis_value(vertex, axis), value):
+			result.append(vertex)
+	return result
+
+
+func _all_near(vertices: PackedVector3Array, y: float) -> bool:
+	for vertex in vertices:
+		if not is_equal_approx(vertex.y, y):
+			return false
+	return true
+
+
+func _no_side_faces_at(mesh: ArrayMesh, axis: int, value: float) -> bool:
+	var arrays: Array = mesh.surface_get_arrays(0)
+	var vertices: PackedVector3Array = arrays[Mesh.ARRAY_VERTEX]
+	var normals: PackedVector3Array = arrays[Mesh.ARRAY_NORMAL]
+	for index in range(0, vertices.size(), 3):
+		var on_plane := true
+		var face_normal := Vector3.ZERO
+		for offset in 3:
+			var vertex := vertices[index + offset]
+			if not is_equal_approx(_axis_value(vertex, axis), value):
+				on_plane = false
+				break
+			face_normal = normals[index + offset]
+		if on_plane and absf(face_normal.y) <= 0.9:
+			return false
+	return true
+
+
+func _axis_value(vector: Vector3, axis: int) -> float:
+	match axis:
+		0:
+			return vector.x
+		1:
+			return vector.y
+		_:
+			return vector.z
