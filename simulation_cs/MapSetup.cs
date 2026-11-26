@@ -10,6 +10,10 @@ public static class MapSetup
 {
     public const int StartingVillagers = 3;
     public const long StartingPopulationCap = 15;
+    public const long StartingWood = 500;
+    public const long StartingFood = 200;
+    public const long StartingGold = 100;
+    public const long StartingStone = 200;
     public const double VillagerSpeed = 0.09;
     public const long VillagerCarryCapacity = 20;
     public const double VillagerGatherRate = 0.5;
@@ -29,6 +33,10 @@ public static class MapSetup
         var drops = new Dictionary<int, long>();
         foreach (PlayerStart start in map.Starts)
         {
+            sim.AddResource(start.Team, GameSim.ResourceWood, StartingWood);
+            sim.AddResource(start.Team, GameSim.ResourceFood, StartingFood);
+            sim.AddResource(start.Team, GameSim.ResourceGold, StartingGold);
+            sim.AddResource(start.Team, GameSim.ResourceStone, StartingStone);
             long townCenter = sim.IssuePlaceBuilding(
                 BuildingTypes.TownCenter, start.X, start.Y, start.Team);
             if (townCenter >= 0)

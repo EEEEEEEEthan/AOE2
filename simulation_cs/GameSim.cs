@@ -671,11 +671,27 @@ public sealed class GameSim
 
     public long IssuePlaceBuilding(long type, int cellX, int cellY, long player)
     {
-        long id = BuildingSystem.Place(World, Grid, Terrain, type, cellX, cellY, player);
-        if (id >= 0)
+        if (!BuildingTypes.IsKnown(type))
         {
-            InvalidateFields();
+            return -1;
         }
+        EnsureInventoryInitialized();
+        if (!_inventoryEntities.ContainsKey(player))
+        {
+            return -1;
+        }
+        long cost = BuildingTypes.Cost(type);
+        if (Resource(player, ResourceWood) < cost)
+        {
+            return -1;
+        }
+        long id = BuildingSystem.Place(World, Grid, Terrain, type, cellX, cellY, player);
+        if (id < 0)
+        {
+            return -1;
+        }
+        AddResource(player, ResourceWood, -cost);
+        InvalidateFields();
         return id;
     }
 

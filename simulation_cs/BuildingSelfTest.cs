@@ -14,6 +14,8 @@ public static class BuildingSelfTest
         CheckTerrainPlacement(failures);
         CheckConstruction(failures);
         CheckDestroyRuins(failures);
+        CheckInsufficientResources(failures);
+        CheckPlaceDeductsCost(failures);
         CheckDeterminism(failures);
         CheckCommandRoundtrip(failures);
         return failures;
@@ -31,6 +33,7 @@ public static class BuildingSelfTest
     {
         var grid = new NavGrid(16, 16);
         var sim = new GameSim(grid, 501);
+        sim.AddResource(0, GameSim.ResourceWood, 100);
         long building = sim.IssuePlaceBuilding(BuildingTypes.House, 4, 4, 0);
         Expect(failures, building >= 0, "house placed on open ground");
         Expect(failures, grid.IsBuildingBlocked(4, 4), "building origin cell blocks pathing");
@@ -52,6 +55,7 @@ public static class BuildingSelfTest
         var grid = new NavGrid(16, 16);
         grid.SetBlocked(2, 2, true);
         var sim = new GameSim(grid, 502);
+        sim.AddResource(0, GameSim.ResourceWood, 100);
         Expect(failures, sim.IssuePlaceBuilding(BuildingTypes.House, 15, 15, 0) == -1, "out of bounds rejected");
         Expect(failures, sim.IssuePlaceBuilding(BuildingTypes.House, 2, 2, 0) == -1, "terrain wall rejected");
         Expect(failures, sim.IssuePlaceBuilding(BuildingTypes.None, 8, 8, 0) == -1, "unknown type rejected");
@@ -73,6 +77,7 @@ public static class BuildingSelfTest
             }
         }
         var sim = new GameSim(new NavGrid(16, 16), 507, terrain: terrain);
+        sim.AddResource(0, GameSim.ResourceWood, 100);
         Expect(failures, sim.IssuePlaceBuilding(BuildingTypes.House, 3, 3, 0) == -1, "water rejected");
         Expect(failures, sim.IssuePlaceBuilding(BuildingTypes.House, 6, 3, 0) == -1, "cliff rejected");
         Expect(failures, sim.IssuePlaceBuilding(BuildingTypes.House, 12, 12, 0) == -1, "sloped footprint rejected");
@@ -83,6 +88,7 @@ public static class BuildingSelfTest
     {
         var grid = new NavGrid(16, 16);
         var sim = new GameSim(grid, 503);
+        sim.AddResource(0, GameSim.ResourceWood, 100);
         long building = sim.IssuePlaceBuilding(BuildingTypes.House, 5, 5, 0);
         long builder = sim.SpawnVillager(9, 6, 0, 0.5, 20, 0.5);
         sim.IssueConstruct(builder, building);
@@ -115,6 +121,7 @@ public static class BuildingSelfTest
             grid.SetBlocked(3, wallY, true);
         }
         var sim = new GameSim(grid, 504);
+        sim.AddResource(0, GameSim.ResourceWood, 100);
         long building = sim.IssuePlaceBuilding(BuildingTypes.House, 6, 6, 0);
         sim.SpawnUnit(8, 7, 1, 100, 60, 1.0, 3.0, 0.0);
         for (int tick = 0; tick < 300; tick++)
@@ -135,6 +142,31 @@ public static class BuildingSelfTest
         Expect(failures, sim.FieldFor(6, 6).Reachable(9, 9), "path reopens through ruins");
     }
 
+    private static void CheckInsufficientResources(List<string> failures)
+    {
+        var grid = new NavGrid(16, 16);
+        var sim = new GameSim(grid, 508);
+        sim.AddResource(0, GameSim.ResourceWood, BuildingTypes.Cost(BuildingTypes.House) - 1);
+        long before = sim.Resource(0, GameSim.ResourceWood);
+        long building = sim.IssuePlaceBuilding(BuildingTypes.House, 4, 4, 0);
+        Expect(failures, building == -1, "insufficient resources reject placement");
+        Expect(failures, !grid.IsBuildingBlocked(4, 4), "rejected placement leaves no foundation");
+        Expect(failures, sim.Resource(0, GameSim.ResourceWood) == before, "rejected placement spends nothing");
+    }
+
+    private static void CheckPlaceDeductsCost(List<string> failures)
+    {
+        var sim = new GameSim(new NavGrid(16, 16), 509);
+        long cost = BuildingTypes.Cost(BuildingTypes.House);
+        long before = cost + 100;
+        sim.AddResource(0, GameSim.ResourceWood, before);
+        long building = sim.IssuePlaceBuilding(BuildingTypes.House, 4, 4, 0);
+        Expect(failures, building >= 0, "affordable placement accepted");
+        Expect(failures,
+            sim.Resource(0, GameSim.ResourceWood) == before - cost,
+            "placement deducts the building cost");
+    }
+
     private static void CheckDeterminism(List<string> failures)
     {
         Expect(failures, RunBuildCycle() == RunBuildCycle(), "identical build cycles share checksum");
@@ -143,6 +175,7 @@ public static class BuildingSelfTest
     private static long RunBuildCycle()
     {
         var sim = new GameSim(new NavGrid(20, 20), 505);
+        sim.AddResource(0, GameSim.ResourceWood, 200);
         long building = sim.IssuePlaceBuilding(BuildingTypes.Barracks, 4, 4, 0);
         long builder = sim.SpawnVillager(10, 6, 0, 0.4, 20, 0.5);
         sim.IssueConstruct(builder, building);
@@ -179,6 +212,7 @@ public static class BuildingSelfTest
         Expect(failures, legacy.Aux == 0, "short payload defaults build type");
 
         var sim = new GameSim(new NavGrid(12, 12), 506);
+        sim.AddResource(place.Player, GameSim.ResourceWood, 200);
         sim.ApplyCommand(place);
         Expect(failures, sim.Grid.IsBuildingBlocked(7, 9), "place command reaches building system");
     }
