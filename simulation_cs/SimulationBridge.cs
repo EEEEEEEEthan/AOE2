@@ -23,19 +23,25 @@ public partial class SimulationBridge : Node
     public bool ProtocolSelfCheck()
     {
         var command = new AoeSim.LockstepCommand(1, AoeSim.LockstepCommand.KindGather, 12, 3, 4, 30, 31);
+        var attack = new AoeSim.LockstepCommand(0, AoeSim.LockstepCommand.KindAttack, 7, 0, 0, 21, -1);
         var frame = new AoeSim.CommandFrame
         {
             Player = 1,
             Turn = 7,
-            Commands = new[] { command },
+            Commands = new[] { command, attack },
         };
         AoeSim.CommandFrame decodedCommand = AoeSim.CommandFrame.Decode(frame.Encode());
-        if (decodedCommand.Player != 1 || decodedCommand.Turn != 7 || decodedCommand.Commands.Length != 1)
+        if (decodedCommand.Player != 1 || decodedCommand.Turn != 7 || decodedCommand.Commands.Length != 2)
         {
             return false;
         }
         AoeSim.LockstepCommand restored = decodedCommand.Commands[0];
         if (restored.Entity != 12 || restored.TargetEntity != 30 || restored.DropEntity != 31 || restored.Kind != AoeSim.LockstepCommand.KindGather)
+        {
+            return false;
+        }
+        AoeSim.LockstepCommand restoredAttack = decodedCommand.Commands[1];
+        if (restoredAttack.Entity != 7 || restoredAttack.TargetEntity != 21 || restoredAttack.Kind != AoeSim.LockstepCommand.KindAttack)
         {
             return false;
         }
@@ -92,6 +98,7 @@ public partial class SimulationBridge : Node
             5 => UnitReach(),
             6 => DiagonalStep(),
             7 => GatherDeplete(),
+            8 => AttackBattle(),
             _ => -1,
         };
     }
@@ -198,6 +205,22 @@ public partial class SimulationBridge : Node
         long id = sim.SpawnUnit(2, 2, 0, 10, 0, 0.0, 0.4);
         sim.IssueMove(id, 3, 3);
         sim.SimulateTick();
+        return sim.World.Checksum();
+    }
+
+    private static long AttackBattle()
+    {
+        var sim = new AoeSim.GameSim(new AoeSim.NavGrid(24, 24), 66, 2, 6);
+        for (int index = 0; index < 6; index++)
+        {
+            long attacker = sim.SpawnUnit(3, 4 + index, 0, 60, 8, 1.2, 0.2);
+            long victim = sim.SpawnUnit(14, 4 + index, 1, 40, 8, 1.2, 0.0);
+            sim.IssueAttack(attacker, victim);
+        }
+        for (int tick = 0; tick < 150; tick++)
+        {
+            sim.SimulateTick();
+        }
         return sim.World.Checksum();
     }
 

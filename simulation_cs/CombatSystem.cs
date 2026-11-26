@@ -23,10 +23,19 @@ public static class CombatSystem
             {
                 continue;
             }
+            long explicitTarget = LockedTarget(world, id);
             long cooldownLeft = world.GetValue(id, SimComponents.Combat, SimComponents.CooldownLeft);
             if (cooldownLeft > 0)
             {
                 world.SetValue(id, SimComponents.Combat, SimComponents.CooldownLeft, cooldownLeft - 1);
+                continue;
+            }
+            if (explicitTarget >= 0)
+            {
+                if (InRange(world, id, explicitTarget))
+                {
+                    ApplyDamage(world, id, explicitTarget, dead);
+                }
                 continue;
             }
             long target = NearestEnemy(world, spatial, id);
@@ -41,6 +50,92 @@ public static class CombatSystem
             world.Despawn(id);
         }
         return dead.Count;
+    }
+
+    /// <summary>
+    /// 读取显式攻击目标并推进追击；目标非法或已死亡时清除锁定并停止移动，回落自动索敌。
+    /// 返回有效的锁定目标 id，无锁定时返回 -1。
+    /// </summary>
+    private static long LockedTarget(SimWorld world, long attacker)
+    {
+        if (!world.HasComponent(attacker, SimComponents.AttackTarget))
+        {
+            return -1;
+        }
+        long target = world.GetValue(attacker, SimComponents.AttackTarget, SimComponents.TargetEntity);
+        if (!IsValidTarget(world, attacker, target))
+        {
+            world.Detach(attacker, SimComponents.AttackTarget);
+            StopMoving(world, attacker);
+            return -1;
+        }
+        if (InRange(world, attacker, target))
+        {
+            StopMoving(world, attacker);
+        }
+        else
+        {
+            Chase(world, attacker, target);
+        }
+        return target;
+    }
+
+    private static bool IsValidTarget(SimWorld world, long attacker, long target)
+    {
+        if (target == attacker || !world.IsAlive(target))
+        {
+            return false;
+        }
+        if (!world.HasComponent(target, SimComponents.Health)
+            || !world.HasComponent(target, SimComponents.Position))
+        {
+            return false;
+        }
+        return world.GetValue(target, SimComponents.Team, SimComponents.TeamId)
+            != world.GetValue(attacker, SimComponents.Team, SimComponents.TeamId);
+    }
+
+    private static bool InRange(SimWorld world, long attacker, long target)
+    {
+        long rangeSq = world.GetValue(attacker, SimComponents.Combat, SimComponents.RangeSq);
+        long deltaX = Fixed.Sub(
+            world.GetValue(target, SimComponents.Position, SimComponents.X),
+            world.GetValue(attacker, SimComponents.Position, SimComponents.X));
+        long deltaY = Fixed.Sub(
+            world.GetValue(target, SimComponents.Position, SimComponents.Y),
+            world.GetValue(attacker, SimComponents.Position, SimComponents.Y));
+        long distanceSq = Fixed.Add(Fixed.Mul(deltaX, deltaX), Fixed.Mul(deltaY, deltaY));
+        return distanceSq <= rangeSq;
+    }
+
+    private static void Chase(SimWorld world, long attacker, long target)
+    {
+        if (!world.HasComponent(attacker, SimComponents.Move))
+        {
+            return;
+        }
+        world.SetValue(
+            attacker,
+            SimComponents.Move,
+            SimComponents.TargetX,
+            Fixed.ToInt(world.GetValue(target, SimComponents.Position, SimComponents.X)));
+        world.SetValue(
+            attacker,
+            SimComponents.Move,
+            SimComponents.TargetY,
+            Fixed.ToInt(world.GetValue(target, SimComponents.Position, SimComponents.Y)));
+        world.SetValue(attacker, SimComponents.Move, SimComponents.Active, 1);
+    }
+
+    private static void StopMoving(SimWorld world, long id)
+    {
+        if (!world.HasComponent(id, SimComponents.Move))
+        {
+            return;
+        }
+        world.SetValue(id, SimComponents.Move, SimComponents.Active, 0);
+        world.SetValue(id, SimComponents.Velocity, SimComponents.X, 0);
+        world.SetValue(id, SimComponents.Velocity, SimComponents.Y, 0);
     }
 
     private static long NearestEnemy(SimWorld world, SpatialHash spatial, long attacker)
