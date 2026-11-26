@@ -96,6 +96,7 @@ public sealed class DedicatedServer
         public TcpClient Tcp { get; }
         public NetworkStream Stream { get; }
         public long Team { get; }
+        public SnapshotDelta Delta { get; } = new();
         public volatile bool Alive = true;
         public Thread? Reader { get; set; }
         public Thread? Writer { get; set; }
@@ -112,18 +113,22 @@ public sealed class DedicatedServer
             }
         }
 
-        public void Enqueue(byte frameType, byte[] payload)
+        /// <summary>入队一帧；返回 false 表示客户端跟不上、旧帧已被清空，调用方须重置增量状态改发关键帧。</summary>
+        public bool Enqueue(byte frameType, byte[] payload)
         {
             if (!Alive)
             {
-                return;
+                return true;
             }
-            if (!_outbound.TryAdd(new Outgoing(frameType, payload)))
+            if (_outbound.TryAdd(new Outgoing(frameType, payload)))
             {
-                // 队列满说明客户端跟不上：丢掉最旧一帧，保留最新快照，绝不阻塞模拟线程。
-                _outbound.TryTake(out _);
-                _outbound.TryAdd(new Outgoing(frameType, payload));
+                return true;
             }
+            // 队列满说明客户端跟不上：清空积压，绝不阻塞模拟线程；增量帧有依赖，必须由调用方改发关键帧。
+            while (_outbound.TryTake(out _))
+            {
+            }
+            return false;
         }
 
         public void Complete() => _outbound.CompleteAdding();
@@ -363,7 +368,12 @@ public sealed class DedicatedServer
                     continue;
                 }
                 SnapshotFrame snapshot = _server.Snapshot(channel.Team);
-                channel.Enqueue(NetFrameType.Snapshot, snapshot.Encode());
+                SnapshotFrame outgoing = channel.Delta.Build(snapshot);
+                if (!channel.Enqueue(NetFrameType.Snapshot, outgoing.Encode()))
+                {
+                    // 丢帧后客户端状态不再连续：本帧丢弃，下一 tick 重置并重发关键帧。
+                    channel.Delta.Reset();
+                }
             }
             if (removed)
             {
