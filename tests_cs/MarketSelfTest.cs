@@ -1,6 +1,8 @@
 using System.Collections.Generic;
 using AoeSim;
 
+using static AOE2Framework.SelfTestBase;
+
 namespace AOE2Framework;
 
 /// <summary>市场买卖、进贡与陆路贸易车的语义、校验和、快照与确定性自测；返回空列表表示全过。</summary>
@@ -19,14 +21,6 @@ public static class MarketSelfTest
         CheckSnapshotExposesRates(failures);
         CheckDeterministic(failures);
         return failures;
-    }
-
-    private static void Expect(List<string> failures, bool condition, string message)
-    {
-        if (!condition)
-        {
-            failures.Add(message);
-        }
     }
 
     private static long BuildMarket(GameSim sim, int cellX, int cellY, long team)
