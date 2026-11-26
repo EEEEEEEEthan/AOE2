@@ -10,8 +10,15 @@ public static class BuildingTypes
     public const long Wall = 4;
     public const long Tower = 5;
     public const long Market = 6;
+    public const long Farm = 7;
 
-    public static bool IsKnown(long type) => type >= TownCenter && type <= Market;
+    /// <summary>一块农田完工后挂载的食物节点总量，耗尽后需重播。</summary>
+    public const long FarmFoodAmount = 250;
+
+    /// <summary>空田手动重播消耗的木材。</summary>
+    public const long FarmReseedCost = 60;
+
+    public static bool IsKnown(long type) => type >= TownCenter && type <= Farm;
 
     /// <summary>建筑所属时代：升城堡/帝国时统计上一时代的已完成建筑数量。</summary>
     public static long AgeOf(long type) => type switch
@@ -22,6 +29,7 @@ public static class BuildingTypes
         Wall => TechCatalog.AgeDark,
         Tower => TechCatalog.AgeCastle,
         Market => TechCatalog.AgeFeudal,
+        Farm => TechCatalog.AgeDark,
         _ => TechCatalog.AgeDark,
     };
 
@@ -33,6 +41,7 @@ public static class BuildingTypes
         Wall => 1,
         Tower => 2,
         Market => 4,
+        Farm => 3,
         _ => 0,
     };
 
@@ -44,6 +53,7 @@ public static class BuildingTypes
         Wall => 1,
         Tower => 2,
         Market => 3,
+        Farm => 3,
         _ => 0,
     };
 
@@ -55,6 +65,7 @@ public static class BuildingTypes
         Wall => 500,
         Tower => 1000,
         Market => 1500,
+        Farm => 480,
         _ => 0,
     };
 
@@ -66,6 +77,7 @@ public static class BuildingTypes
         Wall => 24,
         Tower => 120,
         Market => 180,
+        Farm => 90,
         _ => 0,
     };
 
@@ -85,6 +97,7 @@ public static class BuildingTypes
         Wall => 5,
         Tower => 125,
         Market => 175,
+        Farm => 60,
         _ => 0,
     };
 }

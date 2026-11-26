@@ -28,23 +28,23 @@ func _capture() -> void:
 	bridge.call("StartBuildingShowcase")
 	bridge.call("RevealAllVision")
 	_reset_world(scene, bridge)
-	camera.set("grid_width", 20.0)
+	camera.set("grid_width", 24.0)
 	camera.set("grid_height", 12.0)
-	camera.set("focus", Vector3(9.5, 0.0, 6.5))
-	camera.set("ortho_size", 18.0)
+	camera.set("focus", Vector3(11.5, 0.0, 6.5))
+	camera.set("ortho_size", 20.0)
 	camera.call("refresh_view")
 	for frame in WARMUP_FRAMES:
 		await get_tree().process_frame
 	await _save("building_showcase.png")
 
-	camera.set("focus", Vector3(9.5, 0.0, 3.8))
+	camera.set("focus", Vector3(11.5, 0.0, 3.8))
 	camera.set("ortho_size", 12.0)
 	camera.call("refresh_view")
 	for frame in SETTLE_FRAMES:
 		await get_tree().process_frame
 	await _save("building_showcase_team_blue.png")
 
-	camera.set("focus", Vector3(9.5, 0.0, 9.5))
+	camera.set("focus", Vector3(11.5, 0.0, 9.5))
 	camera.call("refresh_view")
 	for frame in SETTLE_FRAMES:
 		await get_tree().process_frame

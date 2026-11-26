@@ -58,8 +58,8 @@ public partial class GameBridge : Node
     /// <summary>预览/截图专用：把所有建筑类型按双方阵营摆成两排，验收建筑外观。</summary>
     public void StartBuildingShowcase()
     {
-        var grid = new AoeSim.NavGrid(20, 12);
-        var terrain = AoeSim.TerrainGrid.Flat(20, 12);
+        var grid = new AoeSim.NavGrid(24, 12);
+        var terrain = AoeSim.TerrainGrid.Flat(24, 12);
         var sim = new AoeSim.GameSim(grid, 7, 2, 6, AoeSim.MatchConfig.Standard, terrain);
         _grid = grid;
         _terrain = terrain;
@@ -71,8 +71,9 @@ public partial class GameBridge : Node
             AoeSim.BuildingTypes.Wall,
             AoeSim.BuildingTypes.Tower,
             AoeSim.BuildingTypes.Market,
+            AoeSim.BuildingTypes.Farm,
         };
-        int[] originsX = { 0, 5, 8, 12, 14, 16 };
+        int[] originsX = { 0, 5, 8, 12, 14, 16, 20 };
         for (int team = 0; team < 2; team++)
         {
             int originY = team == 0 ? 2 : 8;

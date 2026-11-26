@@ -260,7 +260,7 @@ public sealed class SnapshotFrame
             long hp = world.GetValue(id, SimComponents.Health, SimComponents.Hp);
             long nodeType = 0;
             long nodeRemaining = 0;
-            if (kind == EntityKind.ResourceNode)
+            if (world.HasComponent(id, SimComponents.ResourceNode))
             {
                 nodeType = world.GetValue(id, SimComponents.ResourceNode, SimComponents.NodeType);
                 nodeRemaining = world.GetValue(id, SimComponents.ResourceNode, SimComponents.Remaining);
@@ -379,6 +379,11 @@ public sealed class SnapshotFrame
 
     private static long ClassifyEntity(SimWorld world, long id)
     {
+        // 农田同时持有 Building 与 ResourceNode：先判建筑，否则会被当成普通资源点丢掉建筑字段。
+        if (world.HasComponent(id, SimComponents.Building))
+        {
+            return EntityKind.Building;
+        }
         if (world.HasComponent(id, SimComponents.ResourceNode))
         {
             return EntityKind.ResourceNode;
@@ -402,10 +407,6 @@ public sealed class SnapshotFrame
         if (world.HasComponent(id, SimComponents.RelicSlot))
         {
             return EntityKind.RelicSlot;
-        }
-        if (world.HasComponent(id, SimComponents.Building))
-        {
-            return EntityKind.Building;
         }
         if (world.HasComponent(id, SimComponents.Combat))
         {
