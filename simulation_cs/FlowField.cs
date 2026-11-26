@@ -32,6 +32,9 @@ public sealed class FlowField
         { -1, -1 },
     };
 
+    private const int OrthogonalCost = 1000;
+    private const int DiagonalCost = 1414;
+
     public int Width { get; }
     public int Height { get; }
     public int GoalX { get; private set; }
@@ -66,14 +69,16 @@ public sealed class FlowField
         }
         int start = grid.Index(targetX, targetY);
         Cost[start] = 0;
-        var queue = new Queue<int>();
-        queue.Enqueue(start);
-        while (queue.Count > 0)
+        var frontier = new PriorityQueue<int, int>();
+        frontier.Enqueue(start, 0);
+        while (frontier.TryDequeue(out int current, out int currentCost))
         {
-            int current = queue.Dequeue();
+            if (currentCost > Cost[current])
+            {
+                continue;
+            }
             int currentX = current % Width;
             int currentY = current / Width;
-            int nextCost = Cost[current] + 1;
             for (int neighborIndex = 0; neighborIndex < NeighborsOffsets.GetLength(0); neighborIndex++)
             {
                 int offsetX = NeighborsOffsets[neighborIndex, 0];
@@ -84,7 +89,8 @@ public sealed class FlowField
                 {
                     continue;
                 }
-                if (offsetX != 0 && offsetY != 0)
+                bool diagonal = offsetX != 0 && offsetY != 0;
+                if (diagonal)
                 {
                     if (grid.IsBlocked(currentX + offsetX, currentY) || grid.IsBlocked(currentX, currentY + offsetY))
                     {
@@ -96,12 +102,13 @@ public sealed class FlowField
                     continue;
                 }
                 int neighbor = grid.Index(neighborX, neighborY);
-                if (Cost[neighbor] != -1)
+                int nextCost = currentCost + (diagonal ? DiagonalCost : OrthogonalCost);
+                if (Cost[neighbor] != -1 && nextCost >= Cost[neighbor])
                 {
                     continue;
                 }
                 Cost[neighbor] = nextCost;
-                queue.Enqueue(neighbor);
+                frontier.Enqueue(neighbor, nextCost);
             }
         }
         BuildDirections(grid);
