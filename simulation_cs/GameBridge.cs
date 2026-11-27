@@ -129,7 +129,11 @@ public partial class GameBridge : Node
         }
         int playerCount = System.Math.Max(1, map.Starts.Count);
         long[]? matchCivs = null;
-        if (civIds != null)
+        if (map.HasPlayerSettings)
+        {
+            matchCivs = map.CivIdsForMatch(playerCount);
+        }
+        else if (civIds != null)
         {
             matchCivs = new long[civIds.Length];
             for (int index = 0; index < civIds.Length; index++)
@@ -145,8 +149,10 @@ public partial class GameBridge : Node
         _session = session;
         _accumulator = 0.0;
         ResetBatchCache();
+        int[]? replayCivs = matchCivs == null ? null : System.Array.ConvertAll(
+            matchCivs, civ => (int)civ);
         _recorder = new AoeSim.ReplayRecorder(
-            map, map.Seed, playerCount, sim.Lockstep.TicksPerTurn, sim.Match!.Config, civIds);
+            map, map.Seed, playerCount, sim.Lockstep.TicksPerTurn, sim.Match!.Config, replayCivs);
         session.Server.Recorder = _recorder;
         if (aiDifficulty >= 0)
         {
@@ -574,6 +580,9 @@ public partial class GameBridge : Node
     public int TechCount => (int)AoeSim.TechCatalog.TechCount;
 
     public string CivilizationName(long civ) => AoeSim.CivilizationCatalog.Name(civ);
+
+    /// <summary>当前本地对局中某玩家实际生效的文明 id；无会话时返回 -1。</summary>
+    public long PlayerCivilization(long team) => _session?.Server.Sim.Civ(team) ?? -1;
 
     /// <summary>
     /// 只读科技树数据：按科技 id 顺序给出名称、时代、前置建筑、造价、研发 tick

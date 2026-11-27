@@ -8,6 +8,12 @@ const TYPE_CLIFF := 3
 
 const MAX_HEIGHT := 16
 
+const DEFAULT_PLAYER_COUNT := 2
+const DEFAULT_STARTING_WOOD := 500
+const DEFAULT_STARTING_FOOD := 200
+const DEFAULT_STARTING_GOLD := 100
+const DEFAULT_STARTING_STONE := 200
+
 const KIND_SPAWN := "spawn"
 const KIND_RESOURCE := "resource"
 const KIND_BUILDING := "building"
@@ -20,6 +26,8 @@ var types := PackedInt32Array()
 var vertex_heights := PackedInt32Array()
 var blocked := PackedInt32Array()
 var placements: Array = []
+var player_count := DEFAULT_PLAYER_COUNT
+var player_settings: Array = []
 var map_name := "editor_map"
 var map_seed := 20261126
 
@@ -45,6 +53,7 @@ func new_map(map_width: int, map_height: int) -> void:
 	placements = []
 	map_name = "editor_map"
 	map_seed = 20261126
+	_reset_players(DEFAULT_PLAYER_COUNT)
 	_undo_stack.clear()
 	_redo_stack.clear()
 
@@ -63,6 +72,7 @@ func load_map(bridge: MapEditorBridge, path: String) -> Dictionary:
 	placements = []
 	for entry: Variant in data["placements"]:
 		placements.append((entry as Dictionary).duplicate(true))
+	_load_players(data)
 	_undo_stack.clear()
 	_redo_stack.clear()
 	return {"ok": true, "error": ""}
@@ -70,11 +80,43 @@ func load_map(bridge: MapEditorBridge, path: String) -> Dictionary:
 
 func save_map(bridge: MapEditorBridge, path: String) -> Dictionary:
 	return bridge.SaveMap(
-		path, map_name, map_seed, width, height, types, vertex_heights, blocked, placements)
+		path, map_name, map_seed, width, height, types, vertex_heights, blocked, placements,
+		player_settings)
 
 
 func validate(bridge: MapEditorBridge) -> Dictionary:
-	return bridge.Validate(width, height, types, vertex_heights, blocked, placements)
+	return bridge.Validate(
+		width, height, types, vertex_heights, blocked, placements, player_settings)
+
+
+func set_player_count(count: int) -> void:
+	if count == player_count and player_settings.size() == count:
+		return
+	while player_settings.size() < count:
+		player_settings.append(_default_player(player_settings.size()))
+	if player_settings.size() > count:
+		player_settings.resize(count)
+	player_count = count
+
+
+func player_at(index: int) -> Dictionary:
+	if index < 0 or index >= player_settings.size():
+		return {}
+	return player_settings[index]
+
+
+func set_player_civ(index: int, civ: int) -> void:
+	var player := player_at(index)
+	if player.is_empty():
+		return
+	player["civ"] = civ
+
+
+func set_player_resource(index: int, key: String, value: int) -> void:
+	var player := player_at(index)
+	if player.is_empty() or not player.has(key):
+		return
+	player[key] = value
 
 
 func in_bounds(cell_x: int, cell_y: int) -> bool:
@@ -297,6 +339,33 @@ func placement_at(cell_x: int, cell_y: int) -> Dictionary:
 		if entry["x"] == cell_x and entry["y"] == cell_y:
 			return entry
 	return {}
+
+
+func _reset_players(count: int) -> void:
+	player_count = clampi(count, 1, 4)
+	player_settings = []
+	for index in player_count:
+		player_settings.append(_default_player(index))
+
+
+func _default_player(index: int) -> Dictionary:
+	return {
+		"team": index,
+		"civ": 0,
+		"wood": DEFAULT_STARTING_WOOD,
+		"food": DEFAULT_STARTING_FOOD,
+		"gold": DEFAULT_STARTING_GOLD,
+		"stone": DEFAULT_STARTING_STONE,
+	}
+
+
+func _load_players(data: Dictionary) -> void:
+	player_settings = []
+	for entry: Variant in data.get("players", []):
+		player_settings.append((entry as Dictionary).duplicate(true))
+	player_count = clampi(int(data.get("player_count", player_settings.size())), 1, 4)
+	while player_settings.size() < player_count:
+		player_settings.append(_default_player(player_settings.size()))
 
 
 func _cell_vertices(cell_x: int, cell_y: int) -> Array[Vector2i]:
