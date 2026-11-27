@@ -85,10 +85,19 @@ func _adopt_prepared_match() -> void:
 
 
 func _finish_setup() -> void:
+	_apply_default_speed()
 	%WorldView.refresh(bridge)
 	%BattleController.setup(bridge)
 	%PauseMenu.setup(bridge)
 	_last_tick = bridge.ClientTick()
+
+
+## 新对局采用选项里的“默认游戏速度”，并让 HUD 速度选择器显示同一档位。
+func _apply_default_speed() -> void:
+	var store := get_node_or_null("/root/Settings") as SettingsStore
+	if store == null:
+		return
+	(get_node("Hud") as GameHud).apply_default_speed(int(store.value("game", "game_speed")))
 
 
 func _exit_tree() -> void:

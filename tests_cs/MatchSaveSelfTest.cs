@@ -17,6 +17,7 @@ public static class MatchSaveSelfTest
         var failures = new List<string>();
         CheckSaveRoundTrip(failures);
         CheckServerRoundTrip(failures);
+        CheckMarketRoundTrip(failures);
         CheckTamperedBodyChecksumRejected(failures);
         CheckCorruptedSaveRejected(failures);
         return failures;
@@ -118,6 +119,96 @@ public static class MatchSaveSelfTest
                 break;
             }
         }
+    }
+
+    /// <summary>市场价差与市场实体索引都要随存档恢复：读档后成交必须延续原价，而不是新建实体回落到基准价。</summary>
+    private static void CheckMarketRoundTrip(List<string> failures)
+    {
+        MapData map = MapGenerator.Generate(MapType.Arabia, Seed, PlayerCount);
+        GameSim original = MapSetup.BuildGeneratedMatch(map, Seed, PlayerCount);
+        int marketX = -1;
+        int marketY = -1;
+        int sizeWidth = BuildingTypes.SizeWidth(BuildingTypes.Market);
+        int sizeHeight = BuildingTypes.SizeHeight(BuildingTypes.Market);
+        for (int y = 0; y + sizeHeight <= map.Height && marketX < 0; y++)
+        {
+            for (int x = 0; x + sizeWidth <= map.Width; x++)
+            {
+                if (IsAreaFree(map.Nav, x, y, sizeWidth, sizeHeight))
+                {
+                    marketX = x;
+                    marketY = y;
+                    break;
+                }
+            }
+        }
+        Expect(failures, marketX >= 0, "found a free spot for the test market");
+        if (marketX < 0)
+        {
+            return;
+        }
+        original.AddResource(0, GameSim.ResourceWood, BuildingTypes.Cost(BuildingTypes.Market).Wood);
+        long market = original.IssuePlaceBuilding(BuildingTypes.Market, marketX, marketY, 0);
+        Expect(failures, market >= 0, "test market is placed");
+        if (market < 0)
+        {
+            return;
+        }
+        BuildingSystem.Complete(original.World, market);
+        original.AddResource(0, GameSim.ResourceGold, 5000);
+        original.AddResource(0, GameSim.ResourceWood, 1000);
+        MarketSystem.Buy(original, 0, GameSim.ResourceWood, 200);
+        MarketSystem.Sell(original, 0, GameSim.ResourceWood, 50);
+        long savedRate = MarketSystem.Rate(original.World, 0, GameSim.ResourceWood);
+        Expect(failures, savedRate != MarketSystem.BaseRate, "trades shift the market rate before saving");
+
+        MatchSaveData data = MatchSaveData.Build(original, map, "市场存档", 1);
+        GameSim restored = data.Restore();
+        Expect(failures,
+            restored.World.TryGetPlayerEntity(SimComponents.MarketState, 0, out _),
+            "restored match re-indexes the market entity");
+        Expect(failures,
+            MarketSystem.Rate(restored.World, 0, GameSim.ResourceWood) == savedRate,
+            "restored market keeps the shifted rate");
+        Expect(failures, restored.World.NextEntity == original.World.NextEntity,
+            "restored market does not add entities");
+
+        for (int tick = 0; tick < 30; tick++)
+        {
+            MarketSystem.Buy(original, 0, GameSim.ResourceWood, 20);
+            MarketSystem.Buy(restored, 0, GameSim.ResourceWood, 20);
+            MarketSystem.Sell(original, 0, GameSim.ResourceWood, 10);
+            MarketSystem.Sell(restored, 0, GameSim.ResourceWood, 10);
+            if (MarketSystem.Rate(original.World, 0, GameSim.ResourceWood)
+                != MarketSystem.Rate(restored.World, 0, GameSim.ResourceWood))
+            {
+                failures.Add($"market rate diverged at continued tick {tick}");
+                break;
+            }
+            original.SimulateTick();
+            restored.SimulateTick();
+            if (original.World.Checksum() != restored.World.Checksum())
+            {
+                failures.Add($"market match diverged at continued tick {tick}: "
+                    + FirstDifference(original, restored));
+                break;
+            }
+        }
+    }
+
+    private static bool IsAreaFree(NavGrid nav, int x, int y, int width, int height)
+    {
+        for (int cellY = y; cellY < y + height; cellY++)
+        {
+            for (int cellX = x; cellX < x + width; cellX++)
+            {
+                if (!nav.InBounds(cellX, cellY) || nav.IsBlocked(cellX, cellY))
+                {
+                    return false;
+                }
+            }
+        }
+        return true;
     }
 
     private static long FindEntity(GameSim sim, long team, string component)

@@ -110,6 +110,16 @@ public sealed partial class GameSim
                 _progressIndex.Set(team, id);
                 World.RegisterPlayerEntity(SimComponents.PlayerProgress, team, id);
             }
+            if (World.HasComponent(id, SimComponents.MarketState)
+                && !World.TryGetPlayerEntity(SimComponents.MarketState, team, out _))
+            {
+                World.RegisterPlayerEntity(SimComponents.MarketState, team, id);
+            }
+            if (World.HasComponent(id, SimComponents.Population)
+                && !World.TryGetPlayerEntity(SimComponents.Population, team, out _))
+            {
+                World.RegisterPlayerEntity(SimComponents.Population, team, id);
+            }
         }
     }
 

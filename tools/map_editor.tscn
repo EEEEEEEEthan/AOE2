@@ -364,6 +364,18 @@ layout_mode = 2
 layout_mode = 2
 text = "玩家设置"
 
+[node name="PlayerSelectRow" type="HBoxContainer" parent="Hud/PlayerPanel/PlayerBox"]
+layout_mode = 2
+
+[node name="PlayerSelectLabel" type="Label" parent="Hud/PlayerPanel/PlayerBox/PlayerSelectRow"]
+layout_mode = 2
+text = "当前玩家"
+
+[node name="PlayerSelect" type="OptionButton" parent="Hud/PlayerPanel/PlayerBox/PlayerSelectRow"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+
 [node name="PlayerCountRow" type="HBoxContainer" parent="Hud/PlayerPanel/PlayerBox"]
 layout_mode = 2
 
@@ -393,7 +405,7 @@ size_flags_horizontal = 3
 
 [node name="ResourceTitle" type="Label" parent="Hud/PlayerPanel/PlayerBox"]
 layout_mode = 2
-text = "起始资源（提示用）"
+text = "起始资源"
 
 [node name="WoodRow" type="HBoxContainer" parent="Hud/PlayerPanel/PlayerBox"]
 layout_mode = 2
@@ -470,5 +482,11 @@ text = "外交（未实现）"
 [connection signal="item_selected" from="Hud/PalettePanel/PaletteBox/PaletteTabs/建筑/BuildingList" to="." method="_on_building_selected"]
 [connection signal="item_selected" from="Hud/PalettePanel/PaletteBox/PaletteTabs/单位/UnitList" to="." method="_on_unit_selected"]
 [connection signal="value_changed" from="Hud/PlayerPanel/PlayerBox/PlayerCountRow/PlayerCountSpin" to="." method="_on_player_count_changed"]
+[connection signal="item_selected" from="Hud/PlayerPanel/PlayerBox/PlayerSelectRow/PlayerSelect" to="." method="_on_player_selected"]
+[connection signal="item_selected" from="Hud/PlayerPanel/PlayerBox/CivRow/CivOption" to="." method="_on_civ_selected"]
+[connection signal="value_changed" from="Hud/PlayerPanel/PlayerBox/WoodRow/StartWoodSpin" to="." method="_on_start_wood_changed"]
+[connection signal="value_changed" from="Hud/PlayerPanel/PlayerBox/FoodRow/StartFoodSpin" to="." method="_on_start_food_changed"]
+[connection signal="value_changed" from="Hud/PlayerPanel/PlayerBox/GoldRow/StartGoldSpin" to="." method="_on_start_gold_changed"]
+[connection signal="value_changed" from="Hud/PlayerPanel/PlayerBox/StoneRow/StartStoneSpin" to="." method="_on_start_stone_changed"]
 [connection signal="file_selected" from="OpenDialog" to="." method="_on_open_file_selected"]
 [connection signal="confirmed" from="SizeDialog" to="." method="_on_size_confirmed"]
