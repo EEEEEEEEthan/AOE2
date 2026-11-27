@@ -42,6 +42,10 @@ func run() -> void:
 	model.redo()
 	check_eq(model.placements.size(), 4, "redo restores placements")
 
+	model.set_player_civ(0, 1)
+	model.set_player_resource(0, "wood", 640)
+	model.set_player_resource(0, "food", 280)
+
 	var bridge := MapEditorBridge.new()
 	add_child(bridge)
 	var save_result := model.save_map(bridge, MAP_PATH)
@@ -53,6 +57,8 @@ func run() -> void:
 	check_eq(loaded.height_at(4, 4), raised, "roundtrip keeps height")
 	check_eq(loaded.type_at(2, 2), MapEditorModel.TYPE_WATER, "roundtrip keeps type")
 	check_eq(loaded.placements.size(), 4, "roundtrip keeps placements")
+	check_eq(int(loaded.player_at(0)["civ"]), 1, "roundtrip keeps player civ")
+	check_eq(int(loaded.player_at(0)["wood"]), 640, "roundtrip keeps player starting wood")
 
 	var map_data := bridge.LoadMap(MAP_PATH)
 	check_eq(map_data["starts"].size(), 1, "saved map derives player starts")
@@ -63,6 +69,10 @@ func run() -> void:
 	check(game.StartFromMap(MAP_PATH, -1, PackedInt32Array()), "start a match from the saved map")
 	check_true(game.HasSession, "saved map starts a playable session")
 	check_eq(game.TerrainWidth, 8, "saved map keeps its width in a match")
+	var states := game.PlayerStates()
+	check_eq(int(states[0]["wood"]), 640, "starting wood from map applies in match")
+	check_eq(int(states[0]["food"]), 280, "starting food from map applies in match")
+	check_eq(game.PlayerCivilization(0), 1, "starting civ from map applies in match")
 	game.queue_free()
 
 	var walled: MapEditorModel = MODEL.new()

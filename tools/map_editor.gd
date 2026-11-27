@@ -78,6 +78,7 @@ var _unit_categories: Array = []
 var _unit_list_ids: Array = []
 var _selected_building_type := 0
 var _selected_unit_type := -1
+var _syncing_player_ui := false
 
 
 func _ready() -> void:
@@ -87,9 +88,9 @@ func _ready() -> void:
 	add_child(_bridge)
 	_setup_menus()
 	_setup_civ_options()
-	_setup_team_options(int(%PlayerCountSpin.value))
 	_setup_building_palette()
 	_setup_unit_palette()
+	_sync_player_controls()
 	_fit_camera()
 
 
@@ -172,6 +173,36 @@ func _setup_team_options(player_count: int) -> void:
 	%TeamOption.clear()
 	for team in player_count:
 		%TeamOption.add_item("玩家 %d" % (team + 1))
+
+
+func _setup_player_select() -> void:
+	%PlayerSelect.clear()
+	for index in _model.player_count:
+		%PlayerSelect.add_item("玩家 %d" % (index + 1))
+	%PlayerSelect.select(0)
+
+
+func _sync_player_controls() -> void:
+	_syncing_player_ui = true
+	%PlayerCountSpin.value = _model.player_count
+	_syncing_player_ui = false
+	_setup_team_options(_model.player_count)
+	_setup_player_select()
+	_refresh_player_fields()
+
+
+func _refresh_player_fields() -> void:
+	var index: int = %PlayerSelect.selected if %PlayerSelect.item_count > 0 else 0
+	var player := _model.player_at(index)
+	if player.is_empty():
+		return
+	_syncing_player_ui = true
+	%CivOption.select(clampi(int(player["civ"]), 0, maxi(%CivOption.item_count - 1, 0)))
+	%StartWoodSpin.value = player["wood"]
+	%StartFoodSpin.value = player["food"]
+	%StartGoldSpin.value = player["gold"]
+	%StartStoneSpin.value = player["stone"]
+	_syncing_player_ui = false
 
 
 func _setup_building_palette() -> void:
@@ -517,6 +548,7 @@ func _on_open_file_selected(path: String) -> void:
 
 func _on_size_confirmed() -> void:
 	_model.new_map(int(%SizeWidthSpin.value), int(%SizeHeightSpin.value))
+	_sync_player_controls()
 	_mark_dirty()
 	_fit_camera()
 	_set_status("已新建 %d×%d 地图" % [_model.width, _model.height])
@@ -547,8 +579,47 @@ func _on_unit_selected(index: int) -> void:
 
 
 func _on_player_count_changed(value: float) -> void:
+	if _syncing_player_ui:
+		return
+	_model.set_player_count(int(value))
 	_setup_team_options(int(value))
+	_setup_player_select()
+	_refresh_player_fields()
 	_set_status("玩家数量：%d（出生点按阵营颜色区分）" % int(value))
+
+
+func _on_player_selected(_index: int) -> void:
+	_refresh_player_fields()
+
+
+func _on_civ_selected(index: int) -> void:
+	if _syncing_player_ui:
+		return
+	_model.set_player_civ(%PlayerSelect.selected, index)
+
+
+func _on_start_wood_changed(value: float) -> void:
+	if _syncing_player_ui:
+		return
+	_model.set_player_resource(%PlayerSelect.selected, "wood", int(value))
+
+
+func _on_start_food_changed(value: float) -> void:
+	if _syncing_player_ui:
+		return
+	_model.set_player_resource(%PlayerSelect.selected, "food", int(value))
+
+
+func _on_start_gold_changed(value: float) -> void:
+	if _syncing_player_ui:
+		return
+	_model.set_player_resource(%PlayerSelect.selected, "gold", int(value))
+
+
+func _on_start_stone_changed(value: float) -> void:
+	if _syncing_player_ui:
+		return
+	_model.set_player_resource(%PlayerSelect.selected, "stone", int(value))
 
 
 func _on_main_menu_pressed() -> void:
@@ -569,6 +640,7 @@ func _on_redo_pressed() -> void:
 
 func _on_new_pressed() -> void:
 	_model.new_map(32, 32)
+	_sync_player_controls()
 	_mark_dirty()
 	_fit_camera()
 	_set_status("已新建 32×32 地图")
@@ -593,6 +665,11 @@ func _on_quick_test_pressed() -> void:
 	MatchSetup.reset_config()
 	MatchSetup.config["map_path"] = %PathEdit.text.strip_edges()
 	MatchSetup.config["map_name"] = String(%PathEdit.text.strip_edges()).get_file().get_basename()
+	MatchSetup.config["player_count"] = _model.player_count
+	var civ_ids := PackedInt32Array()
+	for player: Dictionary in _model.player_settings:
+		civ_ids.append(int(player["civ"]))
+	MatchSetup.config["civ_ids"] = civ_ids
 	get_tree().change_scene_to_file("res://presentation/loading.tscn")
 
 
@@ -605,6 +682,7 @@ func _on_load_pressed() -> void:
 	if not result["ok"]:
 		_set_status("读取失败：%s" % result["error"])
 		return
+	_sync_player_controls()
 	_mark_dirty()
 	_fit_camera()
 	_set_status("已读取 %s（%d×%d）" % [path, _model.width, _model.height])
@@ -615,6 +693,7 @@ func _on_validate_pressed() -> void:
 	var lines := PackedStringArray()
 	lines.append("出生点连通：%s" % ("通过" if result["spawn_connected"] else "未通过"))
 	lines.append("资源可达：%s" % ("通过" if result["resources_reachable"] else "未通过"))
+	lines.append("玩家设置：%s" % ("通过" if result["players_configured"] else "未通过"))
 	lines.append("出生点 %d 个，资源点 %d 个" % [result["spawn_count"], result["resource_count"]])
 	for message in result["messages"]:
 		lines.append("· %s" % message)

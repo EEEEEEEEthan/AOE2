@@ -27,6 +27,8 @@ public partial class MapEditorBridge : Node
             result["placements"] = ToGodotPlacements(map.Placements);
             result["starts"] = ToGodotStarts(map.Starts);
             result["resources"] = map.Resources.Count;
+            result["player_count"] = map.Players.Count;
+            result["players"] = ToGodotPlayers(map.Players);
         }
         catch (Exception exception)
         {
@@ -44,13 +46,14 @@ public partial class MapEditorBridge : Node
         int[] types,
         int[] vertexHeights,
         int[] blocked,
-        Godot.Collections.Array placements)
+        Godot.Collections.Array placements,
+        Godot.Collections.Array players)
     {
         var result = new Godot.Collections.Dictionary();
         try
         {
             AoeSim.MapData map = BuildMap(
-                name, seed, width, height, types, vertexHeights, blocked, placements);
+                name, seed, width, height, types, vertexHeights, blocked, placements, players);
             string resolved = ResolvePath(path);
             string? directory = System.IO.Path.GetDirectoryName(resolved);
             if (!string.IsNullOrEmpty(directory))
@@ -74,10 +77,11 @@ public partial class MapEditorBridge : Node
         int[] types,
         int[] vertexHeights,
         int[] blocked,
-        Godot.Collections.Array placements)
+        Godot.Collections.Array placements,
+        Godot.Collections.Array players)
     {
         AoeSim.MapData map = BuildMap(
-            "validation", 0, width, height, types, vertexHeights, blocked, placements);
+            "validation", 0, width, height, types, vertexHeights, blocked, placements, players);
         var spawns = new List<AoeSim.MapPlacement>();
         var resources = new List<AoeSim.MapPlacement>();
         foreach (AoeSim.MapPlacement placement in map.Placements)
@@ -141,11 +145,41 @@ public partial class MapEditorBridge : Node
             }
         }
 
+        bool playersConfigured = true;
+        var spawnTeams = new HashSet<int>();
+        foreach (AoeSim.MapPlacement spawn in spawns)
+        {
+            spawnTeams.Add(spawn.Team);
+        }
+        var settingTeams = new HashSet<int>();
+        foreach (AoeSim.PlayerSetting player in map.Players)
+        {
+            settingTeams.Add(player.Team);
+            if (!spawnTeams.Contains(player.Team))
+            {
+                playersConfigured = false;
+                messages.Add($"玩家 {player.Team + 1} 没有对应出生点");
+            }
+        }
+        foreach (int team in spawnTeams)
+        {
+            if (!settingTeams.Contains(team))
+            {
+                playersConfigured = false;
+                messages.Add($"出生点阵营 {team + 1} 没有玩家设置");
+            }
+        }
+        if (spawns.Count != map.Players.Count)
+        {
+            messages.Add($"出生点 {spawns.Count} 个，玩家设置 {map.Players.Count} 名");
+        }
+
         var result = new Godot.Collections.Dictionary
         {
-            { "ok", spawnConnected && resourcesReachable },
+            { "ok", spawnConnected && resourcesReachable && playersConfigured },
             { "spawn_connected", spawnConnected },
             { "resources_reachable", resourcesReachable },
+            { "players_configured", playersConfigured },
             { "spawn_count", spawns.Count },
             { "resource_count", resources.Count },
             { "messages", messages.ToArray() },
@@ -161,7 +195,8 @@ public partial class MapEditorBridge : Node
         int[] types,
         int[] vertexHeights,
         int[] blocked,
-        Godot.Collections.Array placements)
+        Godot.Collections.Array placements,
+        Godot.Collections.Array players)
     {
         int cells = width * height;
         int vertexCells = (width + 1) * (height + 1);
@@ -188,7 +223,8 @@ public partial class MapEditorBridge : Node
             AoeSim.MapScenarioBuilder.FromPlacements(placementList, terrain);
         return new AoeSim.MapData(
             name, seed, terrain, nav, placementList,
-            scenario.Resources, scenario.Starts, scenario.Animals);
+            scenario.Resources, scenario.Starts, scenario.Animals,
+            FromGodotPlayers(players));
     }
 
     private static List<AoeSim.MapPlacement> FromGodotPlacements(Godot.Collections.Array placements)
@@ -232,6 +268,47 @@ public partial class MapEditorBridge : Node
             });
         }
         return result;
+    }
+
+    private static List<AoeSim.PlayerSetting> FromGodotPlayers(Godot.Collections.Array players)
+    {
+        var result = new List<AoeSim.PlayerSetting>();
+        foreach (Variant item in players)
+        {
+            var dict = item.AsGodotDictionary();
+            int team = IntField(dict, "team");
+            result.Add(new AoeSim.PlayerSetting(
+                team,
+                IntField(dict, "civ"),
+                TeamLongField(dict, "wood", AoeSim.MapSetup.StartingWood),
+                TeamLongField(dict, "food", AoeSim.MapSetup.StartingFood),
+                TeamLongField(dict, "gold", AoeSim.MapSetup.StartingGold),
+                TeamLongField(dict, "stone", AoeSim.MapSetup.StartingStone)));
+        }
+        return result;
+    }
+
+    private static Godot.Collections.Array ToGodotPlayers(IReadOnlyList<AoeSim.PlayerSetting> players)
+    {
+        var result = new Godot.Collections.Array();
+        foreach (AoeSim.PlayerSetting player in players)
+        {
+            result.Add(new Godot.Collections.Dictionary
+            {
+                { "team", player.Team },
+                { "civ", player.Civ },
+                { "wood", player.Wood },
+                { "food", player.Food },
+                { "gold", player.Gold },
+                { "stone", player.Stone },
+            });
+        }
+        return result;
+    }
+
+    private static long TeamLongField(Godot.Collections.Dictionary dict, string key, long fallback)
+    {
+        return dict.TryGetValue(key, out Variant value) ? value.AsInt64() : fallback;
     }
 
     private static Godot.Collections.Array ToGodotStarts(IReadOnlyList<AoeSim.PlayerStart> starts)

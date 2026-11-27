@@ -21,6 +21,7 @@ public static class MapSelfTest
         CheckStartsAndResources(failures);
         CheckJsonRoundtrip(failures);
         CheckSpawnedMatch(failures);
+        CheckPlayerSettings(failures);
         return failures;
     }
 
@@ -189,5 +190,46 @@ public static class MapSelfTest
         Expect(failures, resourceNodes == map.Resources.Count, "generated match spawns every resource point");
         Expect(failures, animals == map.Animals.Count, "generated match spawns every hunting animal");
         Expect(failures, sim.Grid.Width == Size && sim.Grid.Height == Size, "generated match uses map grid");
+    }
+
+    private static void CheckPlayerSettings(List<string> failures)
+    {
+        MapData baseMap = Generate();
+        var players = new List<PlayerSetting>
+        {
+            new(0, 1, 777, 311, 42, 66),
+            new(1, 0, 5, 6, 7, 8),
+        };
+        var map = new MapData(
+            baseMap.Name, baseMap.Seed, baseMap.Terrain, baseMap.Nav,
+            baseMap.Placements, baseMap.Resources, baseMap.Starts, baseMap.Animals, players);
+        Expect(failures, map.HasPlayerSettings, "explicit player settings are marked recorded");
+        Expect(failures, map.Players.Count == 2, "explicit player settings keep every player");
+
+        MapData restored = MapData.FromJson(map.ToJson());
+        Expect(failures, restored.Checksum() == map.Checksum(), "player settings survive json roundtrip");
+        Expect(failures, restored.HasPlayerSettings, "restored map keeps player settings flag");
+        PlayerSetting? woodPlayer = restored.PlayerSettingFor(0);
+        Expect(
+            failures,
+            woodPlayer != null && woodPlayer.Civ == 1 && woodPlayer.Wood == 777,
+            "player settings roundtrip civ and resources");
+
+        GameSim custom = MapSetup.BuildGeneratedMatch(map, map.Seed, 2, map.CivIdsForMatch(2));
+        Expect(failures, custom.Civ(0) == 1, "map civ applies to first player");
+        Expect(failures, custom.Civ(1) == 0, "map civ applies to second player");
+        Expect(failures, custom.Resource(0, GameSim.ResourceWood) == 777, "map wood applies to first player");
+        Expect(failures, custom.Resource(0, GameSim.ResourceFood) == 311, "map food applies to first player");
+        Expect(failures, custom.Resource(1, GameSim.ResourceStone) == 8, "map stone applies to second player");
+
+        var legacy = new MapData(
+            baseMap.Name, baseMap.Seed, baseMap.Terrain, baseMap.Nav,
+            baseMap.Placements, baseMap.Resources, baseMap.Starts, baseMap.Animals);
+        Expect(failures, !legacy.HasPlayerSettings, "map without players is treated as legacy");
+        Expect(failures, legacy.Players.Count == legacy.Starts.Count, "legacy map fills one player per start");
+        Expect(
+            failures,
+            legacy.PlayerSettingFor(0)?.Wood == MapSetup.StartingWood,
+            "legacy map falls back to default starting resources");
     }
 }

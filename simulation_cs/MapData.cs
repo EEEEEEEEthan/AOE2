@@ -54,6 +54,31 @@ public sealed class PlayerStart
     public int Y { get; }
 }
 
+/// <summary>一名玩家的开局配置：文明与四项起始资源，按 team 索引。</summary>
+public sealed class PlayerSetting
+{
+    public PlayerSetting(int team, int civ, long wood, long food, long gold, long stone)
+    {
+        Team = team;
+        Civ = civ;
+        Wood = wood;
+        Food = food;
+        Gold = gold;
+        Stone = stone;
+    }
+
+    public int Team { get; }
+    public int Civ { get; }
+    public long Wood { get; }
+    public long Food { get; }
+    public long Gold { get; }
+    public long Stone { get; }
+
+    public static PlayerSetting Default(int team) => new(
+        team, 0, MapSetup.StartingWood, MapSetup.StartingFood,
+        MapSetup.StartingGold, MapSetup.StartingStone);
+}
+
 /// <summary>
 /// 地图数据：把 TerrainGrid（高度/类型）与 NavGrid（建筑与障碍占位）打包成可存读的格式，
 /// 并附带生成器产出、由起始布置系统消费的资源点与玩家起始位置。
@@ -61,6 +86,7 @@ public sealed class PlayerStart
 /// 的共享顶点高度场；heights 为逐格最高角高度，用于兼容旧地图与外部读取。
 /// 一份地图既有渲染用的顶点高度，也有模拟用的可走性，但两个网格仍然互相独立。
 /// placements 是出生点/资源点/建筑等编辑器放置元数据，缺省为空且向后兼容。
+/// players 是各玩家的文明与起始资源；旧地图没有该字段时按出生点补默认值。
 /// </summary>
 public sealed class MapData
 {
@@ -72,6 +98,10 @@ public sealed class MapData
     public IReadOnlyList<ResourcePoint> Resources { get; private set; }
     public IReadOnlyList<AnimalSpawn> Animals { get; private set; }
     public IReadOnlyList<PlayerStart> Starts { get; private set; }
+    public IReadOnlyList<PlayerSetting> Players { get; private set; }
+
+    /// <summary>存档是否显式记录了玩家配置；旧地图为 false，开局时沿用调用方的文明参数。</summary>
+    public bool HasPlayerSettings { get; }
 
     public int Width => Terrain.Width;
     public int Height => Terrain.Height;
@@ -86,7 +116,8 @@ public sealed class MapData
         IEnumerable<MapPlacement>? placements = null,
         IReadOnlyList<ResourcePoint>? resources = null,
         IReadOnlyList<PlayerStart>? starts = null,
-        IReadOnlyList<AnimalSpawn>? animals = null)
+        IReadOnlyList<AnimalSpawn>? animals = null,
+        IReadOnlyList<PlayerSetting>? players = null)
     {
         if (terrain.Width != nav.Width || terrain.Height != nav.Height)
         {
@@ -102,6 +133,58 @@ public sealed class MapData
         Resources = resources ?? Array.Empty<ResourcePoint>();
         Animals = animals ?? Array.Empty<AnimalSpawn>();
         Starts = starts ?? Array.Empty<PlayerStart>();
+        HasPlayerSettings = players != null;
+        Players = NormalizePlayers(players, Starts);
+    }
+
+    /// <summary>取某玩家的开局配置；未记录该 team 时返回 null。</summary>
+    public PlayerSetting? PlayerSettingFor(int team)
+    {
+        foreach (PlayerSetting setting in Players)
+        {
+            if (setting.Team == team)
+            {
+                return setting;
+            }
+        }
+        return null;
+    }
+
+    /// <summary>按 team 顺序产出开局文明数组，供 GameSim 的 civIds 入口使用。</summary>
+    public long[] CivIdsForMatch(int playerCount)
+    {
+        var civIds = new long[playerCount];
+        for (int team = 0; team < playerCount; team++)
+        {
+            civIds[team] = PlayerSettingFor(team)?.Civ ?? 0;
+        }
+        return civIds;
+    }
+
+    /// <summary>保留显式配置的玩家，并为缺少配置的出生点补默认值，保证每名玩家都有开局数据。</summary>
+    private static List<PlayerSetting> NormalizePlayers(
+        IReadOnlyList<PlayerSetting>? players, IReadOnlyList<PlayerStart> starts)
+    {
+        var result = new List<PlayerSetting>();
+        var seenTeams = new HashSet<int>();
+        if (players != null)
+        {
+            foreach (PlayerSetting setting in players)
+            {
+                if (seenTeams.Add(setting.Team))
+                {
+                    result.Add(setting);
+                }
+            }
+        }
+        foreach (PlayerStart start in starts)
+        {
+            if (seenTeams.Add(start.Team))
+            {
+                result.Add(PlayerSetting.Default(start.Team));
+            }
+        }
+        return result;
     }
 
     public string ToJson()
@@ -152,6 +235,20 @@ public sealed class MapData
             PlayerStart start = Starts[index];
             starts[index] = new StartDto { Team = start.Team, X = start.X, Y = start.Y };
         }
+        var players = new PlayerDto[Players.Count];
+        for (int index = 0; index < Players.Count; index++)
+        {
+            PlayerSetting player = Players[index];
+            players[index] = new PlayerDto
+            {
+                Team = player.Team,
+                Civ = player.Civ,
+                Wood = player.Wood,
+                Food = player.Food,
+                Gold = player.Gold,
+                Stone = player.Stone,
+            };
+        }
         var dto = new MapDto
         {
             Name = Name,
@@ -166,6 +263,7 @@ public sealed class MapData
             Resources = resources,
             Animals = animals,
             Starts = starts,
+            Players = players,
         };
         return JsonSerializer.Serialize(dto, JsonOptions);
     }
@@ -244,7 +342,18 @@ public sealed class MapData
             starts = scenario.Starts;
             animals = scenario.Animals;
         }
-        return new MapData(dto.Name, dto.Seed, terrain, nav, placements, resources, starts, animals);
+        List<PlayerSetting>? players = null;
+        if (dto.Players != null)
+        {
+            players = new List<PlayerSetting>();
+            foreach (PlayerDto player in dto.Players)
+            {
+                players.Add(new PlayerSetting(
+                    player.Team, player.Civ, player.Wood, player.Food, player.Gold, player.Stone));
+            }
+        }
+        return new MapData(
+            dto.Name, dto.Seed, terrain, nav, placements, resources, starts, animals, players);
     }
 
     /// <summary>种子与最终布局的确定性摘要：同种子同地图必须逐项一致。</summary>
@@ -292,6 +401,15 @@ public sealed class MapData
             hash = SimWorld.HashInt(hash, start.X);
             hash = SimWorld.HashInt(hash, start.Y);
         }
+        foreach (PlayerSetting player in Players)
+        {
+            hash = SimWorld.HashInt(hash, player.Team);
+            hash = SimWorld.HashInt(hash, player.Civ);
+            hash = SimWorld.HashInt(hash, player.Wood);
+            hash = SimWorld.HashInt(hash, player.Food);
+            hash = SimWorld.HashInt(hash, player.Gold);
+            hash = SimWorld.HashInt(hash, player.Stone);
+        }
         return hash;
     }
 
@@ -320,6 +438,7 @@ public sealed class MapData
         public ResourceDto[]? Resources { get; set; }
         public AnimalDto[]? Animals { get; set; }
         public StartDto[]? Starts { get; set; }
+        public PlayerDto[]? Players { get; set; }
     }
 
     private sealed class ResourceDto
@@ -343,5 +462,15 @@ public sealed class MapData
         public int Team { get; set; }
         public int X { get; set; }
         public int Y { get; set; }
+    }
+
+    private sealed class PlayerDto
+    {
+        public int Team { get; set; }
+        public int Civ { get; set; }
+        public long Wood { get; set; }
+        public long Food { get; set; }
+        public long Gold { get; set; }
+        public long Stone { get; set; }
     }
 }

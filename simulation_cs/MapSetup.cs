@@ -39,10 +39,11 @@ public static class MapSetup
     {
         foreach (PlayerStart start in map.Starts)
         {
-            sim.AddResource(start.Team, GameSim.ResourceWood, StartingWood);
-            sim.AddResource(start.Team, GameSim.ResourceFood, StartingFood);
-            sim.AddResource(start.Team, GameSim.ResourceGold, StartingGold);
-            sim.AddResource(start.Team, GameSim.ResourceStone, StartingStone);
+            PlayerSetting? setting = map.PlayerSettingFor(start.Team);
+            sim.AddResource(start.Team, GameSim.ResourceWood, setting?.Wood ?? StartingWood);
+            sim.AddResource(start.Team, GameSim.ResourceFood, setting?.Food ?? StartingFood);
+            sim.AddResource(start.Team, GameSim.ResourceGold, setting?.Gold ?? StartingGold);
+            sim.AddResource(start.Team, GameSim.ResourceStone, setting?.Stone ?? StartingStone);
             long townCenter = sim.IssuePlaceBuilding(
                 BuildingTypes.TownCenter, start.X, start.Y, start.Team);
             if (townCenter >= 0)
