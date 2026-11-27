@@ -7,7 +7,7 @@ using System.Threading;
 
 namespace AoeSim;
 
-/// <summary>TCP 帧类型：客户端上行指令、服务器下行快照。</summary>
+/// <summary>TCP 帧类型：客户端上行指令与 ping，服务器下行快照与 echo。</summary>
 public static class NetFrameType
 {
     public const byte Command = 0;
@@ -15,6 +15,8 @@ public static class NetFrameType
     public const byte StaticMap = 2;
     public const byte Welcome = 3;
     public const byte Lobby = 4;
+    public const byte Ping = 5;
+    public const byte Echo = 6;
 }
 
 /// <summary>长度前缀分帧：[type:1][len:4 LE][payload:len]。</summary>
@@ -103,6 +105,9 @@ public sealed class DedicatedServer
         public long Color { get; set; }
         public bool Ready { get; set; }
         public SnapshotDelta Delta { get; } = new();
+
+        /// <summary>写线程与读线程回 echo 共用同一 NetworkStream，靠此锁避免五字节分帧交织。</summary>
+        public object WriteGate { get; } = new();
         public volatile bool Alive = true;
         public Thread? Reader { get; set; }
         public Thread? Writer { get; set; }
@@ -138,6 +143,29 @@ public sealed class DedicatedServer
         }
 
         public void Complete() => _outbound.CompleteAdding();
+
+        /// <summary>
+        /// 读线程收到 ping 后立即回 echo：走写锁直写而不进出站队列，
+        /// 避免快照有界队列满时被丢弃或被大帧推迟导致 RTT 失真。
+        /// </summary>
+        public void Echo(byte[] payload)
+        {
+            if (!Alive)
+            {
+                return;
+            }
+            try
+            {
+                lock (WriteGate)
+                {
+                    NetFraming.WriteFrame(Stream, NetFrameType.Echo, payload);
+                }
+            }
+            catch (System.Exception)
+            {
+                Alive = false;
+            }
+        }
 
         public IEnumerable<Outgoing> TakeAll() => _outbound.GetConsumingEnumerable();
 
@@ -288,7 +316,7 @@ public sealed class DedicatedServer
         bool sentMap = false;
         try
         {
-            NetFraming.WriteFrame(channel.Stream, NetFrameType.Welcome, new WelcomeFrame { ViewerTeam = team }.Encode());
+            NetFraming.WriteFrame(channel.Stream, NetFrameType.Welcome, MakeWelcome(team).Encode());
             if (!IsLobby)
             {
                 NetFraming.WriteFrame(channel.Stream, NetFrameType.StaticMap, _staticMapPayload!);
@@ -327,6 +355,14 @@ public sealed class DedicatedServer
     }
 
     private bool IsLobby => _lobbyRules != null && !_matchRunning;
+
+    /// <summary>握手帧带上本局节奏，客户端把 RTT 换算提前量时不再硬编码单一对局配置。</summary>
+    private WelcomeFrame MakeWelcome(long team) => new()
+    {
+        ViewerTeam = team,
+        TicksPerTurn = _server?.Sim.Lockstep.TicksPerTurn ?? 6,
+        TicksPerSecond = _ticksPerSecond,
+    };
 
     /// <summary>为连接分配一个空闲玩家位；满员时返回 false。</summary>
     private bool TryReserveTeam(out long team)
@@ -374,6 +410,10 @@ public sealed class DedicatedServer
                         _server.Enqueue(CommandFrame.Decode(payload), channel.Team);
                     }
                 }
+                else if (frameType == NetFrameType.Ping)
+                {
+                    channel.Echo(payload);
+                }
                 else if (frameType == NetFrameType.Lobby)
                 {
                     HandleLobbyMessage(channel, LobbyMessage.Decode(payload));
@@ -405,7 +445,10 @@ public sealed class DedicatedServer
         {
             foreach (ClientChannel.Outgoing outgoing in channel.TakeAll())
             {
-                NetFraming.WriteFrame(channel.Stream, outgoing.Type, outgoing.Payload);
+                lock (channel.WriteGate)
+                {
+                    NetFraming.WriteFrame(channel.Stream, outgoing.Type, outgoing.Payload);
+                }
             }
         }
         catch (Exception)
@@ -541,7 +584,7 @@ public sealed class DedicatedServer
             channel.Team = index;
             channel.Enqueue(
                 NetFrameType.Welcome,
-                new WelcomeFrame { ViewerTeam = index }.Encode());
+                MakeWelcome(index).Encode());
         }
     }
 
@@ -631,7 +674,7 @@ public sealed class DedicatedServer
         {
             channel.Enqueue(
                 NetFrameType.Welcome,
-                new WelcomeFrame { ViewerTeam = channel.Team }.Encode());
+                MakeWelcome(channel.Team).Encode());
             channel.Enqueue(NetFrameType.StaticMap, _staticMapPayload!);
             channel.Enqueue(NetFrameType.Lobby, started.Encode());
         }
@@ -685,15 +728,41 @@ public sealed class DedicatedServer
 public sealed class RemoteClient
 {
     private readonly TcpClient _client = new();
+    private readonly System.Func<long> _clock;
+    private readonly RttTracker _rttTracker;
+    private readonly System.Collections.Generic.Dictionary<long, long> _pendingPings = new();
     private NetworkStream? _stream;
+    private long _nextPingSequence;
+    private long _lastPingSentAt = long.MinValue;
+
+    public RemoteClient(System.Func<long>? clock = null)
+    {
+        _clock = clock ?? (static () => System.Environment.TickCount64);
+        _rttTracker = new RttTracker(_clock);
+    }
 
     public SimulationClient State { get; } = new();
 
     /// <summary>服务器在 Welcome 握手帧里分配的观察方 team；未握手时为 -1。</summary>
     public long ViewerTeam { get; private set; } = -1;
 
+    /// <summary>服务器下发的每回合 tick 数，用于把 RTT 换算成提前回合。</summary>
+    public int TicksPerTurn { get; private set; } = 6;
+
+    /// <summary>服务器下发的模拟频率，用于把 RTT 换算成提前回合。</summary>
+    public int TicksPerSecond { get; private set; } = 30;
+
     /// <summary>已应用的下行快照帧数，用于验证快照降频后仍持续推进。</summary>
     public long SnapshotFrames { get; private set; }
+
+    /// <summary>累计收到的 echo 采样数，0 表示尚未测到 RTT。</summary>
+    public long RttSampleCount { get; private set; }
+
+    /// <summary>平滑往返毫秒；从未采样时为 -1。</summary>
+    public double SmoothedRttMilliseconds => _rttTracker.SmoothedRttMilliseconds;
+
+    /// <summary>当前应使用的输入提前量：有新鲜 RTT 样本按其换算，否则回退默认值。</summary>
+    public int LookaheadTurns => _rttTracker.LookaheadFor(TicksPerTurn, TicksPerSecond);
 
     /// <summary>最近一次房间快照；未进大厅时为 null。</summary>
     public LobbyMessage? Room { get; private set; }
@@ -738,6 +807,7 @@ public sealed class RemoteClient
             ApplyFrame(frameType, payload);
         }
         _client.ReceiveTimeout = 0;
+        _lastPingSentAt = long.MinValue;
     }
 
     public void SendCommands(CommandFrame frame)
@@ -751,12 +821,12 @@ public sealed class RemoteClient
 
     /// <summary>
     /// 输入转发层：以最近快照的回合为基准加提前量填 <see cref="CommandFrame.Turn"/>，
-    /// 再发送指令。服务器只接受当前回合起 +<see cref="InputTiming.MaxLookaheadTurns"/> 内的未来帧，
-    /// 高 RTT 下若仍按快照回合原样提交会落到已过回合被整帧丢弃。
+    /// 再发送指令。提前量默认取实测 RTT 换算值（无新鲜样本时回退
+    /// <see cref="InputTiming.DefaultLookaheadTurns"/>），显式传入则覆盖实测。
     /// </summary>
     public void SubmitCommands(
         System.Collections.Generic.IEnumerable<LockstepCommand> commands,
-        int lookaheadTurns = InputTiming.DefaultLookaheadTurns)
+        int? lookaheadTurns = null)
     {
         SnapshotFrame? latest = State.Latest;
         if (_stream == null || latest == null)
@@ -771,14 +841,19 @@ public sealed class RemoteClient
         SendCommands(new CommandFrame
         {
             Player = ViewerTeam,
-            Turn = InputTiming.PlanTurn(latest.Turn, lookaheadTurns),
+            Turn = InputTiming.PlanTurn(latest.Turn, lookaheadTurns ?? LookaheadTurns),
             Commands = batch.ToArray(),
         });
     }
 
     public bool Poll()
     {
-        if (_stream == null || !_stream.DataAvailable)
+        if (_stream == null)
+        {
+            return false;
+        }
+        SendPingIfDue();
+        if (!_stream.DataAvailable)
         {
             return false;
         }
@@ -789,9 +864,46 @@ public sealed class RemoteClient
         return ApplyFrame(frameType, payload);
     }
 
+    /// <summary>按固定间隔发一条带序号的 ping，并在超时后丢弃未回显的旧序号。</summary>
+    private void SendPingIfDue()
+    {
+        long now = _clock();
+        if (_lastPingSentAt != long.MinValue
+            && now - _lastPingSentAt < RttTracker.PingIntervalMilliseconds)
+        {
+            return;
+        }
+        _lastPingSentAt = now;
+        PrunePendingPings(now);
+        long sequence = _nextPingSequence++;
+        _pendingPings[sequence] = now;
+        NetFraming.WriteFrame(_stream!, NetFrameType.Ping, new PingFrame { Sequence = sequence }.Encode());
+    }
+
+    private void PrunePendingPings(long now)
+    {
+        if (_pendingPings.Count == 0)
+        {
+            return;
+        }
+        var expired = new System.Collections.Generic.List<long>();
+        foreach (System.Collections.Generic.KeyValuePair<long, long> pending in _pendingPings)
+        {
+            if (now - pending.Value > RttTracker.SampleTimeoutMilliseconds)
+            {
+                expired.Add(pending.Key);
+            }
+        }
+        foreach (long sequence in expired)
+        {
+            _pendingPings.Remove(sequence);
+        }
+    }
+
     public void Disconnect()
     {
         _stream = null;
+        _pendingPings.Clear();
         _client.Close();
     }
 
@@ -799,7 +911,20 @@ public sealed class RemoteClient
     {
         if (frameType == NetFrameType.Welcome)
         {
-            ViewerTeam = WelcomeFrame.Decode(payload).ViewerTeam;
+            WelcomeFrame welcome = WelcomeFrame.Decode(payload);
+            ViewerTeam = welcome.ViewerTeam;
+            TicksPerTurn = welcome.TicksPerTurn;
+            TicksPerSecond = welcome.TicksPerSecond;
+            return true;
+        }
+        if (frameType == NetFrameType.Echo)
+        {
+            long sequence = PingFrame.Decode(payload).Sequence;
+            if (_pendingPings.Remove(sequence, out long sentAt))
+            {
+                _rttTracker.Record(_clock() - sentAt);
+                RttSampleCount += 1;
+            }
             return true;
         }
         if (frameType == NetFrameType.StaticMap)

@@ -20,6 +20,7 @@ public static class ServerSelfTest
         CheckConnectionBinding(failures);
         CheckLockstepTurns(failures);
         CheckHighLatencyCommands(failures);
+        CheckRttLookahead(failures);
         CheckLocalServerParity(failures);
         CheckMultiClient(failures);
         CheckDeltaSnapshots(failures);
@@ -353,6 +354,53 @@ public static class ServerSelfTest
         Expect(failures,
             PositionX(sim, unit) != startX || PositionY(sim, unit) != startY,
             "delayed command takes effect within a bounded number of turns");
+    }
+
+    /// <summary>
+    /// RTT 采样链路：客户端定期 ping，服务器经写锁回 echo，客户端据回显算出往返并据此换算提前量；
+    /// 环回延迟接近 0，换算出的提前量应落在窗口内而不是固定默认值。
+    /// </summary>
+    private static void CheckRttLookahead(List<string> failures)
+    {
+        var sim = new GameSim(new NavGrid(16, 16), 950, 2, 6);
+        sim.SpawnUnit(3, 3, 0, 50, 0, 0.0, 0.0, 0.5);
+        sim.SpawnUnit(12, 12, 1, 50, 0, 0.0, 0.0, 0.5);
+        var server = new DedicatedServer(0, sim, 30);
+        var client = new RemoteClient();
+        server.Start();
+        try
+        {
+            client.Connect("127.0.0.1", server.Port);
+            Expect(failures, client.TicksPerTurn == 6 && client.TicksPerSecond == 30,
+                "handshake carries the match pace for lookahead math");
+
+            long deadline = System.Environment.TickCount64 + 3000;
+            while (client.RttSampleCount == 0 && System.Environment.TickCount64 < deadline)
+            {
+                client.Poll();
+                Thread.Sleep(5);
+            }
+            Expect(failures, client.RttSampleCount > 0, "ping is echoed and yields an RTT sample");
+            if (client.RttSampleCount > 0)
+            {
+                int oneWayMilliseconds = (int)System.Math.Round(client.SmoothedRttMilliseconds / 2.0);
+                Expect(failures,
+                    client.LookaheadTurns == InputTiming.LookaheadForLatency(oneWayMilliseconds, 6, 30),
+                    "measured RTT drives the lookahead conversion");
+                Expect(failures,
+                    client.LookaheadTurns >= 1 && client.LookaheadTurns <= InputTiming.MaxLookaheadTurns,
+                    "RTT-derived lookahead stays inside the server window");
+            }
+        }
+        catch (System.Exception error)
+        {
+            failures.Add($"rtt lookahead threw: {error.GetType().Name}: {error.Message}");
+        }
+        finally
+        {
+            client.Disconnect();
+            server.Stop();
+        }
     }
 
     /// <summary>本机直推与经服务器回合边界应用走同一套推进语义，得到相同校验和。</summary>
