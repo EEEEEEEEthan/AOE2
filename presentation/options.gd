@@ -124,8 +124,8 @@ func _build_display_tab() -> Control:
 	var ui_scale_row := _slider_row(grid, "UI 缩放", 80, 150, 10)
 	_ui_scale = ui_scale_row[0]
 	_ui_scale_label = ui_scale_row[1]
-	_color_blind = _option(grid, "色盲配色", SettingsStore.COLOR_BLIND_LABELS)
-	_subtitles = _check(grid, "字幕")
+	_color_blind = _option(grid, "色盲配色（预留）", SettingsStore.COLOR_BLIND_LABELS)
+	_subtitles = _check(grid, "字幕（预留）")
 
 	_window_mode.item_selected.connect(_on_option.bind(SettingsStore.SECTION_DISPLAY, "window_mode"))
 	_resolution.item_selected.connect(_on_option.bind(SettingsStore.SECTION_DISPLAY, "resolution"))

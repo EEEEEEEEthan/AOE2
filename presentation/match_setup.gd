@@ -23,6 +23,10 @@ var _prepared_world: Node = null
 var _network: Node = null
 
 
+func _ready() -> void:
+	config["ai_difficulty"] = _settings_difficulty()
+
+
 func reset_config() -> void:
 	config = {
 		"seed": DEFAULT_SEED,
@@ -30,9 +34,18 @@ func reset_config() -> void:
 		"map_type": ARABIA_MAP_TYPE,
 		"map_name": ARABIA_MAP_NAME,
 		"map_path": "",
-		"ai_difficulty": 1,
+		"ai_difficulty": _settings_difficulty(),
 		"civ_ids": PackedInt32Array([0, 0]),
 	}
+
+
+## 新对局默认难度取自选项里的“默认难度”。选项索引 0/1/2 与 AiDifficulty 的
+## Easy/Normal/Hard 一一对应，直接透传；Settings 缺失时回退普通难度。
+func _settings_difficulty() -> int:
+	var store := get_node_or_null("/root/Settings") as SettingsStore
+	if store == null:
+		return 1
+	return clampi(int(store.value("game", "difficulty")), 0, 2)
 
 
 func has_prepared() -> bool:

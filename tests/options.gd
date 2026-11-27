@@ -15,10 +15,12 @@ func run() -> void:
 	_check_input_map(store)
 	_check_conflict(store)
 	_check_persistence(store)
+	_check_default_difficulty(store)
 	_check_options_scene()
 	store.reset_defaults()
 	store.apply()
 	store.save()
+	MatchSetup.reset_config()
 
 
 func _check_input_map(store: SettingsStore) -> void:
@@ -58,6 +60,17 @@ func _check_persistence(store: SettingsStore) -> void:
 	if events.size() == 1:
 		check_eq(int((events[0] as InputEventKey).physical_keycode), KEY_Q,
 				"InputMap event matches the rebound key")
+
+
+func _check_default_difficulty(store: SettingsStore) -> void:
+	store.set_value(SettingsStore.SECTION_GAME, "difficulty", 2)
+	MatchSetup.reset_config()
+	check_eq(int(MatchSetup.config["ai_difficulty"]), 2,
+			"new match uses the configured default difficulty")
+	store.set_value(SettingsStore.SECTION_GAME, "difficulty", 0)
+	MatchSetup.reset_config()
+	check_eq(int(MatchSetup.config["ai_difficulty"]), 0,
+			"default difficulty follows the settings index")
 
 
 func _check_options_scene() -> void:

@@ -24,10 +24,16 @@ func _ready() -> void:
 	_run_loading.call_deferred()
 
 
+## 加载页提示受选项“提示与教程”控制；当前无独立教程系统，本开关只覆盖这里。
+func _tips_enabled() -> bool:
+	var store := get_node_or_null("/root/Settings") as SettingsStore
+	return store == null or bool(store.value("game", "tips"))
+
+
 func _populate_info() -> void:
 	var config: Dictionary = MatchSetup.config
 	%MapNameLabel.text = "地图：%s" % config.get("map_name", "阿拉伯")
-	%TipLabel.text = TIPS[randi() % TIPS.size()]
+	%TipLabel.text = TIPS[randi() % TIPS.size()] if _tips_enabled() else ""
 	%ErrorLabel.hide()
 	%BackButton.hide()
 	for child in %PlayersList.get_children():
