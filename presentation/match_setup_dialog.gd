@@ -7,12 +7,6 @@ signal confirmed
 signal cancelled
 
 const PLAYER_CHOICES := [2, 3, 4]
-const TEAM_NAMES := {
-	0: "蓝方",
-	1: "红方",
-	2: "绿方",
-	3: "黄方",
-}
 
 var _civ_names: PackedStringArray = PackedStringArray()
 var _selections: PackedInt32Array = PackedInt32Array([0, 0, 0, 0])
@@ -127,7 +121,7 @@ func _rebuild_civ_rows() -> void:
 		var row := HBoxContainer.new()
 		row.add_theme_constant_override("separation", 8)
 		var label := Label.new()
-		label.text = TEAM_NAMES.get(player, "玩家 %d" % player)
+		label.text = PlayerColors.name_of(player)
 		label.custom_minimum_size = Vector2(72, 0)
 		row.add_child(label)
 		var option := OptionButton.new()

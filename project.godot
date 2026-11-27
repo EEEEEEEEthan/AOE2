@@ -29,6 +29,10 @@ project/assembly_name="AOE2Framework"
 
 ignore_warning_pattern=""
 
+[gui]
+
+theme/custom="res://presentation/ui_theme.tres"
+
 [rendering]
 
 renderer/rendering_method="forward_plus"

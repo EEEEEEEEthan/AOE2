@@ -6,14 +6,6 @@ const MATCH_SCENE := "res://presentation/main.tscn"
 const MAIN_MENU_SCENE := "res://presentation/main_menu.tscn"
 const WORLD_VIEW := preload("res://presentation/world_view.gd")
 
-const TEAM_NAMES := {
-	0: "蓝方",
-	1: "红方",
-}
-const TEAM_COLORS := {
-	0: Color(0.28, 0.52, 0.95),
-	1: Color(0.9, 0.3, 0.28),
-}
 const TIPS := [
 	"提示：村民伐木、采果、打猎、采金、采石各有对应的资源点。",
 	"提示：在资源点旁建造伐木场、磨坊或采矿营可以缩短采集往返。",
@@ -46,11 +38,11 @@ func _populate_info() -> void:
 		var row := HBoxContainer.new()
 		var swatch := ColorRect.new()
 		swatch.custom_minimum_size = Vector2(18, 18)
-		swatch.color = TEAM_COLORS.get(team, Color(0.7, 0.7, 0.7))
+		swatch.color = PlayerColors.color_of(team)
 		var label := Label.new()
 		var civ := int(civ_ids[team]) if team < civ_ids.size() else 0
 		var civ_name := civ_names[civ] if civ >= 0 and civ < civ_names.size() else "通用"
-		label.text = "%s　文明：%s" % [TEAM_NAMES.get(team, "玩家 %d" % team), civ_name]
+		label.text = "%s　文明：%s" % [PlayerColors.name_of(team), civ_name]
 		row.add_child(swatch)
 		row.add_child(label)
 		%PlayersList.add_child(row)

@@ -1,4 +1,4 @@
-extends Node3D
+extends Control
 
 const DEDICATED_FEATURE := "dedicated_server"
 const SERVER_ARGUMENT := "--server"
@@ -7,16 +7,6 @@ const DEFAULT_SEED := 20261127
 const DEFAULT_PLAYER_COUNT := 2
 const ARABIA_MAP_TYPE := 0
 const DEFAULT_AI_DIFFICULTY := 1
-const TEAM_NAMES := {
-	0: "蓝方",
-	1: "红方",
-}
-const TEAM_COLORS := [
-	Color(0.32, 0.56, 1.0, 1.0),
-	Color(1.0, 0.42, 0.36, 1.0),
-	Color(0.45, 0.86, 0.45, 1.0),
-	Color(0.95, 0.8, 0.3, 1.0),
-]
 const SCORE_TABLE_HEADERS := ["阵营", "总分", "军事", "经济", "科技", "击杀", "损失", "采集", "存活", "状态"]
 const REASON_NAMES := {
 	-1: "无",
@@ -177,7 +167,7 @@ func _build_score_table() -> void:
 	for player: Dictionary in bridge.PlayerStates():
 		var team: int = player["team"]
 		var cells := [
-			TEAM_NAMES.get(team, "玩家 %d" % team),
+			PlayerColors.name_of(team),
 			str(player["score"]),
 			str(player["score_military"]),
 			str(player["score_economy"]),
@@ -216,7 +206,7 @@ func _build_score_chart() -> void:
 
 
 func _team_color(team: int) -> Color:
-	return TEAM_COLORS[team % TEAM_COLORS.size()]
+	return PlayerColors.color_of(team)
 
 
 func _on_continue_spectating_pressed() -> void:
@@ -254,7 +244,7 @@ func _result_title() -> String:
 	var winner := bridge.MatchWinnerTeam()
 	if winner < 0:
 		return "平局"
-	return "%s 胜利" % TEAM_NAMES.get(winner, "玩家 %d" % winner)
+	return "%s 胜利" % PlayerColors.name_of(winner)
 
 
 func _player_state_text(player: Dictionary) -> String:

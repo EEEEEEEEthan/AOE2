@@ -37,12 +37,6 @@ const RESOURCE_AMOUNT := 300
 # 与 C# ResourceSubtype 对齐：木/食/金/石分别落到树/浆果丛/金矿/石矿。
 const RESOURCE_SUBTYPES := [1, 2, 3, 4]
 
-const TEAM_COLORS := [
-	Color(0.82, 0.22, 0.2),
-	Color(0.2, 0.42, 0.85),
-	Color(0.25, 0.66, 0.3),
-	Color(0.86, 0.7, 0.2),
-]
 const RESOURCE_COLORS := [
 	Color(0.36, 0.24, 0.12),
 	Color(0.25, 0.6, 0.25),
@@ -454,7 +448,7 @@ func _get_placement_material(placement: Dictionary) -> StandardMaterial3D:
 func _placement_color(placement: Dictionary) -> Color:
 	match String(placement["kind"]):
 		MapEditorModel.KIND_SPAWN, MapEditorModel.KIND_UNIT:
-			return TEAM_COLORS[int(placement["team"]) % TEAM_COLORS.size()]
+			return PlayerColors.color_of(int(placement["team"]))
 		MapEditorModel.KIND_RESOURCE:
 			return RESOURCE_COLORS[int(placement["node_type"]) % RESOURCE_COLORS.size()]
 		_:
