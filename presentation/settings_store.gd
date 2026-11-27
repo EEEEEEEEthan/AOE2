@@ -34,6 +34,8 @@ const DIFFICULTY_LABELS := ["简单", "普通", "困难"]
 const GAME_SPEED_LABELS := ["0.5×", "1×", "1.5×", "2×"]
 const GAME_SPEEDS := [0.5, 1.0, 1.5, 2.0]
 
+## color_blind / subtitles 为预留设置位：当前仓库无色盲配色与字幕渲染系统，
+## 仅保留可持久化的值，后续接入时在此处消费。
 const DISPLAY_DEFAULTS := {
 	"window_mode": 0,
 	"resolution": 0,
@@ -44,6 +46,8 @@ const DISPLAY_DEFAULTS := {
 	"subtitles": true,
 }
 const AUDIO_DEFAULTS := {"master": 80, "sfx": 80, "music": 60}
+## difficulty 由 MatchSetup 决定新对局 AI 难度；game_speed 由对局场景初始化
+## time_scale；tips 控制加载页提示。三者消费点见 presentation 下对应脚本。
 const GAME_DEFAULTS := {"difficulty": 1, "game_speed": 1, "tips": true}
 
 const ACTION_DEFINITIONS := [

@@ -420,6 +420,14 @@ func _on_chat_button_pressed() -> void:
 		%ChatInput.grab_focus()
 
 
+## 选项里的“默认游戏速度”决定新对局起始速度：同步下拉项与 time_scale。
+## HUD 内手动切换仍即时生效，不回写设置，避免每局耦合。
+func apply_default_speed(index: int) -> void:
+	var clamped := clampi(index, 0, GAME_SPEEDS.size() - 1)
+	%SpeedOption.select(clamped)
+	Engine.time_scale = GAME_SPEEDS[clamped]
+
+
 func _on_speed_selected(index: int) -> void:
 	Engine.time_scale = GAME_SPEEDS[index]
 	push_notification("游戏速度：%s" % %SpeedOption.get_item_text(index))
