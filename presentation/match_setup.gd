@@ -21,6 +21,7 @@ var config: Dictionary = {
 var _prepared_bridge: Node = null
 var _prepared_world: Node = null
 var _network: Node = null
+var _pending_save_path := ""
 
 
 func _ready() -> void:
@@ -28,6 +29,7 @@ func _ready() -> void:
 
 
 func reset_config() -> void:
+	_pending_save_path = ""
 	config = {
 		"seed": DEFAULT_SEED,
 		"player_count": DEFAULT_PLAYER_COUNT,
@@ -37,6 +39,21 @@ func reset_config() -> void:
 		"ai_difficulty": _settings_difficulty(),
 		"civ_ids": PackedInt32Array([0, 0]),
 	}
+
+
+## 读档入口：记录待加载的对局存档路径，由对局场景在启动时消费。
+func set_pending_save(path: String) -> void:
+	_pending_save_path = path
+
+
+func has_pending_save() -> bool:
+	return not _pending_save_path.is_empty()
+
+
+func take_pending_save() -> String:
+	var path := _pending_save_path
+	_pending_save_path = ""
+	return path
 
 
 ## 新对局默认难度取自选项里的“默认难度”。选项索引 0/1/2 与 AiDifficulty 的

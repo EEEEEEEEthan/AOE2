@@ -6,11 +6,19 @@ signal return_to_menu_requested
 
 const OPTIONS_SCENE := "res://presentation/options.tscn"
 
+var _bridge = null
+
 
 func _ready() -> void:
 	hide()
 	%PauseUnavailableDialog.hide()
+	%SaveDialog.hide()
 	%PauseSurrenderConfirm.hide()
+
+
+## 由对局场景注入当前对局桥接，保存按钮据此写入完整模拟快照。
+func setup(bridge) -> void:
+	_bridge = bridge
 
 
 func _unhandled_input(event: InputEvent) -> void:
@@ -46,7 +54,24 @@ func _on_options_pressed() -> void:
 
 
 func _on_save_pressed() -> void:
-	_show_unavailable("保存功能开发中，敬请期待。")
+	if _bridge == null:
+		_show_unavailable("当前对局无法保存。")
+		return
+	%SaveNameEdit.text = str(_bridge.SuggestedSaveName())
+	%SaveDialog.popup_centered()
+	%SaveNameEdit.grab_focus()
+
+
+func _on_save_confirmed() -> void:
+	if _bridge == null:
+		return
+	var path: String = str(_bridge.SaveMatch(%SaveNameEdit.text))
+	if path.is_empty():
+		_show_unavailable("保存失败：%s" % str(_bridge.LastMatchError))
+		return
+	%PauseUnavailableDialog.title = "保存成功"
+	%PauseUnavailableDialog.dialog_text = "对局已保存，可在主菜单「读取存档」中继续。"
+	%PauseUnavailableDialog.popup_centered()
 
 
 func _on_restart_pressed() -> void:

@@ -55,6 +55,21 @@ public sealed class MatchConfig
     };
 }
 
+/// <summary>对局状态里不落在 ECS 的累计数据：击杀/采集/分数与分数历史，读档时必须一并恢复。</summary>
+public sealed class MatchRuntimeState
+{
+    public long[] Kills = System.Array.Empty<long>();
+    public long[] Losses = System.Array.Empty<long>();
+    public long[] Gathered = System.Array.Empty<long>();
+    public long[] SocietyScore = System.Array.Empty<long>();
+    public long[] EconomyScore = System.Array.Empty<long>();
+    public long[] MilitaryScore = System.Array.Empty<long>();
+    public long[] TechScore = System.Array.Empty<long>();
+    public long HistoryInterval = MatchState.HistoryInitialInterval;
+    public System.Collections.Generic.List<long> HistoryTicks = new();
+    public System.Collections.Generic.List<long[]> HistoryScores = new();
+}
+
 /// <summary>对局状态存放在 ECS 世界内，随全局校验和与存档一起确定性推进。</summary>
 public sealed class MatchState
 {
@@ -132,6 +147,87 @@ public sealed class MatchState
             playerEntities[team] = playerEntity;
         }
         return new MatchState(world, entity, playerEntities, config);
+    }
+
+    /// <summary>
+    /// 读档专用：不新建实体，只在已恢复的 SimWorld 里找回对局实体与各玩家状态实体，
+    /// 重建 MatchState 包装。找不到对局实体时返回 null。
+    /// </summary>
+    public static MatchState? Rebind(SimWorld world, long playerCount, MatchConfig config)
+    {
+        long matchEntity = -1;
+        ComponentStore matchStore = world.Store(SimComponents.Match);
+        ComponentStore playerStore = world.Store(SimComponents.PlayerState);
+        var playerEntities = new long[playerCount];
+        for (long team = 0; team < playerCount; team++)
+        {
+            playerEntities[team] = -1;
+        }
+        foreach (long id in world.Entities())
+        {
+            if (matchEntity < 0 && matchStore.Has(id))
+            {
+                matchEntity = id;
+            }
+            if (playerStore.Has(id))
+            {
+                long team = world.GetValue(id, SimComponents.Team, SimComponents.TeamId);
+                if (team >= 0 && team < playerCount)
+                {
+                    playerEntities[team] = id;
+                }
+            }
+        }
+        if (matchEntity < 0)
+        {
+            return null;
+        }
+        return new MatchState(world, matchEntity, playerEntities, config);
+    }
+
+    /// <summary>导出 ECS 之外的累计数据，供对局存档保存。</summary>
+    public MatchRuntimeState CaptureRuntime() => new()
+    {
+        Kills = (long[])Kills.Clone(),
+        Losses = (long[])Losses.Clone(),
+        Gathered = (long[])Gathered.Clone(),
+        SocietyScore = (long[])SocietyScore.Clone(),
+        EconomyScore = (long[])EconomyScore.Clone(),
+        MilitaryScore = (long[])MilitaryScore.Clone(),
+        TechScore = (long[])TechScore.Clone(),
+        HistoryInterval = HistoryInterval,
+        HistoryTicks = new System.Collections.Generic.List<long>(HistoryTicks),
+        HistoryScores = HistoryScores.ConvertAll(sample => (long[])sample.Clone()),
+    };
+
+    /// <summary>读档时把累计数据复位到存档时点，避免分数从 0 重新累计。</summary>
+    public void RestoreRuntime(MatchRuntimeState state)
+    {
+        CopyInto(state.Kills, Kills);
+        CopyInto(state.Losses, Losses);
+        CopyInto(state.Gathered, Gathered);
+        CopyInto(state.SocietyScore, SocietyScore);
+        CopyInto(state.EconomyScore, EconomyScore);
+        CopyInto(state.MilitaryScore, MilitaryScore);
+        CopyInto(state.TechScore, TechScore);
+        HistoryInterval = state.HistoryInterval;
+        HistoryTicks.Clear();
+        HistoryTicks.AddRange(state.HistoryTicks);
+        HistoryScores.Clear();
+        foreach (long[] sample in state.HistoryScores)
+        {
+            HistoryScores.Add((long[])sample.Clone());
+        }
+    }
+
+    private static void CopyInto(long[] source, long[] target)
+    {
+        int count = System.Math.Min(source.Length, target.Length);
+        System.Array.Copy(source, target, count);
+        for (int index = count; index < target.Length; index++)
+        {
+            target[index] = 0;
+        }
     }
 
     public int PlayerCount => _playerEntities.Length;

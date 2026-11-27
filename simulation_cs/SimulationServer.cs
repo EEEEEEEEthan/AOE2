@@ -8,6 +8,24 @@ public interface ICommandRecorder
     void Record(long turn, LockstepCommand command);
 }
 
+/// <summary>待应用的回合指令：读档时把未消费的锁步队列一起恢复。</summary>
+public sealed class PendingTurnCommands
+{
+    public long Turn;
+    public int Player;
+    public long[] Fields = System.Array.Empty<long>();
+}
+
+/// <summary>服务器可落盘状态：回合内 tick 进度、统计与电脑玩家/待应用指令。</summary>
+public sealed class SimulationServerState
+{
+    public int TurnTicks;
+    public long AcceptedCommands;
+    public long RejectedCommands;
+    public List<ComputerPlayerState> ComputerPlayers = new();
+    public List<PendingTurnCommands> Pending = new();
+}
+
 /// <summary>
 /// 权威服务器：每 tick 推进模拟，按 <see cref="CommandFrame.Turn"/> 收集各玩家输入，在回合边界统一应用。
 /// 玩家身份由连接层绑定，<see cref="CommandFrame.Player"/> 与指令自报的 Player 都不被信任；
@@ -66,6 +84,87 @@ public sealed class SimulationServer
     public SimulationServer(GameSim sim)
     {
         Sim = sim;
+    }
+
+    /// <summary>导出 ECS 之外的服务器状态：回合内 tick 进度、电脑玩家控制器与未消费的锁步队列。</summary>
+    public SimulationServerState CaptureState()
+    {
+        lock (_gate)
+        {
+            var state = new SimulationServerState
+            {
+                TurnTicks = _turnTicks,
+                AcceptedCommands = _acceptedCommands,
+                RejectedCommands = _rejectedCommands,
+            };
+            foreach (ComputerPlayer player in _computerPlayers)
+            {
+                state.ComputerPlayers.Add(player.CaptureState());
+            }
+            var turns = new List<long>(_turns.Keys);
+            turns.Sort();
+            foreach (long turn in turns)
+            {
+                List<LockstepCommand>[] slots = _turns[turn];
+                for (int player = 0; player < slots.Length; player++)
+                {
+                    foreach (LockstepCommand command in slots[player])
+                    {
+                        state.Pending.Add(new PendingTurnCommands
+                        {
+                            Turn = turn,
+                            Player = player,
+                            Fields = command.ToArray(),
+                        });
+                    }
+                }
+            }
+            return state;
+        }
+    }
+
+    /// <summary>
+    /// 读档时恢复服务器状态；缺失的电脑玩家按存档里的队伍与难度补建，
+    /// starts/seed 用于重建 AI 的敌方锚点与随机流派生。必须在挂载电脑玩家后调用。
+    /// </summary>
+    public void RestoreState(
+        SimulationServerState state, IReadOnlyList<PlayerStart>? starts = null, long seed = 1)
+    {
+        lock (_gate)
+        {
+            _turnTicks = state.TurnTicks;
+            _acceptedCommands = state.AcceptedCommands;
+            _rejectedCommands = state.RejectedCommands;
+            foreach (ComputerPlayerState saved in state.ComputerPlayers)
+            {
+                ComputerPlayer? player = null;
+                foreach (ComputerPlayer existing in _computerPlayers)
+                {
+                    if (existing.Team == saved.Team)
+                    {
+                        player = existing;
+                        break;
+                    }
+                }
+                if (player == null)
+                {
+                    player = new ComputerPlayer(
+                        Sim, saved.Team, (AiDifficulty)saved.Difficulty, starts, seed);
+                    AddComputerPlayer(player);
+                }
+                player.RestoreState(saved);
+            }
+            foreach (PendingTurnCommands pending in state.Pending)
+            {
+                if (pending.Player < 0 || pending.Player >= Sim.Lockstep.PlayerCount
+                    || pending.Fields.Length != LockstepCommand.FieldCount)
+                {
+                    continue;
+                }
+                SlotsFor(pending.Turn)[pending.Player]
+                    .Add(LockstepCommand.FromArray(pending.Fields));
+            }
+        }
     }
 
     /// <summary>挂载电脑玩家；同队已存在则忽略，按队伍升序在回合边界依次决策。</summary>

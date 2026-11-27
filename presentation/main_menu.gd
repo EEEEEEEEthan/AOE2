@@ -4,6 +4,7 @@ const LOADING_SCENE := "res://presentation/loading.tscn"
 const MATCH_SCENE := "res://presentation/main.tscn"
 const MAP_EDITOR_SCENE := "res://tools/map_editor.tscn"
 const REPLAY_SCENE := "res://presentation/replay.tscn"
+const LOAD_GAME_SCENE := "res://presentation/load_game.tscn"
 const LOBBY_SCENE := "res://presentation/lobby.tscn"
 const OPTIONS_SCENE := "res://presentation/options.tscn"
 const MATCH_SETUP_SCENE := "res://presentation/match_setup_dialog.tscn"
@@ -53,6 +54,10 @@ func _on_custom_map_selected(path: String) -> void:
 
 func _on_replay_pressed() -> void:
 	get_tree().change_scene_to_file(REPLAY_SCENE)
+
+
+func _on_load_game_pressed() -> void:
+	get_tree().change_scene_to_file(LOAD_GAME_SCENE)
 
 
 func _on_multiplayer_pressed() -> void:

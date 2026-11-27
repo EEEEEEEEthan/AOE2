@@ -81,6 +81,18 @@ public sealed class VisionGrid
         }
     }
 
+    /// <summary>读档专用：按存档里的可视状态位图恢复可见层与已探索层。</summary>
+    public void LoadStates(byte[] states)
+    {
+        int count = System.Math.Min(states.Length, _visible.Length);
+        for (int cell = 0; cell < count; cell++)
+        {
+            byte state = states[cell];
+            _visible[cell] = state == StateVisible ? (byte)1 : (byte)0;
+            _explored[cell] = state != StateUnexplored ? (byte)1 : (byte)0;
+        }
+    }
+
     public byte[] States()
     {
         var states = new byte[Width * Height];

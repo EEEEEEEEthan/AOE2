@@ -40,9 +40,24 @@ func _ready() -> void:
 	if MatchSetup.has_prepared():
 		_adopt_prepared_match()
 		return
+	if MatchSetup.has_pending_save():
+		_load_pending_save()
+		%WorldView.build_terrain(bridge)
+		_finish_setup()
+		return
 	_start_session()
 	%WorldView.build_terrain(bridge)
 	_finish_setup()
+
+
+## 主菜单「读取存档」：桥接恢复对局后直接进入，不推进模拟。
+func _load_pending_save() -> void:
+	var path := MatchSetup.take_pending_save()
+	if bridge.LoadMatch(path):
+		return
+	%UnavailableDialog.dialog_text = "读取存档失败：%s" % bridge.LastMatchError
+	%UnavailableDialog.popup_centered()
+	_start_session()
 
 
 ## 大厅已连上服务器，本机只消费快照渲染与转发指令。
@@ -73,6 +88,7 @@ func _finish_setup() -> void:
 	_apply_default_speed()
 	%WorldView.refresh(bridge)
 	%BattleController.setup(bridge)
+	%PauseMenu.setup(bridge)
 	_last_tick = bridge.ClientTick()
 
 
@@ -116,7 +132,8 @@ func _refresh_result() -> void:
 		_result_hidden = false
 		_set_play_hud_visible(true)
 		return
-	if not bridge.IsReplay:
+	%SaveReplayButton.visible = bridge.CanSaveReplay
+	if not bridge.IsReplay and bridge.CanSaveReplay:
 		var saved: String = str(bridge.SaveReplayIfNeeded())
 		if not saved.is_empty() and %SaveReplayButton.text != "本局录像已保存":
 			%SaveReplayButton.text = "本局录像已保存"

@@ -11,6 +11,19 @@ public enum AiDifficulty
     Hard = 2,
 }
 
+/// <summary>电脑玩家可落盘状态：随机流、决策回合与进攻目标等 ECS 之外的控制器字段。</summary>
+public sealed class ComputerPlayerState
+{
+    public long Team;
+    public int Difficulty;
+    public long RngState;
+    public long LastDecisionTurn;
+    public int MilitaryTrained;
+    public bool Attacking;
+    public int TargetX = -1;
+    public int TargetY = -1;
+}
+
 /// <summary>
 /// 服务器权威的电脑玩家：每个决策回合读取模拟状态（敌方目标须本队视野可见），
 /// 产出交给 <see cref="SimulationServer"/> 做归属校验后进入锁步队列的指令。
@@ -124,6 +137,34 @@ public sealed class ComputerPlayer
         }
         _enemyStartX = enemyStartX.ToArray();
         _enemyStartY = enemyStartY.ToArray();
+    }
+
+    /// <summary>导出控制器状态，供对局存档保存随机流与决策进度。</summary>
+    public ComputerPlayerState CaptureState() => new()
+    {
+        Team = Team,
+        Difficulty = (int)Difficulty,
+        RngState = _rng.State,
+        LastDecisionTurn = _lastDecisionTurn,
+        MilitaryTrained = _militaryTrained,
+        Attacking = _attacking,
+        TargetX = _targetX,
+        TargetY = _targetY,
+    };
+
+    /// <summary>读档时把控制器状态复位到存档时点，避免 AI 重放已做过的决策。</summary>
+    public void RestoreState(ComputerPlayerState state)
+    {
+        if (state.Team != Team || state.Difficulty != (int)Difficulty)
+        {
+            return;
+        }
+        _rng.State = state.RngState;
+        _lastDecisionTurn = state.LastDecisionTurn;
+        _militaryTrained = state.MilitaryTrained;
+        _attacking = state.Attacking;
+        _targetX = state.TargetX;
+        _targetY = state.TargetY;
     }
 
     /// <summary>本决策回合要提交的指令；空列表表示本回合不行动。</summary>

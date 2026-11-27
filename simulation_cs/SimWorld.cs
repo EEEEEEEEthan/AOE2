@@ -52,6 +52,24 @@ public sealed class SimWorld
         return id;
     }
 
+    /// <summary>
+    /// 读档专用：把指定 id 直接标记为存活，不递增 <see cref="NextEntity"/>，
+    /// 保证恢复后实体 id 分配与原局一致。只应由存档恢复路径调用。
+    /// </summary>
+    public void RestoreAlive(long id)
+    {
+        if (id < 0)
+        {
+            return;
+        }
+        while (_alive.Count <= id)
+        {
+            _alive.Add(false);
+        }
+        _alive[(int)id] = true;
+        _cacheDirty = true;
+    }
+
     public void Despawn(long id)
     {
         if (!IsAlive(id))

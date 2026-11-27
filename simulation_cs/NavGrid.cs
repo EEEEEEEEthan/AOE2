@@ -96,6 +96,27 @@ public sealed class NavGrid
 
     public void ClearBlocked() => System.Array.Fill(Blocked, (byte)0);
 
+    /// <summary>
+    /// 读档专用：一次性覆盖地形阻塞、建筑占地与城门可通行三层。
+    /// 地图存档只带地形阻塞，对局存档需要三层全部还原才能复现寻路。
+    /// </summary>
+    public void LoadLayers(byte[] blocked, byte[] buildingBlocked, byte[] structurePassable)
+    {
+        int cells = Width * Height;
+        if (blocked.Length == cells)
+        {
+            blocked.CopyTo(Blocked, 0);
+        }
+        if (buildingBlocked.Length == cells)
+        {
+            buildingBlocked.CopyTo(BuildingBlocked, 0);
+        }
+        if (structurePassable.Length == cells)
+        {
+            structurePassable.CopyTo(StructurePassable, 0);
+        }
+    }
+
     public NavGrid Clone()
     {
         var other = new NavGrid(Width, Height);
