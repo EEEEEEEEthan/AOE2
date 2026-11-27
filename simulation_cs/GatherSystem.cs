@@ -171,6 +171,38 @@ public static class GatherSystem
         return NearestDropSite(world, team, resourceKind, x, y);
     }
 
+    public static void IssueGather(SimWorld world, long villager, long node, long drop)
+    {
+        if (!world.IsAlive(villager) || !world.HasComponent(villager, SimComponents.Gather))
+        {
+            return;
+        }
+        if (drop < 0)
+        {
+            drop = ResolveNearestDropSite(world, villager, node);
+        }
+        world.Detach(villager, SimComponents.Repair);
+        world.SetValue(villager, SimComponents.Gather, SimComponents.GatherState, GatherStateGathering);
+        world.SetValue(villager, SimComponents.Gather, SimComponents.NodeEntity, node);
+        world.SetValue(villager, SimComponents.Gather, SimComponents.DropEntity, drop);
+        world.SetValue(villager, SimComponents.Gather, SimComponents.CarryAmount, 0);
+        world.SetValue(villager, SimComponents.Gather, SimComponents.Progress, 0);
+    }
+
+    /// <summary>未指定投放点时，按目标资源种类在己方已完工投放建筑中就近选取。</summary>
+    private static long ResolveNearestDropSite(SimWorld world, long villager, long node)
+    {
+        if (!world.HasComponent(node, SimComponents.ResourceNode))
+        {
+            return -1;
+        }
+        long resourceKind = world.GetValue(node, SimComponents.ResourceNode, SimComponents.NodeType);
+        long team = world.GetValue(villager, SimComponents.Team, SimComponents.TeamId);
+        long x = Fixed.ToInt(world.GetValue(villager, SimComponents.Position, SimComponents.X));
+        long y = Fixed.ToInt(world.GetValue(villager, SimComponents.Position, SimComponents.Y));
+        return NearestDropSite(world, team, resourceKind, x, y);
+    }
+
     /// <summary>
     /// 在己方已完工、且接收该资源的建筑中就近选点：按 footprint 最近格曼哈顿距离，
     /// 平手取实体 id 较小者，保证确定性与跨端一致。

@@ -165,6 +165,90 @@ public static class MonkSystem
         Stop(world, id);
     }
 
+    public static void IssueHeal(SimWorld world, long monk, long target)
+    {
+        if (!world.IsAlive(monk) || !world.HasComponent(monk, SimComponents.Monk))
+        {
+            return;
+        }
+        if (monk == target || !world.IsAlive(target) || !world.HasComponent(target, SimComponents.Health))
+        {
+            return;
+        }
+        if (world.GetValue(target, SimComponents.Team, SimComponents.TeamId)
+            != world.GetValue(monk, SimComponents.Team, SimComponents.TeamId))
+        {
+            return;
+        }
+        SetTarget(world, monk, StateHealing, target);
+    }
+
+    public static void IssueConvert(SimWorld world, long monk, long target)
+    {
+        if (!world.IsAlive(monk) || !world.HasComponent(monk, SimComponents.Monk))
+        {
+            return;
+        }
+        if (monk == target || !world.IsAlive(target) || !world.HasComponent(target, SimComponents.Health))
+        {
+            return;
+        }
+        if (world.GetValue(target, SimComponents.Team, SimComponents.TeamId)
+            == world.GetValue(monk, SimComponents.Team, SimComponents.TeamId))
+        {
+            return;
+        }
+        SetTarget(world, monk, StateConverting, target);
+    }
+
+    public static void IssuePickupRelic(SimWorld world, long monk, long relic)
+    {
+        if (!world.IsAlive(monk) || !world.HasComponent(monk, SimComponents.Monk))
+        {
+            return;
+        }
+        if (!world.IsAlive(relic) || !world.HasComponent(relic, SimComponents.Relic))
+        {
+            return;
+        }
+        if (world.GetValue(relic, SimComponents.Relic, SimComponents.Carrier) >= 0
+            || world.GetValue(relic, SimComponents.Relic, SimComponents.StoredIn) >= 0)
+        {
+            return;
+        }
+        SetTarget(world, monk, StateSeekRelic, relic);
+    }
+
+    public static void IssueDepositRelic(SimWorld world, long monk, long slot)
+    {
+        if (!world.IsAlive(monk) || !world.HasComponent(monk, SimComponents.Monk))
+        {
+            return;
+        }
+        if (!world.IsAlive(slot) || !world.HasComponent(slot, SimComponents.RelicSlot))
+        {
+            return;
+        }
+        if (CarriedRelic(world, monk) < 0)
+        {
+            return;
+        }
+        SetTarget(world, monk, StateSeekDeposit, slot);
+    }
+
+    private static void SetTarget(SimWorld world, long monk, long state, long target)
+    {
+        if (world.HasComponent(monk, SimComponents.Move))
+        {
+            world.SetValue(monk, SimComponents.Move, SimComponents.Active, 0);
+            world.SetValue(monk, SimComponents.Velocity, SimComponents.X, 0);
+            world.SetValue(monk, SimComponents.Velocity, SimComponents.Y, 0);
+        }
+        world.SetValue(monk, SimComponents.Monk, SimComponents.State, state);
+        world.SetValue(monk, SimComponents.Monk, SimComponents.TargetEntity, target);
+        world.SetValue(monk, SimComponents.Monk, SimComponents.ConvertProgress, 0);
+    }
+
     public static long CarriedRelic(SimWorld world, long monk)
     {
         ComponentStore relicStore = world.Store(SimComponents.Relic);

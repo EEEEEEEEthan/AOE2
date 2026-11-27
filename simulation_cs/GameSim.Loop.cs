@@ -124,7 +124,7 @@ public sealed partial class GameSim
 
     public void InvalidateFields() => _fieldCache.Invalidate();
 
-    private void InvalidateFieldsForBlockedRect(int originX, int originY, int width, int height) =>
+    internal void InvalidateFieldsForBlockedRect(int originX, int originY, int width, int height) =>
         _fieldCache.InvalidateForBlockedRect(originX, originY, width, height);
 
     private FlowField FieldProvider(int targetX, int targetY, long domain) =>
