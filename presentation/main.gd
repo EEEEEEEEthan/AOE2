@@ -130,7 +130,7 @@ func _refresh_result() -> void:
 
 ## 结算期间隐藏会误操作的建造/生产 HUD；对局仍在进行时恢复。
 func _set_play_hud_visible(visible_state: bool) -> void:
-	get_node("Hud/CommandPanel").visible = visible_state
+	get_node("Hud/CommandPanel").visible = visible_state and not %MarketPanel.visible
 	get_node("Hud/MenuBar").visible = visible_state
 	if not visible_state:
 		%MarketPanel.hide()

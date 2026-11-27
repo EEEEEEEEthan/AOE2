@@ -415,8 +415,11 @@ func _on_chat_send_pressed() -> void:
 
 
 func _on_chat_button_pressed() -> void:
-	%ChatPanel.visible = not %ChatPanel.visible
-	if %ChatPanel.visible:
+	var chat: PanelContainer = %ChatPanel
+	var open := not chat.visible
+	chat.visible = open
+	(%SelectionPanel as PanelContainer).visible = not open
+	if open:
 		%ChatInput.grab_focus()
 
 

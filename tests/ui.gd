@@ -11,6 +11,7 @@ func run() -> void:
 	_groups_keep_their_own_copy()
 	_world_view_draws_selection_rings()
 	_hud_periphery_frameworks()
+	_hud_band_keeps_panels_inside()
 
 
 func _selection_deduplicates_and_prunes() -> void:
@@ -104,4 +105,34 @@ func _hud_periphery_frameworks() -> void:
 	var assignments: Dictionary = controller.selection.group_assignments()
 	check_eq(assignments.size(), 2, "group assignments map every member")
 	check_eq(int(assignments[11]), 2, "group assignments keep the control group number")
+	scene.queue_free()
+
+
+## 底部 25% 是唯一的常驻 HUD 带：主面板默认/展开态都必须落在带内。
+func _hud_band_keeps_panels_inside() -> void:
+	var scene := MAIN_SCENE.instantiate()
+	add_child(scene)
+	var chat: Control = scene.get_node("Hud/ChatPanel")
+	var market: Control = scene.get_node("Hud/MarketPanel")
+	check_true(not chat.visible, "chat panel starts collapsed")
+	check_true(not market.visible, "market panel starts collapsed")
+	chat.show()
+	market.show()
+	var panel_names := ["MinimapPanel", "SelectionPanel", "CommandPanel", "ChatPanel", "MarketPanel"]
+	for resolution: Vector2 in [Vector2(1920, 1080), Vector2(1600, 900), Vector2(1280, 720)]:
+		var band_top := resolution.y * 0.75
+		for panel_name: String in panel_names:
+			var panel: Control = scene.get_node("Hud/%s" % panel_name)
+			var top := panel.anchor_top * resolution.y + panel.offset_top
+			var bottom := panel.anchor_bottom * resolution.y + panel.offset_bottom
+			var left := panel.anchor_left * resolution.x + panel.offset_left
+			var right := panel.anchor_right * resolution.x + panel.offset_right
+			check_true(top >= band_top - 0.5,
+				"%s stays below the band top at %dx%d" % [panel_name, int(resolution.x), int(resolution.y)])
+			check_true(bottom <= resolution.y + 0.5,
+				"%s stays inside the viewport at %dx%d" % [panel_name, int(resolution.x), int(resolution.y)])
+			check_true(bottom > top and right > left,
+				"%s keeps a positive rect at %dx%d" % [panel_name, int(resolution.x), int(resolution.y)])
+			check_true(left >= 0.0 and right <= resolution.x + 0.5,
+				"%s stays inside the viewport width at %dx%d" % [panel_name, int(resolution.x), int(resolution.y)])
 	scene.queue_free()
