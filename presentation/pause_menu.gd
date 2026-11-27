@@ -10,10 +10,13 @@ const OPTIONS_SCENE := "res://presentation/options.tscn"
 func _ready() -> void:
 	hide()
 	%PauseUnavailableDialog.hide()
+	%PauseSurrenderConfirm.hide()
 
 
 func _unhandled_input(event: InputEvent) -> void:
 	if not get_tree().paused or not visible:
+		return
+	if %PauseSurrenderConfirm.visible:
 		return
 	if not event is InputEventKey:
 		return
@@ -51,6 +54,10 @@ func _on_restart_pressed() -> void:
 
 
 func _on_surrender_pressed() -> void:
+	%PauseSurrenderConfirm.popup_centered()
+
+
+func _on_surrender_confirmed() -> void:
 	close()
 	surrender_requested.emit()
 

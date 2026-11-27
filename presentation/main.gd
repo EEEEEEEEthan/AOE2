@@ -41,7 +41,6 @@ func _ready() -> void:
 	%ResultPanel.hide()
 	%ReopenButton.hide()
 	if _is_dedicated():
-		%SurrenderButton.hide()
 		%TechTreeButton.hide()
 		bridge.StartDedicatedServer(_server_port())
 		return
@@ -112,7 +111,6 @@ func _refresh_result() -> void:
 	if not bridge.MatchEnded():
 		%ResultPanel.hide()
 		%ReopenButton.hide()
-		%SurrenderButton.show()
 		_result_built_tick = -1
 		_result_hidden = false
 		_set_play_hud_visible(true)
@@ -121,7 +119,6 @@ func _refresh_result() -> void:
 		var saved: String = str(bridge.SaveReplayIfNeeded())
 		if not saved.is_empty() and %SaveReplayButton.text != "本局录像已保存":
 			%SaveReplayButton.text = "本局录像已保存"
-	%SurrenderButton.hide()
 	if _result_built_tick != bridge.MatchEndTick():
 		_result_built_tick = bridge.MatchEndTick()
 		_result_hidden = false
@@ -267,13 +264,11 @@ func _player_state_text(player: Dictionary) -> String:
 
 
 func _on_tech_tree_pressed() -> void:
-	%SurrenderButton.hide()
 	%TechTreeButton.hide()
 	%TechTree.open(bridge)
 
 
 func _on_tech_tree_closed() -> void:
-	%SurrenderButton.show()
 	%TechTreeButton.show()
 
 

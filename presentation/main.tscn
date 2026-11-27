@@ -929,6 +929,13 @@ unique_name_in_owner = true
 title = "开发中"
 dialog_text = "该功能正在开发中，敬请期待。"
 
+[node name="PauseSurrenderConfirm" type="ConfirmationDialog" parent="Hud/PauseMenu"]
+unique_name_in_owner = true
+title = "投降确认"
+dialog_text = "确定投降吗？"
+ok_button_text = "确定"
+cancel_button_text = "取消"
+
 [node name="UnavailableDialog" type="AcceptDialog" parent="Hud"]
 unique_name_in_owner = true
 title = "开发中"
@@ -993,6 +1000,7 @@ unique_name_in_owner = true
 [connection signal="pressed" from="Hud/PauseMenu/Center/PausePanel/Margin/Content/RestartButton" to="Hud/PauseMenu" method="_on_restart_pressed"]
 [connection signal="pressed" from="Hud/PauseMenu/Center/PausePanel/Margin/Content/PauseOptionsButton" to="Hud/PauseMenu" method="_on_options_pressed"]
 [connection signal="pressed" from="Hud/PauseMenu/Center/PausePanel/Margin/Content/SurrenderButton" to="Hud/PauseMenu" method="_on_surrender_pressed"]
+[connection signal="confirmed" from="Hud/PauseMenu/PauseSurrenderConfirm" to="Hud/PauseMenu" method="_on_surrender_confirmed"]
 [connection signal="pressed" from="Hud/PauseMenu/Center/PausePanel/Margin/Content/PauseExitButton" to="Hud/PauseMenu" method="_on_exit_pressed"]
 [connection signal="surrender_requested" from="Hud/PauseMenu" to="." method="_on_surrender_pressed"]
 [connection signal="return_to_menu_requested" from="Hud/PauseMenu" to="." method="_on_return_to_menu_pressed"]
