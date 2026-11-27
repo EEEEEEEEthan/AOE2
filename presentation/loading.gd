@@ -6,14 +6,6 @@ const MATCH_SCENE := "res://presentation/main.tscn"
 const MAIN_MENU_SCENE := "res://presentation/main_menu.tscn"
 const WORLD_VIEW := preload("res://presentation/world_view.gd")
 
-const TEAM_NAMES := {
-	0: "蓝方",
-	1: "红方",
-}
-const TEAM_COLORS := {
-	0: Color(0.28, 0.52, 0.95),
-	1: Color(0.9, 0.3, 0.28),
-}
 const TIPS := [
 	"提示：村民伐木、采果、打猎、采金、采石各有对应的资源点。",
 	"提示：在资源点旁建造伐木场、磨坊或采矿营可以缩短采集往返。",
@@ -40,24 +32,29 @@ func _populate_info() -> void:
 	%BackButton.hide()
 	for child in %PlayersList.get_children():
 		child.queue_free()
-	var civilization := _civilization_name()
+	var civ_names := _civilization_names()
+	var civ_ids: PackedInt32Array = config.get("civ_ids", PackedInt32Array())
 	for team in int(config.get("player_count", 2)):
 		var row := HBoxContainer.new()
 		var swatch := ColorRect.new()
 		swatch.custom_minimum_size = Vector2(18, 18)
-		swatch.color = TEAM_COLORS.get(team, Color(0.7, 0.7, 0.7))
+		swatch.color = PlayerColors.color_of(team)
 		var label := Label.new()
-		label.text = "%s　文明：%s" % [TEAM_NAMES.get(team, "玩家 %d" % team), civilization]
+		var civ := int(civ_ids[team]) if team < civ_ids.size() else 0
+		var civ_name := civ_names[civ] if civ >= 0 and civ < civ_names.size() else "通用"
+		label.text = "%s　文明：%s" % [PlayerColors.name_of(team), civ_name]
 		row.add_child(swatch)
 		row.add_child(label)
 		%PlayersList.add_child(row)
 
 
-func _civilization_name() -> String:
+func _civilization_names() -> PackedStringArray:
+	var names := PackedStringArray()
 	var probe := GameBridge.new()
-	var name := probe.CivilizationName(0)
+	for civ in probe.CivilizationCount:
+		names.append(probe.CivilizationName(civ))
 	probe.free()
-	return name
+	return names
 
 
 func _run_loading() -> void:
@@ -69,15 +66,16 @@ func _run_loading() -> void:
 	_bridge = GameBridge.new()
 	add_child(_bridge)
 	var map_path := String(config.get("map_path", ""))
+	var civ_ids: PackedInt32Array = config.get("civ_ids", PackedInt32Array())
 	if map_path.is_empty():
 		_bridge.StartGeneratedMatch(
 			int(config.get("seed", MatchSetup.DEFAULT_SEED)),
 			int(config.get("player_count", MatchSetup.DEFAULT_PLAYER_COUNT)),
 			int(config.get("map_type", MatchSetup.ARABIA_MAP_TYPE)),
 			int(config.get("ai_difficulty", 1)),
-			PackedInt32Array())
+			civ_ids)
 	else:
-		_bridge.StartFromMap(map_path, int(config.get("ai_difficulty", 1)), PackedInt32Array())
+		_bridge.StartFromMap(map_path, int(config.get("ai_difficulty", 1)), civ_ids)
 
 	if not _bridge.HasSession or _bridge.TerrainWidth <= 0 or _bridge.TerrainHeight <= 0:
 		_fail("生成地图失败：%s" % _map_error_text())

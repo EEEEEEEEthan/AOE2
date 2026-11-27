@@ -51,6 +51,7 @@ public sealed class MatchSaveData
     public byte[] NavBuildingBlocked = System.Array.Empty<byte>();
     public byte[] NavStructurePassable = System.Array.Empty<byte>();
     public SimulationServerState? ServerState;
+    public MatchRuntimeState? MatchRuntime;
     public List<byte[]> VisionStates = new();
     public List<long> AliveIds = new();
     public List<ComponentRecord> Components = new();
@@ -85,6 +86,7 @@ public sealed class MatchSaveData
         WriteBytes(writer, NavBuildingBlocked);
         WriteBytes(writer, NavStructurePassable);
         WriteServerState(writer, ServerState);
+        WriteMatchRuntime(writer, MatchRuntime);
         writer.Write(VisionStates.Count);
         foreach (byte[] states in VisionStates)
         {
@@ -132,6 +134,7 @@ public sealed class MatchSaveData
         data.NavBuildingBlocked = ReadBytes(reader);
         data.NavStructurePassable = ReadBytes(reader);
         data.ServerState = ReadServerState(reader);
+        data.MatchRuntime = ReadMatchRuntime(reader);
         int visionCount = reader.ReadInt32();
         if (visionCount < 0 || visionCount > 64)
         {
@@ -333,6 +336,95 @@ public sealed class MatchSaveData
         return state;
     }
 
+    private static void WriteMatchRuntime(BinaryWriter writer, MatchRuntimeState? state)
+    {
+        writer.Write(state != null);
+        if (state == null)
+        {
+            return;
+        }
+        WriteLongs(writer, state.Kills);
+        WriteLongs(writer, state.Losses);
+        WriteLongs(writer, state.Gathered);
+        WriteLongs(writer, state.SocietyScore);
+        WriteLongs(writer, state.EconomyScore);
+        WriteLongs(writer, state.MilitaryScore);
+        WriteLongs(writer, state.TechScore);
+        writer.Write(state.HistoryInterval);
+        writer.Write(state.HistoryTicks.Count);
+        foreach (long tick in state.HistoryTicks)
+        {
+            writer.Write(tick);
+        }
+        writer.Write(state.HistoryScores.Count);
+        foreach (long[] sample in state.HistoryScores)
+        {
+            WriteLongs(writer, sample);
+        }
+    }
+
+    private static MatchRuntimeState? ReadMatchRuntime(BinaryReader reader)
+    {
+        if (!reader.ReadBoolean())
+        {
+            return null;
+        }
+        var state = new MatchRuntimeState
+        {
+            Kills = ReadLongs(reader),
+            Losses = ReadLongs(reader),
+            Gathered = ReadLongs(reader),
+            SocietyScore = ReadLongs(reader),
+            EconomyScore = ReadLongs(reader),
+            MilitaryScore = ReadLongs(reader),
+            TechScore = ReadLongs(reader),
+            HistoryInterval = reader.ReadInt64(),
+        };
+        int tickCount = reader.ReadInt32();
+        if (tickCount < 0)
+        {
+            throw new InvalidDataException("存档分数历史数量非法");
+        }
+        for (int index = 0; index < tickCount; index++)
+        {
+            state.HistoryTicks.Add(reader.ReadInt64());
+        }
+        int sampleCount = reader.ReadInt32();
+        if (sampleCount < 0)
+        {
+            throw new InvalidDataException("存档分数样本数量非法");
+        }
+        for (int index = 0; index < sampleCount; index++)
+        {
+            state.HistoryScores.Add(ReadLongs(reader));
+        }
+        return state;
+    }
+
+    private static void WriteLongs(BinaryWriter writer, long[] values)
+    {
+        writer.Write(values.Length);
+        foreach (long value in values)
+        {
+            writer.Write(value);
+        }
+    }
+
+    private static long[] ReadLongs(BinaryReader reader)
+    {
+        int length = reader.ReadInt32();
+        if (length < 0)
+        {
+            throw new InvalidDataException("存档数组长度非法");
+        }
+        var values = new long[length];
+        for (int index = 0; index < length; index++)
+        {
+            values[index] = reader.ReadInt64();
+        }
+        return values;
+    }
+
     private static void WriteBytes(BinaryWriter writer, byte[] values)
     {
         writer.Write(values.Length);
@@ -423,6 +515,7 @@ public sealed class MatchSaveData
             SavedTick = world.Tick,
             SavedChecksum = world.Checksum(),
             ServerState = serverState,
+            MatchRuntime = sim.Match?.CaptureRuntime(),
             Tick = world.Tick,
             NextEntity = world.NextEntity,
             RngState = world.Rng.State,
@@ -530,6 +623,10 @@ public sealed class MatchSaveData
         if (HasMatch)
         {
             sim.Match = MatchState.Rebind(world, PlayerCount, Config);
+            if (sim.Match != null && MatchRuntime != null)
+            {
+                sim.Match.RestoreRuntime(MatchRuntime);
+            }
         }
         for (int player = 0; player < sim.Vision.Count && player < VisionStates.Count; player++)
         {

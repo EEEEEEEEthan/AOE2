@@ -108,7 +108,8 @@ public partial class GameBridge : Node
         _session = session;
         _accumulator = 0.0;
         ResetBatchCache();
-        _recorder = new AoeSim.ReplayRecorder(map, seed, playerCount, sim.Lockstep.TicksPerTurn, sim.Match!.Config);
+        _recorder = new AoeSim.ReplayRecorder(
+            map, seed, playerCount, sim.Lockstep.TicksPerTurn, sim.Match!.Config, civIds);
         session.Server.Recorder = _recorder;
         if (aiDifficulty >= 0)
         {
@@ -166,7 +167,7 @@ public partial class GameBridge : Node
         _accumulator = 0.0;
         ResetBatchCache();
         _recorder = new AoeSim.ReplayRecorder(
-            map, map.Seed, playerCount, sim.Lockstep.TicksPerTurn, sim.Match!.Config);
+            map, map.Seed, playerCount, sim.Lockstep.TicksPerTurn, sim.Match!.Config, civIds);
         session.Server.Recorder = _recorder;
         if (aiDifficulty >= 0)
         {
@@ -886,6 +887,37 @@ public partial class GameBridge : Node
                 { "market_stone", player.MarketStone },
                 { "population_used", player.PopulationUsed },
                 { "population_cap", player.PopulationCap },
+                { "kills", player.Kills },
+                { "losses", player.Losses },
+                { "gathered", player.Gathered },
+                { "score_military", player.ScoreMilitary },
+                { "score_economy", player.ScoreEconomy },
+                { "score_tech", player.ScoreTech },
+            });
+        }
+        return result;
+    }
+
+    /// <summary>分数曲线：由服务器按固定间隔采样，随快照下发；每项为 {tick, scores:[逐队总分]}。</summary>
+    public Godot.Collections.Array<Godot.Collections.Dictionary> ScoreTimeline()
+    {
+        var result = new Godot.Collections.Array<Godot.Collections.Dictionary>();
+        AoeSim.SnapshotFrame? frame = ClientState?.Latest;
+        if (frame == null || !frame.HasHistory)
+        {
+            return result;
+        }
+        for (int index = 0; index < frame.HistoryTicks.Length; index++)
+        {
+            var scores = new Godot.Collections.Array<long>();
+            foreach (long score in frame.HistoryScores[index])
+            {
+                scores.Add(score);
+            }
+            result.Add(new Godot.Collections.Dictionary
+            {
+                { "tick", frame.HistoryTicks[index] },
+                { "scores", scores },
             });
         }
         return result;
@@ -1056,29 +1088,32 @@ public partial class GameBridge : Node
             _session.Server.Sim.World, _grid, _terrain, unit, ship);
     }
 
-    public bool HasCompletedMarket()
+    public bool HasCompletedMarket
     {
-        if (_multiplayer != null)
+        get
         {
-            AoeSim.SnapshotFrame? frame = ClientState?.Latest;
-            if (frame == null)
+            if (_multiplayer != null)
             {
+                AoeSim.SnapshotFrame? frame = ClientState?.Latest;
+                if (frame == null)
+                {
+                    return false;
+                }
+                foreach (AoeSim.EntitySnapshot entity in frame.Entities)
+                {
+                    if (entity.Team == MyTeam
+                        && entity.Kind == AoeSim.EntityKind.Building
+                        && entity.BuildingType == AoeSim.BuildingTypes.Market
+                        && entity.BuildingState == AoeSim.BuildingSystem.StateComplete)
+                    {
+                        return true;
+                    }
+                }
                 return false;
             }
-            foreach (AoeSim.EntitySnapshot entity in frame.Entities)
-            {
-                if (entity.Team == MyTeam
-                    && entity.Kind == AoeSim.EntityKind.Building
-                    && entity.BuildingType == AoeSim.BuildingTypes.Market
-                    && entity.BuildingState == AoeSim.BuildingSystem.StateComplete)
-                {
-                    return true;
-                }
-            }
-            return false;
+            return _session != null
+                && AoeSim.MarketSystem.HasCompletedMarket(_session.Server.Sim.World, MyTeam);
         }
-        return _session != null
-            && AoeSim.MarketSystem.HasCompletedMarket(_session.Server.Sim.World, MyTeam);
     }
 
     public long MarketBaseRate(long resource)
@@ -1116,7 +1151,7 @@ public partial class GameBridge : Node
         if (_multiplayer != null)
         {
             AoeSim.PlayerSnapshot? player = MyPlayerSnapshot();
-            if (player == null || !HasCompletedMarket())
+            if (player == null || !HasCompletedMarket)
             {
                 return false;
             }
@@ -1146,7 +1181,7 @@ public partial class GameBridge : Node
         if (_multiplayer != null)
         {
             AoeSim.PlayerSnapshot? player = MyPlayerSnapshot();
-            return player != null && HasCompletedMarket()
+            return player != null && HasCompletedMarket
                 && MyResource(player.Value, resource) >= amount;
         }
         if (_session == null)

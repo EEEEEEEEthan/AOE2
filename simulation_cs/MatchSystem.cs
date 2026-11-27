@@ -68,7 +68,22 @@ public static class MatchSystem
         {
             PlayerState player = match.Player(team);
             player.Participants = participants[team];
-            player.Score = participants[team] * 10 + resources[team];
+            long progressEntity = PlayerProgress.FindEntity(world, team);
+            long age = progressEntity >= 0
+                ? world.GetValue(progressEntity, SimComponents.PlayerProgress, SimComponents.Age)
+                : 0;
+            long research = progressEntity >= 0
+                ? world.GetValue(progressEntity, SimComponents.PlayerProgress, SimComponents.Research)
+                : 0;
+            long society = participants[team] * 10;
+            long economy = match.Gathered[team] + resources[team];
+            long military = match.Kills[team] * 10;
+            long tech = age * 100 + PopCount(research) * 30;
+            match.SocietyScore[team] = society;
+            match.EconomyScore[team] = economy;
+            match.MilitaryScore[team] = military;
+            match.TechScore[team] = tech;
+            player.Score = society + economy + military + tech;
             if (kingsAlive[team])
             {
                 player.HadKing = true;
@@ -106,6 +121,19 @@ public static class MatchSystem
         {
             ResolveScoreVictory(match);
         }
+        match.SampleScoreHistory(world.Tick, match.Ended);
+    }
+
+    private static long PopCount(long value)
+    {
+        long count = 0;
+        ulong bits = (ulong)value;
+        while (bits != 0)
+        {
+            bits &= bits - 1;
+            count += 1;
+        }
+        return count;
     }
 
     private static void ResolveDirectVictory(MatchState match)

@@ -45,7 +45,6 @@ const RESOURCE_FOOD := 1
 const RESOURCE_GOLD := 2
 const RESOURCE_STONE := 3
 const RESOURCE_NAMES := {0: "木材", 1: "食物", 2: "金币", 3: "石料"}
-const TRADABLE_RESOURCES := [RESOURCE_WOOD, RESOURCE_FOOD, RESOURCE_STONE]
 const TRIBUTE_RESOURCES := [RESOURCE_WOOD, RESOURCE_FOOD, RESOURCE_GOLD, RESOURCE_STONE]
 const MAX_TRADE_AMOUNT := 10000
 const SHIFT_BATCH := 100
@@ -245,7 +244,7 @@ func _ensure_market_targets(my_team: int) -> void:
 	_market_targets_signature = signature
 	%MarketTargetOption.clear()
 	for team: int in teams:
-		%MarketTargetOption.add_item("玩家 %d" % (team + 1), team)
+		%MarketTargetOption.add_item(PlayerColors.name_of(team), team)
 	if %MarketTargetOption.item_count > 0:
 		%MarketTargetOption.select(0)
 
@@ -272,7 +271,7 @@ func _update_tribute_button() -> void:
 
 func _market_trade_hint(resource: int, amount: int, buying: bool) -> String:
 	var name: String = RESOURCE_NAMES[resource]
-	if not _bridge.HasCompletedMarket():
+	if not _bridge.HasCompletedMarket:
 		return "需要已完工市场"
 	if buying:
 		if not _bridge.CanMarketBuy(resource, amount):

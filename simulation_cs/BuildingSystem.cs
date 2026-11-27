@@ -1,3 +1,5 @@
+using System.Collections.Generic;
+
 namespace AoeSim;
 
 /// <summary>
@@ -424,6 +426,220 @@ public static class BuildingSystem
         world.SetValue(id, SimComponents.Move, SimComponents.Active, 0);
         world.SetValue(id, SimComponents.Velocity, SimComponents.X, 0);
         world.SetValue(id, SimComponents.Velocity, SimComponents.Y, 0);
+    }
+
+    /// <summary>
+    /// 放置指令落地：校验已知类型、玩家库存与造价后写入占地，扣费并按占地失效流场。
+    /// 锁步入口只做玩家合法性转发，真正的校验与状态改写在这里。
+    /// </summary>
+    public static long IssuePlace(GameSim sim, long type, int cellX, int cellY, long player)
+    {
+        SimWorld world = sim.World;
+        if (!BuildingTypes.IsKnown(type))
+        {
+            return -1;
+        }
+        if (!sim.HasInventory(player))
+        {
+            return -1;
+        }
+        ResourceCost cost = BuildingTypes.Cost(type);
+        for (long resourceKind = GameSim.ResourceWood; resourceKind <= GameSim.ResourceStone; resourceKind++)
+        {
+            if (sim.Resource(player, resourceKind) < cost.AmountOf(resourceKind))
+            {
+                return -1;
+            }
+        }
+        long id = Place(world, sim.Grid, sim.Terrain, type, cellX, cellY, player);
+        if (id < 0)
+        {
+            return -1;
+        }
+        for (long resourceKind = GameSim.ResourceWood; resourceKind <= GameSim.ResourceStone; resourceKind++)
+        {
+            sim.AddResource(player, resourceKind, -cost.AmountOf(resourceKind));
+        }
+        sim.InvalidateFieldsForBlockedRect(
+            cellX, cellY, BuildingTypes.SizeWidth(type), BuildingTypes.SizeHeight(type));
+        return id;
+    }
+
+    /// <summary>
+    /// 按段拖拽放置城墙体系：起止两格经 <see cref="WallSegment.Rasterize"/> 展开为整段，
+    /// 单回合内原子落位——任一格非法或总造价不足则整段拒绝、不扣费、不落地。
+    /// </summary>
+    public static long[] IssuePlaceWallSegment(
+        GameSim sim, long type, int startX, int startY, int endX, int endY, long player)
+    {
+        SimWorld world = sim.World;
+        if (!BuildingTypes.IsWallLike(type))
+        {
+            return System.Array.Empty<long>();
+        }
+        if (!sim.HasInventory(player))
+        {
+            return System.Array.Empty<long>();
+        }
+        List<(int X, int Y)> cells = WallSegment.Rasterize(startX, startY, endX, endY);
+        foreach ((int cellX, int cellY) in cells)
+        {
+            if (!CanPlace(sim.Grid, sim.Terrain, type, cellX, cellY))
+            {
+                return System.Array.Empty<long>();
+            }
+        }
+        ResourceCost unitCost = BuildingTypes.Cost(type);
+        for (long resourceKind = GameSim.ResourceWood; resourceKind <= GameSim.ResourceStone; resourceKind++)
+        {
+            if (sim.Resource(player, resourceKind) < unitCost.AmountOf(resourceKind) * cells.Count)
+            {
+                return System.Array.Empty<long>();
+            }
+        }
+        var ids = new long[cells.Count];
+        for (int index = 0; index < cells.Count; index++)
+        {
+            ids[index] = Place(
+                world, sim.Grid, sim.Terrain, type, cells[index].X, cells[index].Y, player);
+        }
+        for (long resourceKind = GameSim.ResourceWood; resourceKind <= GameSim.ResourceStone; resourceKind++)
+        {
+            sim.AddResource(player, resourceKind, -unitCost.AmountOf(resourceKind) * cells.Count);
+        }
+        foreach ((int cellX, int cellY) in cells)
+        {
+            sim.InvalidateFieldsForBlockedRect(cellX, cellY, 1, 1);
+        }
+        return ids;
+    }
+
+    /// <summary>
+    /// 城门开合/锁定：只允许本方已完工城门，targetState 取 0 关 / 1 开 / 2 锁定；
+    /// 成功后重建流场，让寻路立刻按新通行性生效。
+    /// </summary>
+    public static bool IssueToggleGate(GameSim sim, long gate, long player, long targetState)
+    {
+        SimWorld world = sim.World;
+        if (!world.IsAlive(gate) || !world.HasComponent(gate, SimComponents.Building))
+        {
+            return false;
+        }
+        if (world.GetValue(gate, SimComponents.Team, SimComponents.TeamId) != player)
+        {
+            return false;
+        }
+        if (!SetGateState(world, sim.Grid, gate, targetState))
+        {
+            return false;
+        }
+        if (targetState == GateOpen)
+        {
+            // 开城门是解除阻挡，任何地方都可能因此出现新捷径，只能全表失效。
+            sim.InvalidateFields();
+        }
+        else
+        {
+            int gateX = (int)Fixed.ToInt(world.GetValue(gate, SimComponents.Position, SimComponents.X));
+            int gateY = (int)Fixed.ToInt(world.GetValue(gate, SimComponents.Position, SimComponents.Y));
+            int gateWidth = (int)world.GetValue(gate, SimComponents.Building, SimComponents.SizeWidth);
+            int gateHeight = (int)world.GetValue(gate, SimComponents.Building, SimComponents.SizeHeight);
+            sim.InvalidateFieldsForBlockedRect(gateX, gateY, gateWidth, gateHeight);
+        }
+        return true;
+    }
+
+    /// <summary>空田手动重播：仅本方已完工且耗尽的农田可用，扣木材后重填食物节点。</summary>
+    public static bool IssueReseedFarm(GameSim sim, long building, long player)
+    {
+        SimWorld world = sim.World;
+        if (!world.IsAlive(building) || !world.HasComponent(building, SimComponents.Building))
+        {
+            return false;
+        }
+        if (world.GetValue(building, SimComponents.Building, SimComponents.BuildingType)
+            != BuildingTypes.Farm)
+        {
+            return false;
+        }
+        if (world.GetValue(building, SimComponents.Building, SimComponents.State) != StateComplete)
+        {
+            return false;
+        }
+        if (world.GetValue(building, SimComponents.Team, SimComponents.TeamId) != player)
+        {
+            return false;
+        }
+        if (!world.HasComponent(building, SimComponents.ResourceNode))
+        {
+            return false;
+        }
+        if (world.GetValue(building, SimComponents.ResourceNode, SimComponents.Remaining) > 0)
+        {
+            return false;
+        }
+        if (sim.Resource(player, GameSim.ResourceWood) < BuildingTypes.FarmReseedCost)
+        {
+            return false;
+        }
+        if (!ReseedFarm(world, building))
+        {
+            return false;
+        }
+        sim.AddResource(player, GameSim.ResourceWood, -BuildingTypes.FarmReseedCost);
+        return true;
+    }
+
+    /// <summary>村民开工：把已落位的地基交给 Construct 组件，清空采集状态并卸下修理。</summary>
+    public static void IssueConstruct(SimWorld world, long villager, long building)
+    {
+        if (!world.IsAlive(villager) || !world.HasComponent(villager, SimComponents.Move))
+        {
+            return;
+        }
+        if (!world.IsAlive(building) || !world.HasComponent(building, SimComponents.Building))
+        {
+            return;
+        }
+        if (world.GetValue(building, SimComponents.Building, SimComponents.State) != StateFoundation)
+        {
+            return;
+        }
+        if (world.HasComponent(villager, SimComponents.Gather))
+        {
+            world.SetValue(villager, SimComponents.Gather, SimComponents.GatherState, GatherSystem.GatherStateIdle);
+            world.SetValue(villager, SimComponents.Gather, SimComponents.NodeEntity, -1);
+            world.SetValue(villager, SimComponents.Gather, SimComponents.Progress, 0);
+        }
+        world.Attach(villager, SimComponents.Construct);
+        world.SetValue(villager, SimComponents.Construct, SimComponents.TargetBase, building);
+        world.SetValue(villager, SimComponents.Construct, SimComponents.State, ConstructActive);
+        world.Detach(villager, SimComponents.Repair);
+    }
+
+    /// <summary>村民修理受损友方建筑：校验归属与目标状态后挂载 Repair 组件。</summary>
+    public static bool IssueRepair(SimWorld world, long villager, long building, long player)
+    {
+        if (!world.IsAlive(villager) || !world.HasComponent(villager, SimComponents.Gather))
+        {
+            return false;
+        }
+        if (world.GetValue(villager, SimComponents.Team, SimComponents.TeamId) != player)
+        {
+            return false;
+        }
+        if (!RepairSystem.CanRepair(world, villager, building))
+        {
+            return false;
+        }
+        world.SetValue(villager, SimComponents.Gather, SimComponents.GatherState, GatherSystem.GatherStateIdle);
+        world.SetValue(villager, SimComponents.Gather, SimComponents.NodeEntity, -1);
+        world.SetValue(villager, SimComponents.Gather, SimComponents.Progress, 0);
+        world.Detach(villager, SimComponents.Construct);
+        world.Attach(villager, SimComponents.Repair);
+        world.SetValue(villager, SimComponents.Repair, SimComponents.TargetBase, building);
+        world.SetValue(villager, SimComponents.Repair, SimComponents.State, RepairSystem.StateActive);
+        return true;
     }
 
     private static void SetBlock(SimWorld world, NavGrid grid, long id, bool value)

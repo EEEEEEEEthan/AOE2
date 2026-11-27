@@ -15,6 +15,7 @@ var config: Dictionary = {
 	"map_name": ARABIA_MAP_NAME,
 	"map_path": "",
 	"ai_difficulty": 1,
+	"civ_ids": PackedInt32Array([0, 0]),
 }
 
 var _prepared_bridge: Node = null
@@ -32,6 +33,7 @@ func reset_config() -> void:
 		"map_name": ARABIA_MAP_NAME,
 		"map_path": "",
 		"ai_difficulty": 1,
+		"civ_ids": PackedInt32Array([0, 0]),
 	}
 
 

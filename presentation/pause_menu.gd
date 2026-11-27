@@ -4,6 +4,8 @@ extends Control
 signal surrender_requested
 signal return_to_menu_requested
 
+const OPTIONS_SCENE := "res://presentation/options.tscn"
+
 var _bridge = null
 
 
@@ -11,6 +13,7 @@ func _ready() -> void:
 	hide()
 	%PauseUnavailableDialog.hide()
 	%SaveDialog.hide()
+	%PauseSurrenderConfirm.hide()
 
 
 ## 由对局场景注入当前对局桥接，保存按钮据此写入完整模拟快照。
@@ -20,6 +23,8 @@ func setup(bridge) -> void:
 
 func _unhandled_input(event: InputEvent) -> void:
 	if not get_tree().paused or not visible:
+		return
+	if %PauseSurrenderConfirm.visible:
 		return
 	if not event is InputEventKey:
 		return
@@ -41,6 +46,11 @@ func close() -> void:
 
 func _on_resume_pressed() -> void:
 	close()
+
+
+func _on_options_pressed() -> void:
+	var options: Node = load(OPTIONS_SCENE).instantiate()
+	add_child(options)
 
 
 func _on_save_pressed() -> void:
@@ -69,6 +79,10 @@ func _on_restart_pressed() -> void:
 
 
 func _on_surrender_pressed() -> void:
+	%PauseSurrenderConfirm.popup_centered()
+
+
+func _on_surrender_confirmed() -> void:
 	close()
 	surrender_requested.emit()
 

@@ -23,9 +23,9 @@ func _capture() -> void:
 		bridge = scene.get("bridge")
 		waited += 1
 
-	bridge.call("StartGeneratedMatch", SEED, PLAYERS, 0, -1)
+	bridge.call("StartGeneratedMatch", SEED, PLAYERS, 0, -1, PackedInt32Array())
 	bridge.call("RevealAllVision")
-	var world: Node3D = scene.get_node("WorldView")
+	var world: Node3D = scene.find_child("WorldView", true, false)
 	for child in world.get_children():
 		child.free()
 	world.set("_units", {})
@@ -36,7 +36,7 @@ func _capture() -> void:
 	if fog != null:
 		fog.visible = false
 
-	var camera: Variant = scene.get_node("Camera3D")
+	var camera: Variant = scene.find_child("Camera3D", true, false)
 	var width := float(bridge.GridWidth)
 	var height := float(bridge.GridHeight)
 	camera.set("grid_width", width)

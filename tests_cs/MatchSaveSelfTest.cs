@@ -17,8 +17,55 @@ public static class MatchSaveSelfTest
         var failures = new List<string>();
         CheckSaveRoundTrip(failures);
         CheckServerRoundTrip(failures);
+        CheckTamperedBodyChecksumRejected(failures);
         CheckCorruptedSaveRejected(failures);
         return failures;
+    }
+
+    /// <summary>存档中间数据被改动时，恢复后的校验和与头部记录不符，必须拒绝载入。</summary>
+    private static void CheckTamperedBodyChecksumRejected(List<string> failures)
+    {
+        MapData map = MapGenerator.Generate(MapType.Arabia, Seed, PlayerCount);
+        GameSim sim = MapSetup.BuildGeneratedMatch(map, Seed, PlayerCount);
+        AdvanceTicks(sim, 20);
+        MatchSaveData data = MatchSaveData.Build(sim, map, "篡改测试", 1);
+        MatchSaveData.ComponentRecord? record = null;
+        foreach (MatchSaveData.ComponentRecord candidate in data.Components)
+        {
+            if (candidate.Values.Count > 0 && candidate.Columns.Count > 0)
+            {
+                record = candidate;
+                break;
+            }
+        }
+        Expect(failures, record != null, "save has component values to tamper with");
+        if (record == null)
+        {
+            return;
+        }
+        record.Values[0][0] += 1;
+        string path = Path.Combine(Path.GetTempPath(), $"aoe2_match_tamper_{System.Guid.NewGuid():N}.aoe2match");
+        try
+        {
+            data.Save(path);
+            bool rejected = false;
+            try
+            {
+                MatchSaveData.Load(path).Restore();
+            }
+            catch (InvalidDataException)
+            {
+                rejected = true;
+            }
+            Expect(failures, rejected, "tampered save is rejected by checksum verification");
+        }
+        finally
+        {
+            if (File.Exists(path))
+            {
+                File.Delete(path);
+            }
+        }
     }
 
     /// <summary>带电脑玩家与服务器回合进度的完整对局链路：读档后 AI 与锁步队列必须从同一时点续推。</summary>
@@ -66,7 +113,8 @@ public static class MatchSaveSelfTest
             long actual = restoredServer.Step();
             if (expected != actual)
             {
-                failures.Add($"AI match diverged at continued tick {tick}: {expected} vs {actual}");
+                failures.Add($"AI match diverged at continued tick {tick}: {expected} vs {actual}; "
+                    + FirstDifference(sim, restoredSim));
                 break;
             }
         }

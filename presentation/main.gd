@@ -1,4 +1,4 @@
-extends Node3D
+extends Control
 
 const DEDICATED_FEATURE := "dedicated_server"
 const SERVER_ARGUMENT := "--server"
@@ -7,10 +7,7 @@ const DEFAULT_SEED := 20261127
 const DEFAULT_PLAYER_COUNT := 2
 const ARABIA_MAP_TYPE := 0
 const DEFAULT_AI_DIFFICULTY := 1
-const TEAM_NAMES := {
-	0: "蓝方",
-	1: "红方",
-}
+const SCORE_TABLE_HEADERS := ["阵营", "总分", "军事", "经济", "科技", "击杀", "损失", "采集", "存活", "状态"]
 const REASON_NAMES := {
 	-1: "无",
 	0: "征服",
@@ -24,14 +21,16 @@ const REASON_NAMES := {
 
 var bridge: GameBridge
 var _last_tick := -1
+var _result_built_tick := -1
+var _result_hidden := false
 
 
 func _ready() -> void:
 	bridge = GameBridge.new()
 	add_child(bridge)
 	%ResultPanel.hide()
+	%ReopenButton.hide()
 	if _is_dedicated():
-		%SurrenderButton.hide()
 		%TechTreeButton.hide()
 		bridge.StartDedicatedServer(_server_port())
 		return
@@ -97,7 +96,9 @@ func _exit_tree() -> void:
 
 
 func _start_session() -> void:
-	bridge.StartGeneratedMatch(DEFAULT_SEED, DEFAULT_PLAYER_COUNT, ARABIA_MAP_TYPE, DEFAULT_AI_DIFFICULTY, PackedInt32Array())
+	var civs: PackedInt32Array = MatchSetup.config.get("civ_ids", PackedInt32Array())
+	var player_count := int(MatchSetup.config.get("player_count", DEFAULT_PLAYER_COUNT))
+	bridge.StartGeneratedMatch(DEFAULT_SEED, player_count, ARABIA_MAP_TYPE, DEFAULT_AI_DIFFICULTY, civs)
 
 
 func _process(delta: float) -> void:
@@ -117,21 +118,133 @@ func _process(delta: float) -> void:
 func _refresh_result() -> void:
 	if not bridge.MatchEnded():
 		%ResultPanel.hide()
-		%SurrenderButton.show()
+		%ReopenButton.hide()
+		_result_built_tick = -1
+		_result_hidden = false
+		_set_play_hud_visible(true)
 		return
 	%SaveReplayButton.visible = bridge.CanSaveReplay
 	if not bridge.IsReplay and bridge.CanSaveReplay:
 		var saved: String = str(bridge.SaveReplayIfNeeded())
 		if not saved.is_empty() and %SaveReplayButton.text != "本局录像已保存":
 			%SaveReplayButton.text = "本局录像已保存"
-	%ResultPanel.show()
-	%SurrenderButton.hide()
-	%ResultTitle.text = _result_title()
+	if _result_built_tick != bridge.MatchEndTick():
+		_result_built_tick = bridge.MatchEndTick()
+		_result_hidden = false
+		_build_result()
+	%ResultPanel.visible = not _result_hidden
+	%ReopenButton.visible = _result_hidden
+
+
+## 结算期间隐藏会误操作的建造/生产 HUD；对局仍在进行时恢复。
+func _set_play_hud_visible(visible_state: bool) -> void:
+	get_node("Hud/CommandPanel").visible = visible_state
+	get_node("Hud/MenuBar").visible = visible_state
+	if not visible_state:
+		%MarketPanel.hide()
+
+
+func _build_result() -> void:
+	%ResultBannerLabel.text = _result_title()
+	var winner := bridge.MatchWinnerTeam()
+	var banner_color := Color(0.3, 0.34, 0.42, 0.95) if winner < 0 else _team_color(winner)
+	var style := StyleBoxFlat.new()
+	style.bg_color = banner_color
+	style.corner_radius_top_left = 6
+	style.corner_radius_top_right = 6
+	style.corner_radius_bottom_left = 6
+	style.corner_radius_bottom_right = 6
+	%ResultBanner.add_theme_stylebox_override("panel", style)
+	var panel_style := StyleBoxFlat.new()
+	panel_style.bg_color = Color(0.08, 0.1, 0.14, 0.97)
+	panel_style.border_color = Color(0.35, 0.4, 0.48, 0.9)
+	panel_style.set_border_width_all(2)
+	panel_style.set_corner_radius_all(8)
+	%ResultPanel.add_theme_stylebox_override("panel", panel_style)
 	%ResultDetail.text = "胜利条件：%s　结束于第 %d tick" % [
 		REASON_NAMES.get(bridge.MatchReason(), "未知"),
 		bridge.MatchEndTick(),
 	]
-	%ResultStats.text = _result_stats()
+	_build_score_table()
+	_build_score_chart()
+	get_node("Hud/CommandPanel").hide()
+	get_node("Hud/MenuBar").hide()
+	%MarketPanel.hide()
+
+
+func _build_score_table() -> void:
+	for child in %ScoreTable.get_children():
+		child.free()
+	for header in SCORE_TABLE_HEADERS:
+		var label := Label.new()
+		label.text = header
+		label.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+		label.add_theme_font_size_override("font_size", 14)
+		%ScoreTable.add_child(label)
+	for player: Dictionary in bridge.PlayerStates():
+		var team: int = player["team"]
+		var cells := [
+			PlayerColors.name_of(team),
+			str(player["score"]),
+			str(player["score_military"]),
+			str(player["score_economy"]),
+			str(player["score_tech"]),
+			str(player["kills"]),
+			str(player["losses"]),
+			str(player["gathered"]),
+			str(player["participants"]),
+			_player_state_text(player),
+		]
+		for index in cells.size():
+			var label := Label.new()
+			label.text = str(cells[index])
+			label.horizontal_alignment = HORIZONTAL_ALIGNMENT_LEFT if index == 0 else HORIZONTAL_ALIGNMENT_RIGHT
+			if index == 0:
+				label.add_theme_color_override("font_color", _team_color(team))
+			%ScoreTable.add_child(label)
+
+
+func _build_score_chart() -> void:
+	var samples: Array = []
+	for entry in bridge.ScoreTimeline():
+		samples.append(entry)
+	var end_tick := int(bridge.MatchEndTick())
+	var last_tick := int(samples[-1]["tick"]) if not samples.is_empty() else -1
+	if last_tick < end_tick:
+		var scores: Array = []
+		for player: Dictionary in bridge.PlayerStates():
+			scores.append(int(player["score"]))
+		samples.append({"tick": end_tick, "scores": scores})
+	var colors: Array = []
+	var player_count := bridge.PlayerStates().size()
+	for team in player_count:
+		colors.append(_team_color(team))
+	%ScoreChart.set_series(samples, player_count, colors, end_tick)
+
+
+func _team_color(team: int) -> Color:
+	return PlayerColors.color_of(team)
+
+
+func _on_continue_spectating_pressed() -> void:
+	_hide_result_for_viewing("继续观战中：可自由移动镜头，点击右上角「查看结算」重新打开")
+
+
+func _on_view_map_pressed() -> void:
+	_hide_result_for_viewing("查看地图中：点击右上角「查看结算」重新打开")
+
+
+func _hide_result_for_viewing(message: String) -> void:
+	_result_hidden = true
+	%ResultPanel.hide()
+	%ReopenButton.show()
+	%NoticeLabel.text = message
+
+
+func _on_reopen_result_pressed() -> void:
+	_result_hidden = false
+	%ReopenButton.hide()
+	%ResultPanel.show()
 
 
 func _on_save_replay_pressed() -> void:
@@ -148,25 +261,7 @@ func _result_title() -> String:
 	var winner := bridge.MatchWinnerTeam()
 	if winner < 0:
 		return "平局"
-	return "%s 胜利" % TEAM_NAMES.get(winner, "玩家 %d" % winner)
-
-
-func _result_stats() -> String:
-	var lines: PackedStringArray = []
-	for player: Dictionary in bridge.PlayerStates():
-		var team: int = player["team"]
-		var state := _player_state_text(player)
-		lines.append("%s　%d 分　单位/建筑 %d　木%d 食%d 金%d 石%d　%s" % [
-			TEAM_NAMES.get(team, "玩家 %d" % team),
-			player["score"],
-			player["participants"],
-			player["wood"],
-			player["food"],
-			player["gold"],
-			player["stone"],
-			state,
-		])
-	return "\n".join(lines)
+	return "%s 胜利" % PlayerColors.name_of(winner)
 
 
 func _player_state_text(player: Dictionary) -> String:
@@ -178,13 +273,11 @@ func _player_state_text(player: Dictionary) -> String:
 
 
 func _on_tech_tree_pressed() -> void:
-	%SurrenderButton.hide()
 	%TechTreeButton.hide()
 	%TechTree.open(bridge)
 
 
 func _on_tech_tree_closed() -> void:
-	%SurrenderButton.show()
 	%TechTreeButton.show()
 
 

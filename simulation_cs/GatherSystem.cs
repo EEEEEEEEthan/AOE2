@@ -10,7 +10,12 @@ public static class GatherSystem
 
     public const long GatherRangeSq = 147456;
 
-    public static void Step(SimWorld world, Func<long, long> inventoryProvider, NavGrid grid, TerrainGrid? terrain = null)
+    public static void Step(
+        SimWorld world,
+        Func<long, long> inventoryProvider,
+        NavGrid grid,
+        TerrainGrid? terrain = null,
+        MatchState? match = null)
     {
         ComponentStore gatherStore = world.Store(SimComponents.Gather);
         if (gatherStore.Count == 0)
@@ -27,7 +32,7 @@ public static class GatherSystem
             }
             else if (state == GatherStateReturning)
             {
-                StepReturning(world, id, inventoryProvider, grid, terrain, domain);
+                StepReturning(world, id, inventoryProvider, grid, terrain, domain, match);
             }
         }
     }
@@ -80,7 +85,13 @@ public static class GatherSystem
     }
 
     private static void StepReturning(
-        SimWorld world, long id, Func<long, long> inventoryProvider, NavGrid grid, TerrainGrid? terrain, long domain)
+        SimWorld world,
+        long id,
+        Func<long, long> inventoryProvider,
+        NavGrid grid,
+        TerrainGrid? terrain,
+        long domain,
+        MatchState? match)
     {
         long drop = world.GetValue(id, SimComponents.Gather, SimComponents.DropEntity);
         if (!IsDropSite(world, drop))
@@ -107,7 +118,8 @@ public static class GatherSystem
             return;
         }
         long carryAmount = world.GetValue(id, SimComponents.Gather, SimComponents.CarryAmount);
-        long inventory = inventoryProvider(world.GetValue(id, SimComponents.Team, SimComponents.TeamId));
+        long team = world.GetValue(id, SimComponents.Team, SimComponents.TeamId);
+        long inventory = inventoryProvider(team);
         if (inventory < 0)
         {
             world.SetValue(id, SimComponents.Gather, SimComponents.GatherState, GatherStateIdle);
@@ -116,6 +128,7 @@ public static class GatherSystem
         string column = SimComponents.ResourceColumns[(int)carryType];
         long stored = world.GetValue(inventory, SimComponents.Resource, column);
         world.SetValue(inventory, SimComponents.Resource, column, stored + carryAmount);
+        match?.RecordGathered(team, carryAmount);
         world.SetValue(id, SimComponents.Gather, SimComponents.CarryAmount, 0);
         world.SetValue(id, SimComponents.Gather, SimComponents.Progress, 0);
         long node = world.GetValue(id, SimComponents.Gather, SimComponents.NodeEntity);
@@ -155,6 +168,38 @@ public static class GatherSystem
         long team = world.GetValue(id, SimComponents.Team, SimComponents.TeamId);
         long x = Fixed.ToInt(world.GetValue(id, SimComponents.Position, SimComponents.X));
         long y = Fixed.ToInt(world.GetValue(id, SimComponents.Position, SimComponents.Y));
+        return NearestDropSite(world, team, resourceKind, x, y);
+    }
+
+    public static void IssueGather(SimWorld world, long villager, long node, long drop)
+    {
+        if (!world.IsAlive(villager) || !world.HasComponent(villager, SimComponents.Gather))
+        {
+            return;
+        }
+        if (drop < 0)
+        {
+            drop = ResolveNearestDropSite(world, villager, node);
+        }
+        world.Detach(villager, SimComponents.Repair);
+        world.SetValue(villager, SimComponents.Gather, SimComponents.GatherState, GatherStateGathering);
+        world.SetValue(villager, SimComponents.Gather, SimComponents.NodeEntity, node);
+        world.SetValue(villager, SimComponents.Gather, SimComponents.DropEntity, drop);
+        world.SetValue(villager, SimComponents.Gather, SimComponents.CarryAmount, 0);
+        world.SetValue(villager, SimComponents.Gather, SimComponents.Progress, 0);
+    }
+
+    /// <summary>未指定投放点时，按目标资源种类在己方已完工投放建筑中就近选取。</summary>
+    private static long ResolveNearestDropSite(SimWorld world, long villager, long node)
+    {
+        if (!world.HasComponent(node, SimComponents.ResourceNode))
+        {
+            return -1;
+        }
+        long resourceKind = world.GetValue(node, SimComponents.ResourceNode, SimComponents.NodeType);
+        long team = world.GetValue(villager, SimComponents.Team, SimComponents.TeamId);
+        long x = Fixed.ToInt(world.GetValue(villager, SimComponents.Position, SimComponents.X));
+        long y = Fixed.ToInt(world.GetValue(villager, SimComponents.Position, SimComponents.Y));
         return NearestDropSite(world, team, resourceKind, x, y);
     }
 

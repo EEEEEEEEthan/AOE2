@@ -141,6 +141,86 @@ public static class OrderSystem
         return true;
     }
 
+    public static void SetStance(SimWorld world, long id, long stance)
+    {
+        if (!world.IsAlive(id) || !world.HasComponent(id, SimComponents.Combat))
+        {
+            return;
+        }
+        if (!CombatStance.IsValid(stance))
+        {
+            return;
+        }
+        world.SetValue(id, SimComponents.Combat, SimComponents.Stance, stance);
+        world.Detach(id, SimComponents.Order);
+        if (world.HasComponent(id, SimComponents.Engage))
+        {
+            world.Detach(id, SimComponents.Engage);
+            world.SetValue(id, SimComponents.Move, SimComponents.Active, 0);
+            world.SetValue(id, SimComponents.Velocity, SimComponents.X, 0);
+            world.SetValue(id, SimComponents.Velocity, SimComponents.Y, 0);
+        }
+    }
+
+    public static void IssueMove(SimWorld world, long id, long cellX, long cellY)
+    {
+        if (!world.IsAlive(id) || !world.HasComponent(id, SimComponents.Move))
+        {
+            return;
+        }
+        world.Detach(id, SimComponents.AttackTarget);
+        world.Detach(id, SimComponents.Engage);
+        world.Detach(id, SimComponents.Order);
+        world.Detach(id, SimComponents.Repair);
+        world.Detach(id, SimComponents.Trade);
+        world.SetValue(id, SimComponents.Move, SimComponents.TargetX, cellX);
+        world.SetValue(id, SimComponents.Move, SimComponents.TargetY, cellY);
+        world.SetValue(id, SimComponents.Move, SimComponents.Active, 1);
+    }
+
+    public static void IssueStop(SimWorld world, long id)
+    {
+        if (!world.IsAlive(id))
+        {
+            return;
+        }
+        world.Detach(id, SimComponents.AttackTarget);
+        world.Detach(id, SimComponents.Engage);
+        world.Detach(id, SimComponents.Order);
+        world.Detach(id, SimComponents.Repair);
+        world.Detach(id, SimComponents.Trade);
+        world.SetValue(id, SimComponents.Move, SimComponents.Active, 0);
+        world.SetValue(id, SimComponents.Velocity, SimComponents.X, 0);
+        world.SetValue(id, SimComponents.Velocity, SimComponents.Y, 0);
+    }
+
+    public static void IssueAttack(SimWorld world, long attacker, long target)
+    {
+        if (!world.IsAlive(attacker) || !world.HasComponent(attacker, SimComponents.Combat))
+        {
+            return;
+        }
+        if (!world.IsAlive(target) || !world.HasComponent(target, SimComponents.Health))
+        {
+            return;
+        }
+        if (world.GetValue(target, SimComponents.Team, SimComponents.TeamId)
+            == world.GetValue(attacker, SimComponents.Team, SimComponents.TeamId))
+        {
+            return;
+        }
+        if (world.HasComponent(attacker, SimComponents.Move))
+        {
+            world.SetValue(attacker, SimComponents.Move, SimComponents.Active, 0);
+            world.SetValue(attacker, SimComponents.Velocity, SimComponents.X, 0);
+            world.SetValue(attacker, SimComponents.Velocity, SimComponents.Y, 0);
+        }
+        world.Detach(attacker, SimComponents.Engage);
+        world.Detach(attacker, SimComponents.Order);
+        world.Attach(attacker, SimComponents.AttackTarget);
+        world.SetValue(attacker, SimComponents.AttackTarget, SimComponents.TargetEntity, target);
+    }
+
     private static bool CanOrder(SimWorld world, long id) =>
         world.IsAlive(id) && world.HasComponent(id, SimComponents.Position);
 

@@ -10,6 +10,7 @@ config/icon="res://icon.svg"
 
 [autoload]
 
+Settings="*res://presentation/settings_store.gd"
 TestEntry="*res://tests/tools/_test_entry.gd"
 MatchSetup="*res://presentation/match_setup.gd"
 
@@ -27,6 +28,10 @@ project/assembly_name="AOE2Framework"
 [test]
 
 ignore_warning_pattern=""
+
+[gui]
+
+theme/custom="res://presentation/ui_theme.tres"
 
 [rendering]
 

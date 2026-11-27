@@ -1,5 +1,20 @@
 namespace AoeSim;
 
+/// <summary>一次击杀归属：在伤害结算时捕获双方队伍，避免停用时实体解散后丢失阵营信息。</summary>
+public readonly struct KillEvent
+{
+    public readonly long Victim;
+    public readonly long KillerTeam;
+    public readonly long VictimTeam;
+
+    public KillEvent(long victim, long killerTeam, long victimTeam)
+    {
+        Victim = victim;
+        KillerTeam = killerTeam;
+        VictimTeam = victimTeam;
+    }
+}
+
 [System.Flags]
 public enum VictoryCondition
 {
@@ -40,6 +55,21 @@ public sealed class MatchConfig
     };
 }
 
+/// <summary>对局状态里不落在 ECS 的累计数据：击杀/采集/分数与分数历史，读档时必须一并恢复。</summary>
+public sealed class MatchRuntimeState
+{
+    public long[] Kills = System.Array.Empty<long>();
+    public long[] Losses = System.Array.Empty<long>();
+    public long[] Gathered = System.Array.Empty<long>();
+    public long[] SocietyScore = System.Array.Empty<long>();
+    public long[] EconomyScore = System.Array.Empty<long>();
+    public long[] MilitaryScore = System.Array.Empty<long>();
+    public long[] TechScore = System.Array.Empty<long>();
+    public long HistoryInterval = MatchState.HistoryInitialInterval;
+    public System.Collections.Generic.List<long> HistoryTicks = new();
+    public System.Collections.Generic.List<long[]> HistoryScores = new();
+}
+
 /// <summary>对局状态存放在 ECS 世界内，随全局校验和与存档一起确定性推进。</summary>
 public sealed class MatchState
 {
@@ -47,9 +77,27 @@ public sealed class MatchState
     public const long PhaseRunning = 1;
     public const long PhaseEnded = 2;
 
+    /// <summary>分数曲线采样间隔（tick）与容量上限；超限时按整倍下采样，保持曲线平滑。</summary>
+    public const long HistoryInitialInterval = 300;
+    public const int HistoryMaxSamples = 120;
+
     public SimWorld World { get; }
     public long Entity { get; }
     public MatchConfig Config { get; }
+
+    /// <summary>结算统计：逐队累计击杀、损失与资源采集量，以及四项分数分项。</summary>
+    public long[] Kills { get; }
+    public long[] Losses { get; }
+    public long[] Gathered { get; }
+    public long[] SocietyScore { get; }
+    public long[] EconomyScore { get; }
+    public long[] MilitaryScore { get; }
+    public long[] TechScore { get; }
+
+    /// <summary>分数曲线：按固定间隔采样总分，随快照下发供结算界面绘制。</summary>
+    public long HistoryInterval { get; internal set; } = HistoryInitialInterval;
+    public System.Collections.Generic.List<long> HistoryTicks { get; } = new();
+    public System.Collections.Generic.List<long[]> HistoryScores { get; } = new();
 
     private readonly long[] _playerEntities;
 
@@ -59,6 +107,14 @@ public sealed class MatchState
         Entity = entity;
         _playerEntities = playerEntities;
         Config = config;
+        int count = playerEntities.Length;
+        Kills = new long[count];
+        Losses = new long[count];
+        Gathered = new long[count];
+        SocietyScore = new long[count];
+        EconomyScore = new long[count];
+        MilitaryScore = new long[count];
+        TechScore = new long[count];
     }
 
     public static MatchState Create(SimWorld world, long playerCount, MatchConfig config)
@@ -129,6 +185,51 @@ public sealed class MatchState
         return new MatchState(world, matchEntity, playerEntities, config);
     }
 
+    /// <summary>导出 ECS 之外的累计数据，供对局存档保存。</summary>
+    public MatchRuntimeState CaptureRuntime() => new()
+    {
+        Kills = (long[])Kills.Clone(),
+        Losses = (long[])Losses.Clone(),
+        Gathered = (long[])Gathered.Clone(),
+        SocietyScore = (long[])SocietyScore.Clone(),
+        EconomyScore = (long[])EconomyScore.Clone(),
+        MilitaryScore = (long[])MilitaryScore.Clone(),
+        TechScore = (long[])TechScore.Clone(),
+        HistoryInterval = HistoryInterval,
+        HistoryTicks = new System.Collections.Generic.List<long>(HistoryTicks),
+        HistoryScores = HistoryScores.ConvertAll(sample => (long[])sample.Clone()),
+    };
+
+    /// <summary>读档时把累计数据复位到存档时点，避免分数从 0 重新累计。</summary>
+    public void RestoreRuntime(MatchRuntimeState state)
+    {
+        CopyInto(state.Kills, Kills);
+        CopyInto(state.Losses, Losses);
+        CopyInto(state.Gathered, Gathered);
+        CopyInto(state.SocietyScore, SocietyScore);
+        CopyInto(state.EconomyScore, EconomyScore);
+        CopyInto(state.MilitaryScore, MilitaryScore);
+        CopyInto(state.TechScore, TechScore);
+        HistoryInterval = state.HistoryInterval;
+        HistoryTicks.Clear();
+        HistoryTicks.AddRange(state.HistoryTicks);
+        HistoryScores.Clear();
+        foreach (long[] sample in state.HistoryScores)
+        {
+            HistoryScores.Add((long[])sample.Clone());
+        }
+    }
+
+    private static void CopyInto(long[] source, long[] target)
+    {
+        int count = System.Math.Min(source.Length, target.Length);
+        System.Array.Copy(source, target, count);
+        for (int index = count; index < target.Length; index++)
+        {
+            target[index] = 0;
+        }
+    }
+
     public int PlayerCount => _playerEntities.Length;
 
     public long Phase
@@ -181,6 +282,76 @@ public sealed class MatchState
             }
         }
         return false;
+    }
+
+    /// <summary>记一次击杀胜负：击杀方 +1 击杀，被击杀方 +1 损失；无关实体的队伍已在上游过滤。</summary>
+    public void RecordKill(long killerTeam, long victimTeam)
+    {
+        if (killerTeam >= 0 && killerTeam < Kills.Length)
+        {
+            Kills[killerTeam] += 1;
+        }
+        if (victimTeam >= 0 && victimTeam < Losses.Length)
+        {
+            Losses[victimTeam] += 1;
+        }
+    }
+
+    public void RecordGathered(long team, long amount)
+    {
+        if (team >= 0 && team < Gathered.Length && amount > 0)
+        {
+            Gathered[team] += amount;
+        }
+    }
+
+    /// <summary>
+    /// 按固定间隔把各方当前总分压入曲线。非强制的非采样 tick 直接返回；
+    /// 样本超容量时移除奇数下标并让采样间隔翻倍，曲线仍覆盖全局时间且长度有界。
+    /// </summary>
+    public void SampleScoreHistory(long tick, bool force)
+    {
+        if (!force && (HistoryInterval <= 0 || tick % HistoryInterval != 0))
+        {
+            return;
+        }
+        if (HistoryTicks.Count > 0 && HistoryTicks[HistoryTicks.Count - 1] == tick)
+        {
+            return;
+        }
+        var scores = new long[_playerEntities.Length];
+        for (long team = 0; team < _playerEntities.Length; team++)
+        {
+            scores[team] = Player(team).Score;
+        }
+        HistoryTicks.Add(tick);
+        HistoryScores.Add(scores);
+        while (HistoryTicks.Count > HistoryMaxSamples)
+        {
+            DownsampleHistory();
+        }
+    }
+
+    private void DownsampleHistory()
+    {
+        int kept = (HistoryTicks.Count + 1) / 2;
+        var ticks = new System.Collections.Generic.List<long>(kept);
+        var scores = new System.Collections.Generic.List<long[]>(kept);
+        for (int index = 0; index < HistoryTicks.Count; index += 2)
+        {
+            ticks.Add(HistoryTicks[index]);
+            scores.Add(HistoryScores[index]);
+        }
+        if (HistoryTicks.Count > 0 && (HistoryTicks.Count - 1) % 2 != 0)
+        {
+            ticks[ticks.Count - 1] = HistoryTicks[HistoryTicks.Count - 1];
+            scores[scores.Count - 1] = HistoryScores[HistoryScores.Count - 1];
+        }
+        HistoryTicks.Clear();
+        HistoryTicks.AddRange(ticks);
+        HistoryScores.Clear();
+        HistoryScores.AddRange(scores);
+        HistoryInterval *= 2;
     }
 
     internal void End(long winnerTeam, long reason)
