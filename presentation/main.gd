@@ -90,7 +90,9 @@ func _exit_tree() -> void:
 
 
 func _start_session() -> void:
-	bridge.StartGeneratedMatch(DEFAULT_SEED, DEFAULT_PLAYER_COUNT, ARABIA_MAP_TYPE, DEFAULT_AI_DIFFICULTY, PackedInt32Array())
+	var civs: PackedInt32Array = MatchSetup.config.get("civ_ids", PackedInt32Array())
+	var player_count := int(MatchSetup.config.get("player_count", DEFAULT_PLAYER_COUNT))
+	bridge.StartGeneratedMatch(DEFAULT_SEED, player_count, ARABIA_MAP_TYPE, DEFAULT_AI_DIFFICULTY, civs)
 
 
 func _process(delta: float) -> void:
