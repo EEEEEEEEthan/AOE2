@@ -158,6 +158,13 @@ public sealed partial class GameSim
             World.GetValue(inventory, SimComponents.Resource, column) + amount);
     }
 
+    /// <summary>该玩家是否已有库存实体；指令落地在改世界前据此校验玩家范围。</summary>
+    internal bool HasInventory(long player)
+    {
+        EnsureInventoryInitialized();
+        return _inventoryIndex.Contains(player);
+    }
+
     private void EnsureInventoryInitialized()
     {
         if (_inventoryIndex.Count > 0)

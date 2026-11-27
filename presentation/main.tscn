@@ -9,7 +9,7 @@
 [ext_resource type="Script" path="res://presentation/battle_controller.gd" id="7_controller"]
 [ext_resource type="Script" path="res://presentation/unit_overlay.gd" id="8_overlay"]
 [ext_resource type="Script" path="res://presentation/pause_menu.gd" id="9_pause"]
-[ext_resource type="Theme" path="res://presentation/ui_theme.tres" id="10_theme"]
+[ext_resource type="Script" path="res://presentation/score_chart.gd" id="10_chart"]
 
 [sub_resource type="Environment" id="Env_main"]
 background_mode = 1
@@ -26,7 +26,6 @@ anchor_bottom = 1.0
 grow_horizontal = 2
 grow_vertical = 2
 mouse_filter = 2
-theme = ExtResource("10_theme")
 script = ExtResource("1_main")
 
 [node name="WorldEnvironment" type="WorldEnvironment" parent="."]
@@ -744,25 +743,36 @@ anchor_left = 0.5
 anchor_top = 0.5
 anchor_right = 0.5
 anchor_bottom = 0.5
-offset_left = -240.0
-offset_top = -150.0
-offset_right = 240.0
-offset_bottom = 150.0
+offset_left = -470.0
+offset_top = -330.0
+offset_right = 470.0
+offset_bottom = 330.0
 grow_horizontal = 2
 grow_vertical = 2
 
 [node name="Margin" type="MarginContainer" parent="Hud/ResultPanel"]
 layout_mode = 2
+theme_override_constants/margin_left = 20
+theme_override_constants/margin_top = 16
+theme_override_constants/margin_right = 20
+theme_override_constants/margin_bottom = 16
 
 [node name="Content" type="VBoxContainer" parent="Hud/ResultPanel/Margin"]
 layout_mode = 2
-theme_override_constants/separation = 16
+theme_override_constants/separation = 10
 
-[node name="ResultTitle" type="Label" parent="Hud/ResultPanel/Margin/Content"]
+[node name="ResultBanner" type="PanelContainer" parent="Hud/ResultPanel/Margin/Content"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 56)
+layout_mode = 2
+
+[node name="ResultBannerLabel" type="Label" parent="Hud/ResultPanel/Margin/Content/ResultBanner"]
 unique_name_in_owner = true
 layout_mode = 2
+theme_override_font_sizes/font_size = 30
 text = "对局结束"
 horizontal_alignment = 1
+vertical_alignment = 1
 
 [node name="ResultDetail" type="Label" parent="Hud/ResultPanel/Margin/Content"]
 unique_name_in_owner = true
@@ -770,21 +780,63 @@ layout_mode = 2
 text = "胜利条件：征服"
 horizontal_alignment = 1
 
-[node name="ResultStats" type="Label" parent="Hud/ResultPanel/Margin/Content"]
+[node name="Body" type="HBoxContainer" parent="Hud/ResultPanel/Margin/Content"]
+layout_mode = 2
+size_flags_vertical = 3
+theme_override_constants/separation = 16
+
+[node name="ScoreTable" type="GridContainer" parent="Hud/ResultPanel/Margin/Content/Body"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(380, 0)
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/h_separation = 8
+theme_override_constants/v_separation = 6
+columns = 10
+
+[node name="ScoreChart" type="Control" parent="Hud/ResultPanel/Margin/Content/Body"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(440, 220)
+layout_mode = 2
+size_flags_horizontal = 3
+script = ExtResource("10_chart")
+
+[node name="ButtonRow" type="HBoxContainer" parent="Hud/ResultPanel/Margin/Content"]
+layout_mode = 2
+theme_override_constants/separation = 10
+alignment = 1
+
+[node name="ContinueButton" type="Button" parent="Hud/ResultPanel/Margin/Content/ButtonRow"]
 unique_name_in_owner = true
 layout_mode = 2
-text = "蓝方 0 分 / 红方 0 分"
-horizontal_alignment = 1
+text = "继续观战"
 
-[node name="ExitButton" type="Button" parent="Hud/ResultPanel/Margin/Content"]
+[node name="MapButton" type="Button" parent="Hud/ResultPanel/Margin/Content/ButtonRow"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "查看地图"
+
+[node name="SaveReplayButton" type="Button" parent="Hud/ResultPanel/Margin/Content/ButtonRow"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "保存本局录像"
+
+[node name="ExitButton" type="Button" parent="Hud/ResultPanel/Margin/Content/ButtonRow"]
 unique_name_in_owner = true
 layout_mode = 2
 text = "返回主菜单"
 
-[node name="SaveReplayButton" type="Button" parent="Hud/ResultPanel/Margin/Content"]
+[node name="ReopenButton" type="Button" parent="Hud"]
 unique_name_in_owner = true
-layout_mode = 2
-text = "保存本局录像"
+visible = false
+anchor_left = 1.0
+anchor_right = 1.0
+offset_left = -136.0
+offset_top = 104.0
+offset_right = -16.0
+offset_bottom = 140.0
+grow_horizontal = 0
+text = "查看结算"
 
 [node name="TooltipPanel" type="PanelContainer" parent="Hud"]
 unique_name_in_owner = true
@@ -874,6 +926,10 @@ text = "保存游戏"
 layout_mode = 2
 text = "重新开始"
 
+[node name="PauseOptionsButton" type="Button" parent="Hud/PauseMenu/Center/PausePanel/Margin/Content"]
+layout_mode = 2
+text = "选项"
+
 [node name="SurrenderButton" type="Button" parent="Hud/PauseMenu/Center/PausePanel/Margin/Content"]
 unique_name_in_owner = true
 layout_mode = 2
@@ -887,6 +943,13 @@ text = "退出到主菜单"
 unique_name_in_owner = true
 title = "开发中"
 dialog_text = "该功能正在开发中，敬请期待。"
+
+[node name="PauseSurrenderConfirm" type="ConfirmationDialog" parent="Hud/PauseMenu"]
+unique_name_in_owner = true
+title = "投降确认"
+dialog_text = "确定投降吗？"
+ok_button_text = "确定"
+cancel_button_text = "取消"
 
 [node name="UnavailableDialog" type="AcceptDialog" parent="Hud"]
 unique_name_in_owner = true
@@ -942,12 +1005,17 @@ unique_name_in_owner = true
 [connection signal="pressed" from="Hud/CommandPanel/Margin/Content/ActionRow/StopButton" to="Hud" method="_on_stop_pressed"]
 [connection signal="pressed" from="Hud/CommandPanel/Margin/Content/ActionRow/UnloadButton" to="Hud" method="_on_unload_pressed"]
 [connection signal="pressed" from="Hud/CommandPanel/Margin/Content/ActionRow/CancelPlacementButton" to="Hud" method="_on_cancel_placement_pressed"]
-[connection signal="pressed" from="Hud/ResultPanel/Margin/Content/ExitButton" to="." method="_on_return_to_menu_pressed"]
-[connection signal="pressed" from="Hud/ResultPanel/Margin/Content/SaveReplayButton" to="." method="_on_save_replay_pressed"]
+[connection signal="pressed" from="Hud/ResultPanel/Margin/Content/ButtonRow/ContinueButton" to="." method="_on_continue_spectating_pressed"]
+[connection signal="pressed" from="Hud/ResultPanel/Margin/Content/ButtonRow/MapButton" to="." method="_on_view_map_pressed"]
+[connection signal="pressed" from="Hud/ResultPanel/Margin/Content/ButtonRow/ExitButton" to="." method="_on_return_to_menu_pressed"]
+[connection signal="pressed" from="Hud/ResultPanel/Margin/Content/ButtonRow/SaveReplayButton" to="." method="_on_save_replay_pressed"]
+[connection signal="pressed" from="Hud/ReopenButton" to="." method="_on_reopen_result_pressed"]
 [connection signal="pressed" from="Hud/PauseMenu/Center/PausePanel/Margin/Content/ResumeButton" to="Hud/PauseMenu" method="_on_resume_pressed"]
 [connection signal="pressed" from="Hud/PauseMenu/Center/PausePanel/Margin/Content/SaveButton" to="Hud/PauseMenu" method="_on_save_pressed"]
 [connection signal="pressed" from="Hud/PauseMenu/Center/PausePanel/Margin/Content/RestartButton" to="Hud/PauseMenu" method="_on_restart_pressed"]
+[connection signal="pressed" from="Hud/PauseMenu/Center/PausePanel/Margin/Content/PauseOptionsButton" to="Hud/PauseMenu" method="_on_options_pressed"]
 [connection signal="pressed" from="Hud/PauseMenu/Center/PausePanel/Margin/Content/SurrenderButton" to="Hud/PauseMenu" method="_on_surrender_pressed"]
+[connection signal="confirmed" from="Hud/PauseMenu/PauseSurrenderConfirm" to="Hud/PauseMenu" method="_on_surrender_confirmed"]
 [connection signal="pressed" from="Hud/PauseMenu/Center/PausePanel/Margin/Content/PauseExitButton" to="Hud/PauseMenu" method="_on_exit_pressed"]
 [connection signal="surrender_requested" from="Hud/PauseMenu" to="." method="_on_surrender_pressed"]
 [connection signal="return_to_menu_requested" from="Hud/PauseMenu" to="." method="_on_return_to_menu_pressed"]

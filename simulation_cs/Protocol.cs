@@ -265,6 +265,12 @@ public readonly struct PlayerSnapshot
     public readonly long MarketStone;
     public readonly long PopulationUsed;
     public readonly long PopulationCap;
+    public readonly long Kills;
+    public readonly long Losses;
+    public readonly long Gathered;
+    public readonly long ScoreMilitary;
+    public readonly long ScoreEconomy;
+    public readonly long ScoreTech;
 
     public PlayerSnapshot(
         long team,
@@ -287,7 +293,13 @@ public readonly struct PlayerSnapshot
         long marketGold,
         long marketStone,
         long populationUsed,
-        long populationCap)
+        long populationCap,
+        long kills,
+        long losses,
+        long gathered,
+        long scoreMilitary,
+        long scoreEconomy,
+        long scoreTech)
     {
         Team = team;
         Defeated = defeated;
@@ -310,6 +322,12 @@ public readonly struct PlayerSnapshot
         MarketStone = marketStone;
         PopulationUsed = populationUsed;
         PopulationCap = populationCap;
+        Kills = kills;
+        Losses = losses;
+        Gathered = gathered;
+        ScoreMilitary = scoreMilitary;
+        ScoreEconomy = scoreEconomy;
+        ScoreTech = scoreTech;
     }
 }
 
@@ -333,6 +351,11 @@ public sealed class SnapshotFrame
     /// <summary>与 <see cref="Entities"/> 一一对应的字段掩码：仅这些字段被编码，其余沿用客户端上一帧的值。</summary>
     public uint[] EntityMasks = System.Array.Empty<uint>();
     public long[] RemovedEntities = System.Array.Empty<long>();
+
+    /// <summary>分数曲线样本（与 Players 同队伍顺序），仅在变化或关键帧下发。</summary>
+    public bool HasHistory;
+    public long[] HistoryTicks = System.Array.Empty<long>();
+    public long[][] HistoryScores = System.Array.Empty<long[]>();
 
     [System.ThreadStatic] private static List<EntitySnapshot>? _entityBuffer;
     [System.ThreadStatic] private static Dictionary<long, long>? _inventoryBuffer;
@@ -683,9 +706,18 @@ public sealed class SnapshotFrame
                     MarketSystem.Rate(world, team, GameSim.ResourceGold),
                     MarketSystem.Rate(world, team, GameSim.ResourceStone),
                     PopulationSystem.Used(world, team),
-                    PopulationSystem.Cap(world, team));
+                    PopulationSystem.Cap(world, team),
+                    match.Kills[team],
+                    match.Losses[team],
+                    match.Gathered[team],
+                    match.MilitaryScore[team],
+                    match.EconomyScore[team],
+                    match.TechScore[team]);
             }
             frame.Players = players;
+            frame.HasHistory = match.HistoryTicks.Count > 0;
+            frame.HistoryTicks = match.HistoryTicks.ToArray();
+            frame.HistoryScores = match.HistoryScores.ToArray();
         }
         return frame;
     }
@@ -715,6 +747,9 @@ public sealed class SnapshotFrame
             Reason = full.Reason,
             EndTick = full.EndTick,
             Players = full.Players,
+            HasHistory = full.HasHistory,
+            HistoryTicks = full.HistoryTicks,
+            HistoryScores = full.HistoryScores,
             Entities = kept.ToArray(),
             VisionWidth = vision.Width,
             VisionHeight = vision.Height,
@@ -850,6 +885,12 @@ public sealed class SnapshotFrame
                 writer.Write(player.MarketStone);
                 writer.Write(player.PopulationUsed);
                 writer.Write(player.PopulationCap);
+                writer.Write(player.Kills);
+                writer.Write(player.Losses);
+                writer.Write(player.Gathered);
+                writer.Write(player.ScoreMilitary);
+                writer.Write(player.ScoreEconomy);
+                writer.Write(player.ScoreTech);
             }
             writer.Write(Entities.Length);
             for (int index = 0; index < Entities.Length; index++)
@@ -867,6 +908,21 @@ public sealed class SnapshotFrame
             if (HasVision)
             {
                 WriteVisionStates(writer, VisionStates);
+            }
+            writer.Write(HasHistory);
+            if (HasHistory)
+            {
+                writer.Write(HistoryTicks.Length);
+                for (int index = 0; index < HistoryTicks.Length; index++)
+                {
+                    writer.Write(HistoryTicks[index]);
+                    long[] scores = HistoryScores.Length > index ? HistoryScores[index] : System.Array.Empty<long>();
+                    writer.Write(scores.Length);
+                    foreach (long score in scores)
+                    {
+                        writer.Write(score);
+                    }
+                }
             }
         }
         length = (int)stream.Length;
@@ -1099,6 +1155,12 @@ public sealed class SnapshotFrame
                 reader.ReadInt64(),
                 reader.ReadInt64(),
                 reader.ReadInt64(),
+                reader.ReadInt64(),
+                reader.ReadInt64(),
+                reader.ReadInt64(),
+                reader.ReadInt64(),
+                reader.ReadInt64(),
+                reader.ReadInt64(),
                 reader.ReadInt64());
         }
         frame.Players = players;
@@ -1126,6 +1188,24 @@ public sealed class SnapshotFrame
         frame.VisionHeight = reader.ReadInt64();
         frame.HasVision = reader.ReadBoolean();
         frame.VisionStates = frame.HasVision ? ReadVisionStates(reader) : System.Array.Empty<byte>();
+        frame.HasHistory = reader.ReadBoolean();
+        if (frame.HasHistory)
+        {
+            int samples = reader.ReadInt32();
+            frame.HistoryTicks = new long[samples];
+            frame.HistoryScores = new long[samples][];
+            for (int index = 0; index < samples; index++)
+            {
+                frame.HistoryTicks[index] = reader.ReadInt64();
+                int scores = reader.ReadInt32();
+                var values = new long[scores];
+                for (int scoreIndex = 0; scoreIndex < scores; scoreIndex++)
+                {
+                    values[scoreIndex] = reader.ReadInt64();
+                }
+                frame.HistoryScores[index] = values;
+            }
+        }
         return frame;
     }
 
@@ -1167,6 +1247,9 @@ public sealed class SnapshotFrame
             Reason = Reason,
             EndTick = EndTick,
             Players = Players,
+            HasHistory = HasHistory || previous.HasHistory,
+            HistoryTicks = HasHistory ? HistoryTicks : previous.HistoryTicks,
+            HistoryScores = HasHistory ? HistoryScores : previous.HistoryScores,
             Entities = merged,
             VisionWidth = HasVision ? VisionWidth : previous.VisionWidth,
             VisionHeight = HasVision ? VisionHeight : previous.VisionHeight,
@@ -1191,12 +1274,16 @@ public sealed class SnapshotDelta
     private readonly List<uint> _masks = new();
     private readonly List<long> _removed = new();
     private byte[]? _vision;
+    private int _historyCount = -1;
+    private long _historyLastTick = -1;
 
     /// <summary>丢弃已发送状态：下一次 <see cref="Build"/> 强制关键帧（慢客户端丢帧或重连时调用）。</summary>
     public void Reset()
     {
         _previous.Clear();
         _vision = null;
+        _historyCount = -1;
+        _historyLastTick = -1;
     }
 
     public SnapshotFrame Build(SnapshotFrame current)
@@ -1250,6 +1337,17 @@ public sealed class SnapshotDelta
         {
             _vision = current.VisionStates;
         }
+        long historyLastTick = current.HistoryTicks.Length > 0
+            ? current.HistoryTicks[current.HistoryTicks.Length - 1]
+            : -1;
+        bool historyChanged = keyframe
+            || current.HistoryTicks.Length != _historyCount
+            || historyLastTick != _historyLastTick;
+        if (historyChanged)
+        {
+            _historyCount = current.HistoryTicks.Length;
+            _historyLastTick = historyLastTick;
+        }
         return new SnapshotFrame
         {
             Tick = current.Tick,
@@ -1259,6 +1357,9 @@ public sealed class SnapshotDelta
             Reason = current.Reason,
             EndTick = current.EndTick,
             Players = current.Players,
+            HasHistory = historyChanged,
+            HistoryTicks = historyChanged ? current.HistoryTicks : System.Array.Empty<long>(),
+            HistoryScores = historyChanged ? current.HistoryScores : System.Array.Empty<long[]>(),
             Delta = !keyframe,
             Entities = _changed.ToArray(),
             EntityMasks = _masks.ToArray(),
@@ -1382,5 +1483,105 @@ public sealed class CommandFrame
         }
         frame.Commands = commands;
         return frame;
+    }
+}
+
+/// <summary>房间规则：进程启动前固定，容量决定最多可坐几个玩家位。</summary>
+public sealed class LobbyRules
+{
+    public int MaxPlayers = 4;
+    public string MapName = "阿拉伯";
+    public long Seed = 20261127;
+}
+
+public readonly struct LobbySlot
+{
+    public readonly long Seat;
+    public readonly string Name;
+    public readonly long Color;
+    public readonly bool Ready;
+
+    public LobbySlot(long seat, string name, long color, bool ready)
+    {
+        Seat = seat;
+        Name = name;
+        Color = color;
+        Ready = ready;
+    }
+}
+
+/// <summary>
+/// 大厅帧：客户端上行加入/资料/准备/开始，服务器下行房间快照/开始通知/错误。
+/// 对局开始后不再使用，改走 Welcome + StaticMap + Snapshot。
+/// </summary>
+public sealed class LobbyMessage
+{
+    public const byte KindJoin = 0;
+    public const byte KindProfile = 1;
+    public const byte KindStart = 2;
+    public const byte KindRoom = 3;
+    public const byte KindStartMatch = 4;
+    public const byte KindError = 5;
+    public const byte KindReady = 6;
+
+    public byte Kind;
+    public string Name = "";
+    public long Color;
+    public bool Ready;
+    public string MapName = "";
+    public string Error = "";
+    public long HostSeat = -1;
+    public bool Started;
+    public LobbySlot[] Slots = System.Array.Empty<LobbySlot>();
+
+    public byte[] Encode()
+    {
+        using var stream = new MemoryStream();
+        using (var writer = new BinaryWriter(stream, System.Text.Encoding.UTF8, leaveOpen: true))
+        {
+            writer.Write(Kind);
+            writer.Write(Name);
+            writer.Write(Color);
+            writer.Write(Ready);
+            writer.Write(MapName);
+            writer.Write(Error);
+            writer.Write(HostSeat);
+            writer.Write(Started);
+            writer.Write(Slots.Length);
+            foreach (LobbySlot slot in Slots)
+            {
+                writer.Write(slot.Seat);
+                writer.Write(slot.Name);
+                writer.Write(slot.Color);
+                writer.Write(slot.Ready);
+            }
+        }
+        return stream.ToArray();
+    }
+
+    public static LobbyMessage Decode(byte[] data)
+    {
+        using var stream = new MemoryStream(data);
+        using var reader = new BinaryReader(stream, System.Text.Encoding.UTF8, leaveOpen: true);
+        var message = new LobbyMessage
+        {
+            Kind = reader.ReadByte(),
+            Name = reader.ReadString(),
+            Color = reader.ReadInt64(),
+            Ready = reader.ReadBoolean(),
+            MapName = reader.ReadString(),
+            Error = reader.ReadString(),
+            HostSeat = reader.ReadInt64(),
+            Started = reader.ReadBoolean(),
+        };
+        int count = reader.ReadInt32();
+        var slots = new LobbySlot[count];
+        for (int index = 0; index < count; index++)
+        {
+            slots[index] = new LobbySlot(
+                reader.ReadInt64(), reader.ReadString(), reader.ReadInt64(), reader.ReadBoolean());
+        }
+        message.Slots = slots;
+        return message;
     }
 }

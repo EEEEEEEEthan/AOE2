@@ -1,4 +1,4 @@
-[gd_scene load_steps=4 format=3]
+[gd_scene load_steps=3 format=3]
 
 [ext_resource type="Script" path="res://tools/map_editor.gd" id="1_editor"]
 [ext_resource type="Script" path="res://presentation/iso_camera.gd" id="2_camera"]
@@ -34,7 +34,79 @@ script = ExtResource("2_camera")
 unique_name_in_owner = true
 title = "地图校验"
 
+[node name="OpenDialog" type="FileDialog" parent="."]
+unique_name_in_owner = true
+title = "打开地图"
+size = Vector2i(720, 480)
+file_mode = 0
+access = 1
+current_dir = "user://maps"
+filters = PackedStringArray("*.json ; 场景地图")
+
+[node name="SizeDialog" type="ConfirmationDialog" parent="."]
+unique_name_in_owner = true
+title = "地图尺寸"
+
+[node name="SizeContent" type="VBoxContainer" parent="SizeDialog"]
+offset_left = 8.0
+offset_top = 8.0
+offset_right = 288.0
+offset_bottom = 96.0
+
+[node name="WidthRow" type="HBoxContainer" parent="SizeDialog/SizeContent"]
+layout_mode = 2
+
+[node name="WidthLabel" type="Label" parent="SizeDialog/SizeContent/WidthRow"]
+layout_mode = 2
+text = "宽度（格）"
+
+[node name="SizeWidthSpin" type="SpinBox" parent="SizeDialog/SizeContent/WidthRow"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+min_value = 8.0
+max_value = 128.0
+value = 32.0
+
+[node name="HeightRow" type="HBoxContainer" parent="SizeDialog/SizeContent"]
+layout_mode = 2
+
+[node name="HeightLabel" type="Label" parent="SizeDialog/SizeContent/HeightRow"]
+layout_mode = 2
+text = "高度（格）"
+
+[node name="SizeHeightSpin" type="SpinBox" parent="SizeDialog/SizeContent/HeightRow"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+min_value = 8.0
+max_value = 128.0
+value = 32.0
+
 [node name="Hud" type="CanvasLayer" parent="."]
+
+[node name="MenuBar" type="MenuBar" parent="Hud"]
+unique_name_in_owner = true
+anchors_preset = 10
+anchor_right = 1.0
+offset_right = -152.0
+offset_bottom = 32.0
+grow_horizontal = 2
+
+[node name="FileMenu" type="PopupMenu" parent="Hud/MenuBar"]
+unique_name_in_owner = true
+
+[node name="EditMenu" type="PopupMenu" parent="Hud/MenuBar"]
+unique_name_in_owner = true
+
+[node name="MapMenu" type="PopupMenu" parent="Hud/MenuBar"]
+unique_name_in_owner = true
+
+[node name="PlayerMenu" type="PopupMenu" parent="Hud/MenuBar"]
+unique_name_in_owner = true
+
+[node name="ViewMenu" type="PopupMenu" parent="Hud/MenuBar"]
+unique_name_in_owner = true
 
 [node name="MainMenuButton" type="Button" parent="Hud"]
 unique_name_in_owner = true
@@ -42,33 +114,38 @@ anchors_preset = 1
 anchor_left = 1.0
 anchor_right = 1.0
 offset_left = -136.0
-offset_top = 16.0
+offset_top = 8.0
 offset_right = -16.0
-offset_bottom = 52.0
+offset_bottom = 40.0
 grow_horizontal = 0
 text = "主菜单"
 
-[node name="ToolPanel" type="PanelContainer" parent="Hud"]
+[node name="PalettePanel" type="PanelContainer" parent="Hud"]
 offset_left = 16.0
-offset_top = 16.0
-offset_right = 336.0
-offset_bottom = 448.0
+offset_top = 48.0
+offset_right = 328.0
+offset_bottom = 656.0
 
-[node name="Margin" type="MarginContainer" parent="Hud/ToolPanel"]
+[node name="PaletteBox" type="VBoxContainer" parent="Hud/PalettePanel"]
 layout_mode = 2
 
-[node name="Content" type="VBoxContainer" parent="Hud/ToolPanel/Margin"]
+[node name="PaletteTabs" type="TabContainer" parent="Hud/PalettePanel/PaletteBox"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_vertical = 3
+
+[node name="工具" type="VBoxContainer" parent="Hud/PalettePanel/PaletteBox/PaletteTabs"]
 layout_mode = 2
 
-[node name="ToolLabel" type="Label" parent="Hud/ToolPanel/Margin/Content"]
+[node name="ToolLabel" type="Label" parent="Hud/PalettePanel/PaletteBox/PaletteTabs/工具"]
 layout_mode = 2
 text = "工具"
 
-[node name="ToolOption" type="OptionButton" parent="Hud/ToolPanel/Margin/Content"]
+[node name="ToolOption" type="OptionButton" parent="Hud/PalettePanel/PaletteBox/PaletteTabs/工具"]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
-item_count = 11
+item_count = 12
 selected = 0
 popup/item_0/text = "抬升高度"
 popup/item_0/id = 0
@@ -86,57 +163,37 @@ popup/item_6/text = "放置资源"
 popup/item_6/id = 6
 popup/item_7/text = "放置建筑"
 popup/item_7/id = 7
-popup/item_8/text = "移除放置"
+popup/item_8/text = "放置单位"
 popup/item_8/id = 8
-popup/item_9/text = "标记障碍"
+popup/item_9/text = "移除放置"
 popup/item_9/id = 9
-popup/item_10/text = "清除障碍"
+popup/item_10/text = "标记障碍"
 popup/item_10/id = 10
+popup/item_11/text = "清除障碍"
+popup/item_11/id = 11
 
-[node name="RadiusRow" type="HBoxContainer" parent="Hud/ToolPanel/Margin/Content"]
+[node name="RadiusRow" type="HBoxContainer" parent="Hud/PalettePanel/PaletteBox/PaletteTabs/工具"]
 layout_mode = 2
 
-[node name="RadiusLabel" type="Label" parent="Hud/ToolPanel/Margin/Content/RadiusRow"]
+[node name="RadiusLabel" type="Label" parent="Hud/PalettePanel/PaletteBox/PaletteTabs/工具/RadiusRow"]
 layout_mode = 2
 text = "半径"
 
-[node name="RadiusSpin" type="SpinBox" parent="Hud/ToolPanel/Margin/Content/RadiusRow"]
+[node name="RadiusSpin" type="SpinBox" parent="Hud/PalettePanel/PaletteBox/PaletteTabs/工具/RadiusRow"]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
 max_value = 8.0
 value = 1.0
 
-[node name="TypeRow" type="HBoxContainer" parent="Hud/ToolPanel/Margin/Content"]
+[node name="NodeRow" type="HBoxContainer" parent="Hud/PalettePanel/PaletteBox/PaletteTabs/工具"]
 layout_mode = 2
 
-[node name="TypeLabel" type="Label" parent="Hud/ToolPanel/Margin/Content/TypeRow"]
-layout_mode = 2
-text = "地形类型"
-
-[node name="TypeOption" type="OptionButton" parent="Hud/ToolPanel/Margin/Content/TypeRow"]
-unique_name_in_owner = true
-layout_mode = 2
-size_flags_horizontal = 3
-item_count = 4
-selected = 0
-popup/item_0/text = "草地"
-popup/item_0/id = 0
-popup/item_1/text = "泥土"
-popup/item_1/id = 1
-popup/item_2/text = "水"
-popup/item_2/id = 2
-popup/item_3/text = "悬崖"
-popup/item_3/id = 3
-
-[node name="NodeRow" type="HBoxContainer" parent="Hud/ToolPanel/Margin/Content"]
-layout_mode = 2
-
-[node name="NodeLabel" type="Label" parent="Hud/ToolPanel/Margin/Content/NodeRow"]
+[node name="NodeLabel" type="Label" parent="Hud/PalettePanel/PaletteBox/PaletteTabs/工具/NodeRow"]
 layout_mode = 2
 text = "资源类型"
 
-[node name="NodeOption" type="OptionButton" parent="Hud/ToolPanel/Margin/Content/NodeRow"]
+[node name="NodeOption" type="OptionButton" parent="Hud/PalettePanel/PaletteBox/PaletteTabs/工具/NodeRow"]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
@@ -151,84 +208,267 @@ popup/item_2/id = 2
 popup/item_3/text = "石头"
 popup/item_3/id = 3
 
-[node name="TeamRow" type="HBoxContainer" parent="Hud/ToolPanel/Margin/Content"]
+[node name="TeamRow" type="HBoxContainer" parent="Hud/PalettePanel/PaletteBox/PaletteTabs/工具"]
 layout_mode = 2
 
-[node name="TeamLabel" type="Label" parent="Hud/ToolPanel/Margin/Content/TeamRow"]
+[node name="TeamLabel" type="Label" parent="Hud/PalettePanel/PaletteBox/PaletteTabs/工具/TeamRow"]
 layout_mode = 2
 text = "阵营"
 
-[node name="TeamOption" type="OptionButton" parent="Hud/ToolPanel/Margin/Content/TeamRow"]
+[node name="TeamOption" type="OptionButton" parent="Hud/PalettePanel/PaletteBox/PaletteTabs/工具/TeamRow"]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
-item_count = 2
+
+[node name="ToolHint" type="Label" parent="Hud/PalettePanel/PaletteBox/PaletteTabs/工具"]
+layout_mode = 2
+autowrap_mode = 3
+text = "选择工具后在场景中左键拖动。滚轮缩放，WASD 平移。"
+
+[node name="地形" type="VBoxContainer" parent="Hud/PalettePanel/PaletteBox/PaletteTabs"]
+visible = false
+layout_mode = 2
+
+[node name="TypeLabel" type="Label" parent="Hud/PalettePanel/PaletteBox/PaletteTabs/地形"]
+layout_mode = 2
+text = "地形调色板"
+
+[node name="TypeOption" type="OptionButton" parent="Hud/PalettePanel/PaletteBox/PaletteTabs/地形"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+item_count = 4
 selected = 0
-popup/item_0/text = "蓝方"
+popup/item_0/text = "草地"
 popup/item_0/id = 0
-popup/item_1/text = "红方"
+popup/item_1/text = "泥土"
 popup/item_1/id = 1
+popup/item_2/text = "水"
+popup/item_2/id = 2
+popup/item_3/text = "悬崖"
+popup/item_3/id = 3
 
-[node name="HistoryRow" type="HBoxContainer" parent="Hud/ToolPanel/Margin/Content"]
+[node name="TerrainHint" type="Label" parent="Hud/PalettePanel/PaletteBox/PaletteTabs/地形"]
+layout_mode = 2
+autowrap_mode = 3
+text = "选择地形类型，配合「涂抹地形」工具在地图上绘制；「标记悬崖」可直接刷出不可通行悬崖。"
+
+[node name="建筑" type="VBoxContainer" parent="Hud/PalettePanel/PaletteBox/PaletteTabs"]
+visible = false
 layout_mode = 2
 
-[node name="UndoButton" type="Button" parent="Hud/ToolPanel/Margin/Content/HistoryRow"]
+[node name="BuildingLabel" type="Label" parent="Hud/PalettePanel/PaletteBox/PaletteTabs/建筑"]
+layout_mode = 2
+text = "按时代分类"
+
+[node name="BuildingCategory" type="OptionButton" parent="Hud/PalettePanel/PaletteBox/PaletteTabs/建筑"]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
-text = "撤销"
 
-[node name="RedoButton" type="Button" parent="Hud/ToolPanel/Margin/Content/HistoryRow"]
+[node name="BuildingList" type="ItemList" parent="Hud/PalettePanel/PaletteBox/PaletteTabs/建筑"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_vertical = 3
+allow_reselect = true
+
+[node name="单位" type="VBoxContainer" parent="Hud/PalettePanel/PaletteBox/PaletteTabs"]
+visible = false
+layout_mode = 2
+
+[node name="UnitLabel" type="Label" parent="Hud/PalettePanel/PaletteBox/PaletteTabs/单位"]
+layout_mode = 2
+text = "按类别分类"
+
+[node name="UnitCategory" type="OptionButton" parent="Hud/PalettePanel/PaletteBox/PaletteTabs/单位"]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
-text = "重做"
 
-[node name="MapRow" type="HBoxContainer" parent="Hud/ToolPanel/Margin/Content"]
+[node name="UnitList" type="ItemList" parent="Hud/PalettePanel/PaletteBox/PaletteTabs/单位"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_vertical = 3
+allow_reselect = true
+
+[node name="地图" type="VBoxContainer" parent="Hud/PalettePanel/PaletteBox/PaletteTabs"]
+visible = false
 layout_mode = 2
 
-[node name="ValidateButton" type="Button" parent="Hud/ToolPanel/Margin/Content/MapRow"]
+[node name="PathEdit" type="LineEdit" parent="Hud/PalettePanel/PaletteBox/PaletteTabs/地图"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "user://maps/editor_map.json"
+
+[node name="FileRow" type="HBoxContainer" parent="Hud/PalettePanel/PaletteBox/PaletteTabs/地图"]
+layout_mode = 2
+
+[node name="SaveButton" type="Button" parent="Hud/PalettePanel/PaletteBox/PaletteTabs/地图/FileRow"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+text = "保存"
+
+[node name="LoadButton" type="Button" parent="Hud/PalettePanel/PaletteBox/PaletteTabs/地图/FileRow"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+text = "读取"
+
+[node name="MapRow" type="HBoxContainer" parent="Hud/PalettePanel/PaletteBox/PaletteTabs/地图"]
+layout_mode = 2
+
+[node name="ValidateButton" type="Button" parent="Hud/PalettePanel/PaletteBox/PaletteTabs/地图/MapRow"]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
 text = "校验"
 
-[node name="NewButton" type="Button" parent="Hud/ToolPanel/Margin/Content/MapRow"]
+[node name="NewButton" type="Button" parent="Hud/PalettePanel/PaletteBox/PaletteTabs/地图/MapRow"]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
 text = "新建"
 
-[node name="PathRow" type="HBoxContainer" parent="Hud/ToolPanel/Margin/Content"]
+[node name="QuickTestButton" type="Button" parent="Hud/PalettePanel/PaletteBox/PaletteTabs/地图"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "保存并测试开局"
+
+[node name="MapHint" type="Label" parent="Hud/PalettePanel/PaletteBox/PaletteTabs/地图"]
+layout_mode = 2
+autowrap_mode = 3
+text = "地图保存到 user://maps 后可被对局读取；测试开局会带着当前地图进入对局。"
+
+[node name="StatusLabel" type="Label" parent="Hud/PalettePanel/PaletteBox"]
+unique_name_in_owner = true
+layout_mode = 2
+autowrap_mode = 3
+text = "就绪：左键拖动编辑，滚轮缩放，WASD 平移"
+
+[node name="PlayerPanel" type="PanelContainer" parent="Hud"]
+unique_name_in_owner = true
+anchors_preset = 1
+anchor_left = 1.0
+anchor_right = 1.0
+offset_left = -312.0
+offset_top = 48.0
+offset_right = -16.0
+offset_bottom = 384.0
+grow_horizontal = 0
+
+[node name="PlayerBox" type="VBoxContainer" parent="Hud/PlayerPanel"]
 layout_mode = 2
 
-[node name="PathEdit" type="LineEdit" parent="Hud/ToolPanel/Margin/Content/PathRow"]
+[node name="PlayerTitle" type="Label" parent="Hud/PlayerPanel/PlayerBox"]
+layout_mode = 2
+text = "玩家设置"
+
+[node name="PlayerCountRow" type="HBoxContainer" parent="Hud/PlayerPanel/PlayerBox"]
+layout_mode = 2
+
+[node name="PlayerCountLabel" type="Label" parent="Hud/PlayerPanel/PlayerBox/PlayerCountRow"]
+layout_mode = 2
+text = "玩家数量"
+
+[node name="PlayerCountSpin" type="SpinBox" parent="Hud/PlayerPanel/PlayerBox/PlayerCountRow"]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
-text = "res://maps/editor_map.json"
+min_value = 1.0
+max_value = 4.0
+value = 2.0
 
-[node name="SaveButton" type="Button" parent="Hud/ToolPanel/Margin/Content/PathRow"]
+[node name="CivRow" type="HBoxContainer" parent="Hud/PlayerPanel/PlayerBox"]
+layout_mode = 2
+
+[node name="CivLabel" type="Label" parent="Hud/PlayerPanel/PlayerBox/CivRow"]
+layout_mode = 2
+text = "文明"
+
+[node name="CivOption" type="OptionButton" parent="Hud/PlayerPanel/PlayerBox/CivRow"]
 unique_name_in_owner = true
 layout_mode = 2
-text = "保存"
+size_flags_horizontal = 3
 
-[node name="LoadButton" type="Button" parent="Hud/ToolPanel/Margin/Content/PathRow"]
+[node name="ResourceTitle" type="Label" parent="Hud/PlayerPanel/PlayerBox"]
+layout_mode = 2
+text = "起始资源（提示用）"
+
+[node name="WoodRow" type="HBoxContainer" parent="Hud/PlayerPanel/PlayerBox"]
+layout_mode = 2
+
+[node name="WoodLabel" type="Label" parent="Hud/PlayerPanel/PlayerBox/WoodRow"]
+layout_mode = 2
+text = "木材"
+
+[node name="StartWoodSpin" type="SpinBox" parent="Hud/PlayerPanel/PlayerBox/WoodRow"]
 unique_name_in_owner = true
 layout_mode = 2
-text = "读取"
+size_flags_horizontal = 3
+max_value = 10000.0
+value = 500.0
 
-[node name="StatusLabel" type="Label" parent="Hud/ToolPanel/Margin/Content"]
+[node name="FoodRow" type="HBoxContainer" parent="Hud/PlayerPanel/PlayerBox"]
+layout_mode = 2
+
+[node name="FoodLabel" type="Label" parent="Hud/PlayerPanel/PlayerBox/FoodRow"]
+layout_mode = 2
+text = "食物"
+
+[node name="StartFoodSpin" type="SpinBox" parent="Hud/PlayerPanel/PlayerBox/FoodRow"]
 unique_name_in_owner = true
 layout_mode = 2
-autowrap_mode = 2
-text = "就绪：左键拖动编辑，滚轮缩放，WASD 平移"
+size_flags_horizontal = 3
+max_value = 10000.0
+value = 200.0
+
+[node name="GoldRow" type="HBoxContainer" parent="Hud/PlayerPanel/PlayerBox"]
+layout_mode = 2
+
+[node name="GoldLabel" type="Label" parent="Hud/PlayerPanel/PlayerBox/GoldRow"]
+layout_mode = 2
+text = "黄金"
+
+[node name="StartGoldSpin" type="SpinBox" parent="Hud/PlayerPanel/PlayerBox/GoldRow"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+max_value = 10000.0
+value = 100.0
+
+[node name="StoneRow" type="HBoxContainer" parent="Hud/PlayerPanel/PlayerBox"]
+layout_mode = 2
+
+[node name="StoneLabel" type="Label" parent="Hud/PlayerPanel/PlayerBox/StoneRow"]
+layout_mode = 2
+text = "石头"
+
+[node name="StartStoneSpin" type="SpinBox" parent="Hud/PlayerPanel/PlayerBox/StoneRow"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+max_value = 10000.0
+value = 200.0
+
+[node name="DiplomacyButton" type="Button" parent="Hud/PlayerPanel/PlayerBox"]
+unique_name_in_owner = true
+layout_mode = 2
+disabled = true
+tooltip_text = "外交系统尚未实现"
+text = "外交（未实现）"
 
 [connection signal="pressed" from="Hud/MainMenuButton" to="." method="_on_main_menu_pressed"]
-[connection signal="item_selected" from="Hud/ToolPanel/Margin/Content/ToolOption" to="." method="_on_tool_selected"]
-[connection signal="pressed" from="Hud/ToolPanel/Margin/Content/HistoryRow/UndoButton" to="." method="_on_undo_pressed"]
-[connection signal="pressed" from="Hud/ToolPanel/Margin/Content/HistoryRow/RedoButton" to="." method="_on_redo_pressed"]
-[connection signal="pressed" from="Hud/ToolPanel/Margin/Content/MapRow/ValidateButton" to="." method="_on_validate_pressed"]
-[connection signal="pressed" from="Hud/ToolPanel/Margin/Content/MapRow/NewButton" to="." method="_on_new_pressed"]
-[connection signal="pressed" from="Hud/ToolPanel/Margin/Content/PathRow/SaveButton" to="." method="_on_save_pressed"]
-[connection signal="pressed" from="Hud/ToolPanel/Margin/Content/PathRow/LoadButton" to="." method="_on_load_pressed"]
+[connection signal="item_selected" from="Hud/PalettePanel/PaletteBox/PaletteTabs/工具/ToolOption" to="." method="_on_tool_selected"]
+[connection signal="pressed" from="Hud/PalettePanel/PaletteBox/PaletteTabs/地图/FileRow/SaveButton" to="." method="_on_save_pressed"]
+[connection signal="pressed" from="Hud/PalettePanel/PaletteBox/PaletteTabs/地图/FileRow/LoadButton" to="." method="_on_load_pressed"]
+[connection signal="pressed" from="Hud/PalettePanel/PaletteBox/PaletteTabs/地图/MapRow/ValidateButton" to="." method="_on_validate_pressed"]
+[connection signal="pressed" from="Hud/PalettePanel/PaletteBox/PaletteTabs/地图/MapRow/NewButton" to="." method="_on_new_pressed"]
+[connection signal="pressed" from="Hud/PalettePanel/PaletteBox/PaletteTabs/地图/QuickTestButton" to="." method="_on_quick_test_pressed"]
+[connection signal="item_selected" from="Hud/PalettePanel/PaletteBox/PaletteTabs/建筑/BuildingCategory" to="." method="_on_building_category_selected"]
+[connection signal="item_selected" from="Hud/PalettePanel/PaletteBox/PaletteTabs/单位/UnitCategory" to="." method="_on_unit_category_selected"]
+[connection signal="item_selected" from="Hud/PalettePanel/PaletteBox/PaletteTabs/建筑/BuildingList" to="." method="_on_building_selected"]
+[connection signal="item_selected" from="Hud/PalettePanel/PaletteBox/PaletteTabs/单位/UnitList" to="." method="_on_unit_selected"]
+[connection signal="value_changed" from="Hud/PlayerPanel/PlayerBox/PlayerCountRow/PlayerCountSpin" to="." method="_on_player_count_changed"]
+[connection signal="file_selected" from="OpenDialog" to="." method="_on_open_file_selected"]
+[connection signal="confirmed" from="SizeDialog" to="." method="_on_size_confirmed"]

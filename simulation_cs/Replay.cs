@@ -12,12 +12,14 @@ namespace AoeSim;
 public sealed class ReplayData
 {
     public const string Magic = "AOE2REPLAY";
-    public const int FormatVersion = 1;
+    public const int FormatVersion = 2;
 
     public string Name = "对局录像";
     public long CreatedUnix;
     public long Seed;
     public int PlayerCount;
+    /// <summary>每个玩家所选文明，按玩家索引排列；空数组表示全部通用文明（旧版录像）。</summary>
+    public int[] CivIds = System.Array.Empty<int>();
     public int TicksPerTurn = 6;
     public MatchConfig Config = MatchConfig.Standard;
     public string MapJson = "";
@@ -51,6 +53,11 @@ public sealed class ReplayData
         writer.Write(CreatedUnix);
         writer.Write(Seed);
         writer.Write(PlayerCount);
+        writer.Write(CivIds.Length);
+        foreach (int civ in CivIds)
+        {
+            writer.Write(civ);
+        }
         writer.Write(TicksPerTurn);
         writer.Write((int)Config.Rules);
         writer.Write(Config.WonderHoldTicks);
@@ -87,7 +94,8 @@ public sealed class ReplayData
             throw new InvalidDataException("不是有效的录像文件");
         }
         int format = reader.ReadInt32();
-        if (format != FormatVersion)
+        // 版本 1 是未携带文明列的旧录像，恢复时按全部通用文明处理，仍可回放。
+        if (format != 1 && format != FormatVersion)
         {
             throw new InvalidDataException($"录像格式版本不兼容：文件 {format}，当前 {FormatVersion}");
         }
@@ -102,8 +110,22 @@ public sealed class ReplayData
             CreatedUnix = reader.ReadInt64(),
             Seed = reader.ReadInt64(),
             PlayerCount = reader.ReadInt32(),
-            TicksPerTurn = reader.ReadInt32(),
         };
+        if (format >= 2)
+        {
+            int civCount = reader.ReadInt32();
+            if (civCount < 0 || civCount > data.PlayerCount)
+            {
+                throw new InvalidDataException("录像文明数量非法");
+            }
+            var civs = new int[civCount];
+            for (int index = 0; index < civCount; index++)
+            {
+                civs[index] = reader.ReadInt32();
+            }
+            data.CivIds = civs;
+        }
+        data.TicksPerTurn = reader.ReadInt32();
         var rules = (VictoryCondition)reader.ReadInt32();
         long wonder = reader.ReadInt64();
         long relic = reader.ReadInt64();
@@ -172,18 +194,22 @@ public sealed class ReplayRecorder : ICommandRecorder
     private readonly int _playerCount;
     private readonly int _ticksPerTurn;
     private readonly MatchConfig _config;
+    private readonly int[] _civIds;
     private readonly Dictionary<long, List<LockstepCommand>> _commands = new();
 
     public long LastTick { get; private set; } = -1;
     public long LastChecksum { get; private set; }
 
-    public ReplayRecorder(MapData map, long seed, int playerCount, int ticksPerTurn, MatchConfig config)
+    public ReplayRecorder(
+        MapData map, long seed, int playerCount, int ticksPerTurn, MatchConfig config,
+        int[]? civIds = null)
     {
         _map = map;
         _seed = seed;
         _playerCount = playerCount;
         _ticksPerTurn = ticksPerTurn;
         _config = config;
+        _civIds = civIds == null ? System.Array.Empty<int>() : (int[])civIds.Clone();
     }
 
     public void Record(long turn, LockstepCommand command)
@@ -213,6 +239,7 @@ public sealed class ReplayRecorder : ICommandRecorder
         CreatedUnix = DateTimeOffset.UtcNow.ToUnixTimeSeconds(),
         Seed = _seed,
         PlayerCount = _playerCount,
+        CivIds = _civIds,
         TicksPerTurn = _ticksPerTurn,
         Config = _config,
         MapJson = _map.ToJson(),
@@ -240,8 +267,11 @@ public sealed class ReplaySession : ILocalSession
     {
         Data = data;
         MapData map = MapData.FromJson(data.MapJson);
+        long[]? civIds = data.CivIds.Length == 0
+            ? null
+            : System.Array.ConvertAll(data.CivIds, value => (long)value);
         GameSim sim = MapSetup.BuildGeneratedMatch(
-            map, data.Seed, data.PlayerCount, data.TicksPerTurn, data.Config);
+            map, data.Seed, data.PlayerCount, data.TicksPerTurn, data.Config, civIds);
         Server = new SimulationServer(sim);
         Client = new SimulationClient();
         Client.ApplyStaticMap(StaticMapFrame.FromTerrain(sim.Terrain));

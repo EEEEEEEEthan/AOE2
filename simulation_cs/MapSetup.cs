@@ -51,6 +51,18 @@ public static class MapSetup
             }
         }
 
+        foreach (MapPlacement placement in map.Placements)
+        {
+            if (placement.Kind != MapPlacement.KindBuilding
+                || !BuildingTypes.IsKnown(placement.BuildingType)
+                || placement.BuildingType == BuildingTypes.TownCenter)
+            {
+                continue;
+            }
+            sim.SpawnCompletedBuilding(
+                placement.X, placement.Y, placement.Team, placement.BuildingType);
+        }
+
         foreach (ResourcePoint point in map.Resources)
         {
             sim.SpawnResourceNode(point.X, point.Y, point.Type, point.Amount, point.Subtype);
@@ -61,10 +73,32 @@ public static class MapSetup
             sim.SpawnHuntingAnimal(animal.X, animal.Y, animal.Species);
         }
 
+        foreach (MapPlacement placement in map.Placements)
+        {
+            if (placement.Kind != MapPlacement.KindUnit)
+            {
+                continue;
+            }
+            SpawnPlacedUnit(sim, placement);
+        }
+
         foreach (PlayerStart start in map.Starts)
         {
             SpawnVillagers(sim, map, start);
         }
+    }
+
+    /// <summary>按编辑器的单位放置项生成单位；村民走采集单位入口，其余走兵种表。</summary>
+    private static void SpawnPlacedUnit(GameSim sim, MapPlacement placement)
+    {
+        if (placement.UnitType == UnitDefs.Villager)
+        {
+            sim.SpawnVillager(
+                placement.X, placement.Y, placement.Team, VillagerSpeed,
+                VillagerCarryCapacity, VillagerGatherRate, 0);
+            return;
+        }
+        sim.SpawnUnit(placement.X, placement.Y, placement.Team, placement.UnitType);
     }
 
     private static void SpawnVillagers(GameSim sim, MapData map, PlayerStart start)

@@ -133,8 +133,16 @@
 ## 启动与主菜单
 
 - 启动进入主菜单 `presentation/main_menu.tscn`，菜单只负责导航，不自动开局。
-- 标准游戏 → `presentation/main.tscn`，以固定种子生成阿拉伯标准对局；场景编辑器 → `tools/map_editor.tscn`；战役/多人/科技树/选项为占位提示。
+- 标准游戏 → `presentation/main.tscn`，以固定种子生成阿拉伯标准对局；场景编辑器 → `tools/map_editor.tscn`；多人游戏 → `presentation/lobby.tscn`；战役/科技树/选项为占位提示。
 - 对局结算面板与地图编辑器都可返回主菜单；dedicated server（`--server`）绕过菜单直接开局。
+
+## 多人大厅
+
+- 主菜单「多人游戏」进入 `presentation/lobby.tscn`：填名称后「创建房间」在本机起一个带大厅阶段的 `DedicatedServer`，其他客户端填地址与端口「加入房间」。
+- 大厅协议在原有帧类型上新增 `Lobby` 帧（加入/资料/准备/开始、房间快照、错误码），对局开始后才下发 `Welcome + StaticMap + Snapshot`；房间内显示槽位、队伍、旗帜颜色与准备状态，房主在其余玩家全部准备后可开始。
+- 房主与加入者共用同一套客户端路径：`MultiplayerSession` 同时持有本机大厅服务器与 `RemoteClient`，切到对局场景时该节点整体移交，断线/退房由节点生命周期收尾。
+- `GameBridge` 增加联机接管：地形取自静态地图、指令经 `RemoteClient` 提交，市场/训练等本地预判读快照，最终仍由服务器校验。
+- 连接失败、房间已满、未准备就开局等都有明确文案；`tests/lobby.gd` + `LobbySelfTest` 用回环地址覆盖建房、加入、准备、开始与满员拒绝。
 
 ## 运行与测试
 
@@ -167,3 +175,4 @@ dotnet build AOE2Framework.sln           # 单独编译 C# 内核
 - [x] 对局加载界面：地图与玩家/文明信息、进度条、随机提示，分帧生成后自动进入对局
 - [x] 录像与回放：对局录制为 `user://replays/*.aoe2rep`，主菜单「观看录像」列表、暂停/倍速/进度拖动与回放校验和对拍
 - [x] 单位训练与生产队列：建筑 `PRODUCTION` 组件、排队/取消/退款、计时出生、集结点与连续生产，状态进校验和
+- [x] 多人大厅：直连建房/加入、槽位队伍颜色与准备、房主开始、连接与满员错误提示、联机对局接管

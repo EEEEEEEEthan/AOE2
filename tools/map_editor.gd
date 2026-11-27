@@ -13,9 +13,10 @@ const TOOL_CLIFF := 4
 const TOOL_SPAWN := 5
 const TOOL_RESOURCE := 6
 const TOOL_BUILDING := 7
-const TOOL_ERASE := 8
-const TOOL_BLOCK := 9
-const TOOL_CLEAR := 10
+const TOOL_UNIT := 8
+const TOOL_ERASE := 9
+const TOOL_BLOCK := 10
+const TOOL_CLEAR := 11
 
 const TOOL_LABELS := [
 	"抬升高度",
@@ -26,6 +27,7 @@ const TOOL_LABELS := [
 	"放置出生点",
 	"放置资源",
 	"放置建筑",
+	"放置单位",
 	"移除放置",
 	"标记障碍",
 	"清除障碍",
@@ -62,6 +64,14 @@ var _terrain_dirty := true
 var _markers_dirty := true
 var _painting := false
 var _last_tile := Vector2i(-1, -1)
+var _building_options: Array = []
+var _building_categories: Array = []
+var _building_list_ids: Array = []
+var _unit_options: Array = []
+var _unit_categories: Array = []
+var _unit_list_ids: Array = []
+var _selected_building_type := 0
+var _selected_unit_type := -1
 
 
 func _ready() -> void:
@@ -69,8 +79,12 @@ func _ready() -> void:
 	_model.new_map(32, 32)
 	_bridge = MapEditorBridge.new()
 	add_child(_bridge)
+	_setup_menus()
+	_setup_civ_options()
+	_setup_team_options(int(%PlayerCountSpin.value))
+	_setup_building_palette()
+	_setup_unit_palette()
 	_fit_camera()
-	_refresh_history_buttons()
 
 
 func _process(_delta: float) -> void:
@@ -111,6 +125,96 @@ func _unhandled_key_input(event: InputEvent) -> void:
 		_on_save_pressed()
 
 
+func _setup_menus() -> void:
+	var menu_bar: MenuBar = %MenuBar
+	menu_bar.set_menu_title(0, "文件")
+	menu_bar.set_menu_title(1, "编辑")
+	menu_bar.set_menu_title(2, "地图")
+	menu_bar.set_menu_title(3, "玩家")
+	menu_bar.set_menu_title(4, "视图")
+	%FileMenu.add_item("新建地图", 0)
+	%FileMenu.add_item("打开地图…", 1)
+	%FileMenu.add_item("保存地图", 2)
+	%FileMenu.add_item("保存并测试开局", 3)
+	%FileMenu.add_separator()
+	%FileMenu.add_item("返回主菜单", 4)
+	%FileMenu.id_pressed.connect(_on_file_menu_pressed)
+	%EditMenu.add_item("撤销", 0)
+	%EditMenu.add_item("重做", 1)
+	%EditMenu.add_separator()
+	%EditMenu.add_item("清空放置", 2)
+	%EditMenu.id_pressed.connect(_on_edit_menu_pressed)
+	%MapMenu.add_item("地图尺寸…", 0)
+	%MapMenu.add_item("校验地图", 1)
+	%MapMenu.add_separator()
+	%MapMenu.add_item("清除全部障碍", 2)
+	%MapMenu.id_pressed.connect(_on_map_menu_pressed)
+	%PlayerMenu.add_item("显示/隐藏玩家设置", 0)
+	%PlayerMenu.id_pressed.connect(_on_player_menu_pressed)
+	%ViewMenu.add_item("重置视角", 0)
+	%ViewMenu.id_pressed.connect(_on_view_menu_pressed)
+
+
+func _setup_civ_options() -> void:
+	var probe := GameBridge.new()
+	for civ in probe.CivilizationCount:
+		%CivOption.add_item(probe.CivilizationName(civ))
+	probe.free()
+
+
+func _setup_team_options(player_count: int) -> void:
+	%TeamOption.clear()
+	for team in player_count:
+		%TeamOption.add_item("玩家 %d" % (team + 1))
+
+
+func _setup_building_palette() -> void:
+	_building_options = _bridge.BuildingOptions()
+	_building_categories = _distinct_categories(_building_options)
+	for category in _building_categories:
+		%BuildingCategory.add_item(category)
+	_refresh_building_list()
+
+
+func _setup_unit_palette() -> void:
+	_unit_options = _bridge.UnitOptions()
+	_unit_categories = _distinct_categories(_unit_options)
+	for category in _unit_categories:
+		%UnitCategory.add_item(category)
+	_refresh_unit_list()
+
+
+func _distinct_categories(options: Array) -> Array:
+	var categories: Array = []
+	for option: Dictionary in options:
+		var category := String(option["category"])
+		if not categories.has(category):
+			categories.append(category)
+	return categories
+
+
+func _refresh_building_list() -> void:
+	%BuildingList.clear()
+	_building_list_ids = []
+	var category: String = _building_categories[%BuildingCategory.selected] if _building_categories.size() > 0 else ""
+	for option: Dictionary in _building_options:
+		if String(option["category"]) != category:
+			continue
+		_building_list_ids.append(int(option["id"]))
+		%BuildingList.add_item(String(option["name"]))
+
+
+func _refresh_unit_list() -> void:
+	%UnitList.clear()
+	_unit_list_ids = []
+	var category: String = _unit_categories[%UnitCategory.selected] if _unit_categories.size() > 0 else ""
+	for option: Dictionary in _unit_options:
+		if String(option["category"]) != category:
+			continue
+		_unit_list_ids.append(int(option["id"]))
+		%UnitList.add_item(String(option["name"]))
+
+
 func _fit_camera() -> void:
 	var camera: IsoCamera = %Camera3D
 	camera.grid_width = float(_model.width)
@@ -144,7 +248,6 @@ func _end_paint() -> void:
 		return
 	_painting = false
 	_model.end_stroke()
-	_refresh_history_buttons()
 
 
 func _apply_tool(tile: Vector2i) -> void:
@@ -171,7 +274,12 @@ func _apply_tool(tile: Vector2i) -> void:
 				RESOURCE_SUBTYPES[%NodeOption.selected])
 		TOOL_BUILDING:
 			_model.add_placement(
-				MapEditorModel.KIND_BUILDING, tile.x, tile.y, %TeamOption.selected, 0, 0)
+				MapEditorModel.KIND_BUILDING, tile.x, tile.y, %TeamOption.selected, 0, 0,
+				0, _selected_building_type)
+		TOOL_UNIT:
+			_model.add_placement(
+				MapEditorModel.KIND_UNIT, tile.x, tile.y, %TeamOption.selected, 0, 0,
+				0, 0, _selected_unit_type)
 		TOOL_ERASE:
 			_model.remove_placement_at(tile.x, tile.y)
 		TOOL_BLOCK:
@@ -275,6 +383,8 @@ func _placement_visual(kind: String) -> Dictionary:
 			return {"mesh": _cylinder_mesh(0.28, 1.1), "height": 0.55}
 		MapEditorModel.KIND_RESOURCE:
 			return {"mesh": _box_mesh(Vector3(0.6, 0.6, 0.6)), "height": 0.3}
+		MapEditorModel.KIND_UNIT:
+			return {"mesh": _cylinder_mesh(0.22, 0.9), "height": 0.45}
 		_:
 			return {"mesh": _box_mesh(Vector3(1.0, 0.9, 1.0)), "height": 0.45}
 
@@ -306,7 +416,7 @@ func _get_placement_material(placement: Dictionary) -> StandardMaterial3D:
 
 func _placement_color(placement: Dictionary) -> Color:
 	match String(placement["kind"]):
-		MapEditorModel.KIND_SPAWN:
+		MapEditorModel.KIND_SPAWN, MapEditorModel.KIND_UNIT:
 			return PlayerColors.color_of(int(placement["team"]))
 		MapEditorModel.KIND_RESOURCE:
 			return RESOURCE_COLORS[int(placement["node_type"]) % RESOURCE_COLORS.size()]
@@ -336,17 +446,103 @@ func _terrain_color(terrain_type: int, is_top: bool) -> Color:
 			return TERRAIN_GRASS_TOP if is_top else TERRAIN_GRASS_SIDE
 
 
-func _refresh_history_buttons() -> void:
-	%UndoButton.disabled = not _model.can_undo()
-	%RedoButton.disabled = not _model.can_redo()
-
 
 func _set_status(text: String) -> void:
 	%StatusLabel.text = text
 
 
-func _on_tool_selected(_index: int) -> void:
-	_set_status("当前工具：%s" % TOOL_LABELS[%ToolOption.selected])
+func _on_file_menu_pressed(id: int) -> void:
+	match id:
+		0:
+			_on_new_pressed()
+		1:
+			%OpenDialog.popup_centered_ratio(0.7)
+		2:
+			_on_save_pressed()
+		3:
+			_on_quick_test_pressed()
+		4:
+			_on_main_menu_pressed()
+
+
+func _on_edit_menu_pressed(id: int) -> void:
+	match id:
+		0:
+			_on_undo_pressed()
+		1:
+			_on_redo_pressed()
+		2:
+			_model.begin_stroke()
+			_model.clear_placements()
+			_model.end_stroke()
+			_mark_dirty()
+			_set_status("已清空放置")
+
+
+func _on_map_menu_pressed(id: int) -> void:
+	match id:
+		0:
+			%SizeWidthSpin.value = _model.width
+			%SizeHeightSpin.value = _model.height
+			%SizeDialog.popup_centered()
+		1:
+			_on_validate_pressed()
+		2:
+			_model.begin_stroke()
+			_model.clear_blocked()
+			_model.end_stroke()
+			_mark_dirty()
+			_set_status("已清除全部障碍标记")
+
+
+func _on_player_menu_pressed(_id: int) -> void:
+	%PlayerPanel.visible = not %PlayerPanel.visible
+
+
+func _on_view_menu_pressed(_id: int) -> void:
+	_fit_camera()
+	_set_status("已重置视角")
+
+
+func _on_open_file_selected(path: String) -> void:
+	%PathEdit.text = path
+	_on_load_pressed()
+
+
+func _on_size_confirmed() -> void:
+	_model.new_map(int(%SizeWidthSpin.value), int(%SizeHeightSpin.value))
+	_mark_dirty()
+	_fit_camera()
+	_set_status("已新建 %d×%d 地图" % [_model.width, _model.height])
+
+
+func _on_tool_selected(index: int) -> void:
+	_set_status("当前工具：%s" % TOOL_LABELS[index])
+
+
+func _on_building_category_selected(_index: int) -> void:
+	_refresh_building_list()
+
+
+func _on_unit_category_selected(_index: int) -> void:
+	_refresh_unit_list()
+
+
+func _on_building_selected(index: int) -> void:
+	_selected_building_type = _building_list_ids[index]
+	%ToolOption.select(TOOL_BUILDING)
+	_set_status("放置建筑：%s（左键点击地图）" % %BuildingList.get_item_text(index))
+
+
+func _on_unit_selected(index: int) -> void:
+	_selected_unit_type = _unit_list_ids[index]
+	%ToolOption.select(TOOL_UNIT)
+	_set_status("放置单位：%s（左键点击地图）" % %UnitList.get_item_text(index))
+
+
+func _on_player_count_changed(value: float) -> void:
+	_setup_team_options(int(value))
+	_set_status("玩家数量：%d（出生点按阵营颜色区分）" % int(value))
 
 
 func _on_main_menu_pressed() -> void:
@@ -356,14 +552,12 @@ func _on_main_menu_pressed() -> void:
 func _on_undo_pressed() -> void:
 	_model.undo()
 	_mark_dirty()
-	_refresh_history_buttons()
 	_set_status("已撤销")
 
 
 func _on_redo_pressed() -> void:
 	_model.redo()
 	_mark_dirty()
-	_refresh_history_buttons()
 	_set_status("已重做")
 
 
@@ -371,20 +565,29 @@ func _on_new_pressed() -> void:
 	_model.new_map(32, 32)
 	_mark_dirty()
 	_fit_camera()
-	_refresh_history_buttons()
 	_set_status("已新建 32×32 地图")
 
 
-func _on_save_pressed() -> void:
+func _on_save_pressed() -> bool:
 	var path: String = %PathEdit.text.strip_edges()
 	if path.is_empty():
 		_set_status("请填写保存路径")
-		return
+		return false
 	var result := _model.save_map(_bridge, path)
 	if result.get("ok", false):
 		_set_status("已保存到 %s" % path)
-	else:
-		_set_status("保存失败：%s" % result.get("error", "未知错误"))
+		return true
+	_set_status("保存失败：%s" % result.get("error", "未知错误"))
+	return false
+
+
+func _on_quick_test_pressed() -> void:
+	if not _on_save_pressed():
+		return
+	MatchSetup.reset_config()
+	MatchSetup.config["map_path"] = %PathEdit.text.strip_edges()
+	MatchSetup.config["map_name"] = String(%PathEdit.text.strip_edges()).get_file().get_basename()
+	get_tree().change_scene_to_file("res://presentation/loading.tscn")
 
 
 func _on_load_pressed() -> void:
@@ -398,7 +601,6 @@ func _on_load_pressed() -> void:
 		return
 	_mark_dirty()
 	_fit_camera()
-	_refresh_history_buttons()
 	_set_status("已读取 %s（%d×%d）" % [path, _model.width, _model.height])
 
 
