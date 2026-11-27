@@ -39,6 +39,35 @@ public static class TradeSystem
         return world.GetValue(id, SimComponents.Building, SimComponents.State) == BuildingSystem.StateComplete;
     }
 
+    /// <summary>
+    /// 设定贸易路线：起点必须是本玩家完工的市场，终点是任意完工市场，两端不可相同。
+    /// 车随后由 <see cref="TradeSystem"/> 自动往返，每次抵达按距离与价差产金。
+    /// </summary>
+    public static bool IssueRoute(SimWorld world, long cart, long homeMarket, long targetMarket)
+    {
+        if (!world.IsAlive(cart) || !world.HasComponent(cart, SimComponents.Trade))
+        {
+            return false;
+        }
+        if (!IsCompletedMarket(world, homeMarket)
+            || !IsCompletedMarket(world, targetMarket))
+        {
+            return false;
+        }
+        if (homeMarket == targetMarket)
+        {
+            return false;
+        }
+        long team = world.GetValue(cart, SimComponents.Team, SimComponents.TeamId);
+        if (world.GetValue(homeMarket, SimComponents.Team, SimComponents.TeamId) != team)
+        {
+            return false;
+        }
+        world.SetValue(cart, SimComponents.Trade, SimComponents.TradeHome, homeMarket);
+        world.SetValue(cart, SimComponents.Trade, SimComponents.TradeTarget, targetMarket);
+        return true;
+    }
+
     private static void StepCart(SimWorld world, NavGrid grid, TerrainGrid terrain, GameSim sim, long id)
     {
         long home = world.GetValue(id, SimComponents.Trade, SimComponents.TradeHome);
