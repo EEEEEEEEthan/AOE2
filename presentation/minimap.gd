@@ -3,10 +3,6 @@ extends Control
 
 signal jump_requested(world_position: Vector2)
 
-const TEAM_COLORS := {
-	0: Color(0.9, 0.32, 0.28),
-	1: Color(0.3, 0.55, 0.95),
-}
 const NEUTRAL_COLOR := Color(0.65, 0.58, 0.42)
 const RESOURCE_COLOR := Color(0.46, 0.36, 0.22)
 const UNEXPLORED_COLOR := Color(0.02, 0.02, 0.03)
@@ -81,7 +77,7 @@ func _draw() -> void:
 		var team: int = _teams[index]
 		var color := NEUTRAL_COLOR
 		if team >= 0:
-			color = TEAM_COLORS.get(team, NEUTRAL_COLOR)
+			color = PlayerColors.color_of(team)
 		if team == _my_team:
 			color = color.lightened(0.2)
 		var point := origin + Vector2(_positions_x[index], _positions_y[index]) * cell_size

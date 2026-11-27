@@ -21,8 +21,8 @@ func _capture() -> void:
 		bridge = scene.get("bridge")
 		waited += 1
 	bridge.call("StartLocalDemo")
-	var world: Node3D = scene.get_node("WorldView")
-	var camera: Variant = scene.get_node("Camera3D")
+	var world: Node3D = scene.find_child("WorldView", true, false)
+	var camera: Variant = scene.find_child("Camera3D", true, false)
 	camera.set("focus", Vector3(16.0, 0.0, 16.0))
 	camera.set("ortho_size", 20.0)
 	camera.call("refresh_view")

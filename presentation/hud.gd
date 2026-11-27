@@ -244,7 +244,7 @@ func _ensure_market_targets(my_team: int) -> void:
 	_market_targets_signature = signature
 	%MarketTargetOption.clear()
 	for team: int in teams:
-		%MarketTargetOption.add_item("玩家 %d" % (team + 1), team)
+		%MarketTargetOption.add_item(PlayerColors.name_of(team), team)
 	if %MarketTargetOption.item_count > 0:
 		%MarketTargetOption.select(0)
 
