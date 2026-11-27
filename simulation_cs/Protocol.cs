@@ -22,7 +22,7 @@ public static class EntityKind
 /// <summary>网络协议版本：静态地图帧携带，握手时校验两端一致。</summary>
 public static class NetProtocol
 {
-    public const int Version = 10;
+    public const int Version = 11;
 }
 
 /// <summary>
@@ -80,10 +80,15 @@ public sealed class StaticMapFrame
     }
 }
 
-/// <summary>握手帧：服务器按接入顺序给该连接分配观察方 team，客户端据此渲染自己的视野。</summary>
+/// <summary>
+/// 握手帧：服务器按接入顺序给该连接分配观察方 team，并下发对局节奏，
+/// 客户端据此渲染自己的视野并把 RTT 换算成输入提前量。
+/// </summary>
 public sealed class WelcomeFrame
 {
     public long ViewerTeam;
+    public int TicksPerTurn = 6;
+    public int TicksPerSecond = 30;
 
     public byte[] Encode()
     {
@@ -91,6 +96,8 @@ public sealed class WelcomeFrame
         using (var writer = new BinaryWriter(stream, System.Text.Encoding.UTF8, leaveOpen: true))
         {
             writer.Write(ViewerTeam);
+            writer.Write(TicksPerTurn);
+            writer.Write(TicksPerSecond);
         }
         return stream.ToArray();
     }
@@ -99,7 +106,35 @@ public sealed class WelcomeFrame
     {
         using var stream = new MemoryStream(data);
         using var reader = new BinaryReader(stream, System.Text.Encoding.UTF8, leaveOpen: true);
-        return new WelcomeFrame { ViewerTeam = reader.ReadInt64() };
+        return new WelcomeFrame
+        {
+            ViewerTeam = reader.ReadInt64(),
+            TicksPerTurn = reader.ReadInt32(),
+            TicksPerSecond = reader.ReadInt32(),
+        };
+    }
+}
+
+/// <summary>往返采样帧（Ping/Echo 共用载荷）：客户端填本地序号，服务器原样回显，客户端据回显时刻算 RTT。</summary>
+public sealed class PingFrame
+{
+    public long Sequence;
+
+    public byte[] Encode()
+    {
+        using var stream = new MemoryStream();
+        using (var writer = new BinaryWriter(stream, System.Text.Encoding.UTF8, leaveOpen: true))
+        {
+            writer.Write(Sequence);
+        }
+        return stream.ToArray();
+    }
+
+    public static PingFrame Decode(byte[] data)
+    {
+        using var stream = new MemoryStream(data);
+        using var reader = new BinaryReader(stream, System.Text.Encoding.UTF8, leaveOpen: true);
+        return new PingFrame { Sequence = reader.ReadInt64() };
     }
 }
 

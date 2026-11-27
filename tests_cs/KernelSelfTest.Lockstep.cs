@@ -25,6 +25,33 @@ public static partial class KernelSelfTest
             InputTiming.PlanTurn(7) == 7 + InputTiming.DefaultLookaheadTurns,
             "planned turn offsets the snapshot turn by the lookahead");
 
+        long now = 0;
+        var tracker = new RttTracker(() => now);
+        Expect(failures,
+            tracker.LookaheadFor(6, 30) == InputTiming.DefaultLookaheadTurns,
+            "no RTT sample falls back to the default lookahead");
+        tracker.Record(20);
+        Expect(failures, tracker.LookaheadFor(6, 30) == 1,
+            "low RTT keeps lookahead at one turn instead of over-advancing");
+        var laggyTracker = new RttTracker(() => now);
+        laggyTracker.Record(600);
+        Expect(failures, laggyTracker.LookaheadFor(6, 30) > tracker.LookaheadFor(6, 30),
+            "high RTT raises the lookahead above the low-latency case");
+        Expect(failures,
+            laggyTracker.LookaheadFor(6, 30) <= InputTiming.MaxLookaheadTurns,
+            "RTT-derived lookahead stays inside the server window");
+        var smoothingTracker = new RttTracker(() => now);
+        smoothingTracker.Record(1000);
+        smoothingTracker.Record(0);
+        Expect(failures,
+            smoothingTracker.SmoothedRttMilliseconds > 0
+            && smoothingTracker.SmoothedRttMilliseconds < 1000,
+            "RTT samples are smoothed instead of replaced");
+        now += RttTracker.SampleTimeoutMilliseconds + 1;
+        Expect(failures,
+            laggyTracker.LookaheadFor(6, 30) == InputTiming.DefaultLookaheadTurns,
+            "expired RTT sample falls back to the default lookahead");
+
         var original = new LockstepCommand(1, LockstepCommand.KindGather, 12, 0, 0, 30, 31);
         LockstepCommand restored = LockstepCommand.FromArray(original.ToArray());
         Expect(failures,
