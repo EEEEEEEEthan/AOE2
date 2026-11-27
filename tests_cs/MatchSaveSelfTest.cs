@@ -16,8 +16,78 @@ public static class MatchSaveSelfTest
     {
         var failures = new List<string>();
         CheckSaveRoundTrip(failures);
+        CheckServerRoundTrip(failures);
         CheckCorruptedSaveRejected(failures);
         return failures;
+    }
+
+    /// <summary>带电脑玩家与服务器回合进度的完整对局链路：读档后 AI 与锁步队列必须从同一时点续推。</summary>
+    private static void CheckServerRoundTrip(List<string> failures)
+    {
+        MapData map = MapGenerator.Generate(MapType.Arabia, Seed, PlayerCount);
+        GameSim sim = MapSetup.BuildGeneratedMatch(map, Seed, PlayerCount);
+        var server = new SimulationServer(sim);
+        server.AddComputerPlayer(new ComputerPlayer(sim, 1, AiDifficulty.Normal, map.Starts, Seed));
+        for (int tick = 0; tick < 240; tick++)
+        {
+            server.Step();
+        }
+        long villager = FindEntity(sim, 0, SimComponents.Gather);
+        if (villager >= 0)
+        {
+            server.Enqueue(new CommandFrame
+            {
+                Player = 0,
+                Turn = server.Turn,
+                Commands = new[]
+                {
+                    new LockstepCommand(0, LockstepCommand.KindMove, villager, 6, 6),
+                },
+            });
+        }
+
+        long savedChecksum = sim.World.Checksum();
+        MatchSaveData data = MatchSaveData.Build(
+            sim, map, "AI 存档", (int)AiDifficulty.Normal, server.CaptureState());
+        Expect(failures, data.ServerState != null, "save carries the server state");
+        Expect(failures, data.ServerState!.ComputerPlayers.Count == 1, "save carries the AI controller");
+
+        GameSim restoredSim = data.Restore();
+        Expect(failures, restoredSim.World.Checksum() == savedChecksum,
+            "AI match restores to the saved checksum");
+        var restoredServer = new SimulationServer(restoredSim);
+        restoredServer.RestoreState(data.ServerState, map.Starts, data.Seed);
+        Expect(failures, restoredServer.ComputerPlayerCount == 1,
+            "restored server rebuilds the AI controller");
+
+        for (int tick = 0; tick < 180; tick++)
+        {
+            long expected = server.Step();
+            long actual = restoredServer.Step();
+            if (expected != actual)
+            {
+                failures.Add($"AI match diverged at continued tick {tick}: {expected} vs {actual}");
+                break;
+            }
+        }
+    }
+
+    private static long FindEntity(GameSim sim, long team, string component)
+    {
+        ComponentStore store = sim.World.Store(component);
+        foreach (long id in sim.World.Entities())
+        {
+            if (!store.Has(id) || !sim.World.IsAlive(id)
+                || !sim.World.HasComponent(id, SimComponents.Team))
+            {
+                continue;
+            }
+            if (sim.World.GetValue(id, SimComponents.Team, SimComponents.TeamId) == team)
+            {
+                return id;
+            }
+        }
+        return -1;
     }
 
     private static void CheckSaveRoundTrip(List<string> failures)

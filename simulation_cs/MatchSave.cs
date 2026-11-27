@@ -27,7 +27,7 @@ public sealed class MatchSaveInfo
 public sealed class MatchSaveData
 {
     public const string Magic = "AOE2MATCH";
-    public const int FormatVersion = 1;
+    public const int FormatVersion = 2;
 
     public string Name = "对局存档";
     public long CreatedUnix;
@@ -50,6 +50,7 @@ public sealed class MatchSaveData
     public byte[] NavBlocked = System.Array.Empty<byte>();
     public byte[] NavBuildingBlocked = System.Array.Empty<byte>();
     public byte[] NavStructurePassable = System.Array.Empty<byte>();
+    public SimulationServerState? ServerState;
     public List<byte[]> VisionStates = new();
     public List<long> AliveIds = new();
     public List<ComponentRecord> Components = new();
@@ -83,6 +84,7 @@ public sealed class MatchSaveData
         WriteBytes(writer, NavBlocked);
         WriteBytes(writer, NavBuildingBlocked);
         WriteBytes(writer, NavStructurePassable);
+        WriteServerState(writer, ServerState);
         writer.Write(VisionStates.Count);
         foreach (byte[] states in VisionStates)
         {
@@ -129,6 +131,7 @@ public sealed class MatchSaveData
         data.NavBlocked = ReadBytes(reader);
         data.NavBuildingBlocked = ReadBytes(reader);
         data.NavStructurePassable = ReadBytes(reader);
+        data.ServerState = ReadServerState(reader);
         int visionCount = reader.ReadInt32();
         if (visionCount < 0 || visionCount > 64)
         {
@@ -235,6 +238,101 @@ public sealed class MatchSaveData
         writer.Write(MapJson);
     }
 
+    private static void WriteServerState(BinaryWriter writer, SimulationServerState? state)
+    {
+        writer.Write(state != null);
+        if (state == null)
+        {
+            return;
+        }
+        writer.Write(state.TurnTicks);
+        writer.Write(state.AcceptedCommands);
+        writer.Write(state.RejectedCommands);
+        writer.Write(state.ComputerPlayers.Count);
+        foreach (ComputerPlayerState player in state.ComputerPlayers)
+        {
+            writer.Write(player.Team);
+            writer.Write(player.Difficulty);
+            writer.Write(player.RngState);
+            writer.Write(player.LastDecisionTurn);
+            writer.Write(player.MilitaryTrained);
+            writer.Write(player.Attacking);
+            writer.Write(player.TargetX);
+            writer.Write(player.TargetY);
+        }
+        writer.Write(state.Pending.Count);
+        foreach (PendingTurnCommands pending in state.Pending)
+        {
+            writer.Write(pending.Turn);
+            writer.Write(pending.Player);
+            writer.Write(pending.Fields.Length);
+            foreach (long field in pending.Fields)
+            {
+                writer.Write(field);
+            }
+        }
+    }
+
+    private static SimulationServerState? ReadServerState(BinaryReader reader)
+    {
+        if (!reader.ReadBoolean())
+        {
+            return null;
+        }
+        var state = new SimulationServerState
+        {
+            TurnTicks = reader.ReadInt32(),
+            AcceptedCommands = reader.ReadInt64(),
+            RejectedCommands = reader.ReadInt64(),
+        };
+        int playerCount = reader.ReadInt32();
+        if (playerCount < 0)
+        {
+            throw new InvalidDataException("存档电脑玩家数量非法");
+        }
+        for (int index = 0; index < playerCount; index++)
+        {
+            state.ComputerPlayers.Add(new ComputerPlayerState
+            {
+                Team = reader.ReadInt64(),
+                Difficulty = reader.ReadInt32(),
+                RngState = reader.ReadInt64(),
+                LastDecisionTurn = reader.ReadInt64(),
+                MilitaryTrained = reader.ReadInt32(),
+                Attacking = reader.ReadBoolean(),
+                TargetX = reader.ReadInt32(),
+                TargetY = reader.ReadInt32(),
+            });
+        }
+        int pendingCount = reader.ReadInt32();
+        if (pendingCount < 0)
+        {
+            throw new InvalidDataException("存档待应用指令数量非法");
+        }
+        for (int index = 0; index < pendingCount; index++)
+        {
+            long turn = reader.ReadInt64();
+            int player = reader.ReadInt32();
+            int fieldCount = reader.ReadInt32();
+            if (fieldCount < 0)
+            {
+                throw new InvalidDataException("存档指令字段数量非法");
+            }
+            var fields = new long[fieldCount];
+            for (int field = 0; field < fieldCount; field++)
+            {
+                fields[field] = reader.ReadInt64();
+            }
+            state.Pending.Add(new PendingTurnCommands
+            {
+                Turn = turn,
+                Player = player,
+                Fields = fields,
+            });
+        }
+        return state;
+    }
+
     private static void WriteBytes(BinaryWriter writer, byte[] values)
     {
         writer.Write(values.Length);
@@ -305,7 +403,9 @@ public sealed class MatchSaveData
     }
 
     /// <summary>把当前模拟打包成存档结构（不落盘）。</summary>
-    public static MatchSaveData Build(GameSim sim, MapData map, string name, int aiDifficulty)
+    public static MatchSaveData Build(
+        GameSim sim, MapData map, string name, int aiDifficulty,
+        SimulationServerState? serverState = null)
     {
         SimWorld world = sim.World;
         var data = new MatchSaveData
@@ -322,6 +422,7 @@ public sealed class MatchSaveData
             AiDifficulty = aiDifficulty,
             SavedTick = world.Tick,
             SavedChecksum = world.Checksum(),
+            ServerState = serverState,
             Tick = world.Tick,
             NextEntity = world.NextEntity,
             RngState = world.Rng.State,
@@ -435,6 +536,12 @@ public sealed class MatchSaveData
             sim.Vision[player].LoadStates(VisionStates[player]);
         }
         sim.RestoreDerivedIndexes();
+        long restoredChecksum = world.Checksum();
+        if (restoredChecksum != SavedChecksum)
+        {
+            throw new InvalidDataException(
+                $"对局存档校验和不一致：文件记录 {SavedChecksum}，恢复后 {restoredChecksum}");
+        }
         return sim;
     }
 }

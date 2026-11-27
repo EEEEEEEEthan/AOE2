@@ -22,7 +22,7 @@ func _csharp_round_trip() -> void:
 func _bridge_save_and_load() -> void:
 	var bridge := GameBridge.new()
 	add_child(bridge)
-	bridge.StartGeneratedMatch(20261127, 2, 0, -1, PackedInt32Array())
+	bridge.StartGeneratedMatch(20261127, 2, 0, 1, PackedInt32Array())
 	bridge.FastForward(45)
 	var checksum_before := int(bridge.ServerChecksum())
 	var tick_before := int(bridge.ClientTick())
@@ -44,6 +44,7 @@ func _bridge_save_and_load() -> void:
 	check_true(bridge.LoadMatch(path), "match loads back")
 	check_eq(int(bridge.ServerChecksum()), checksum_before, "loaded match checksum matches the save")
 	check_eq(int(bridge.ClientTick()), tick_before, "loaded match tick matches the save")
+	check_true(not bridge.CanSaveReplay, "loaded match disables replay saving")
 
 	bridge.FastForward(30)
 	check_true(int(bridge.ClientTick()) > tick_before, "loaded match keeps simulating")

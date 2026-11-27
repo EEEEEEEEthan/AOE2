@@ -119,7 +119,8 @@ func _refresh_result() -> void:
 		%ResultPanel.hide()
 		%SurrenderButton.show()
 		return
-	if not bridge.IsReplay:
+	%SaveReplayButton.visible = bridge.CanSaveReplay
+	if not bridge.IsReplay and bridge.CanSaveReplay:
 		var saved: String = str(bridge.SaveReplayIfNeeded())
 		if not saved.is_empty() and %SaveReplayButton.text != "本局录像已保存":
 			%SaveReplayButton.text = "本局录像已保存"

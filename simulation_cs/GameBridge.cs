@@ -469,6 +469,9 @@ public partial class GameBridge : Node
 
     public bool HasRecording => _recorder != null && _recorder.HasData;
 
+    /// <summary>读档局不带完整录像基线，禁止保存录像；正常开局的本地对局为 true。</summary>
+    public bool CanSaveReplay => _recorder != null && _recorder.HasData;
+
     public bool HasSavedReplay => _savedReplayPath.Length > 0;
 
     /// <summary>把当前对局（到此为止）保存为录像，返回可读路径；失败时 LastReplayError 给出原因。</summary>
@@ -566,7 +569,8 @@ public partial class GameBridge : Node
             string stamp = System.DateTime.Now.ToString("yyyyMMdd_HHmmss_fff");
             string path = MatchSaveDirectory().PathJoin($"{stamp}.aoe2match");
             AoeSim.MatchSaveData.Build(
-                _session.Server.Sim, map, saveName, _aiDifficulty).Save(path);
+                _session.Server.Sim, map, saveName, _aiDifficulty,
+                _session.Server.CaptureState()).Save(path);
             _savedMatchPath = path;
             return path;
         }
@@ -594,7 +598,9 @@ public partial class GameBridge : Node
         try
         {
             string path = MatchSaveDirectory().PathJoin(fileName);
-            AoeSim.MatchSaveData.Build(_session.Server.Sim, map, name, _aiDifficulty).Save(path);
+            AoeSim.MatchSaveData.Build(
+                _session.Server.Sim, map, name, _aiDifficulty,
+                _session.Server.CaptureState()).Save(path);
             return path;
         }
         catch (System.Exception error)
@@ -699,10 +705,14 @@ public partial class GameBridge : Node
             _accumulator = 0.0;
             _autoSaveSeconds = 0.0;
             ResetBatchCache();
-            _recorder = new AoeSim.ReplayRecorder(
-                map, data.Seed, data.PlayerCount, sim.Lockstep.TicksPerTurn, data.Config);
-            session.Server.Recorder = _recorder;
-            if (_aiDifficulty >= 0)
+            // 读档局不重新录制：录像以 tick 0 的地图初始态为基线，从第 N tick 接续录会与回放校验和不符。
+            _recorder = null;
+            session.Server.Recorder = null;
+            if (data.ServerState != null)
+            {
+                session.Server.RestoreState(data.ServerState, map.Starts, data.Seed);
+            }
+            else if (_aiDifficulty >= 0)
             {
                 var difficulty = (AoeSim.AiDifficulty)_aiDifficulty;
                 for (long team = 1; team < data.PlayerCount; team++)
