@@ -92,7 +92,8 @@ public partial class GameBridge : Node
         _session = session;
         _accumulator = 0.0;
         ResetBatchCache();
-        _recorder = new AoeSim.ReplayRecorder(map, seed, playerCount, sim.Lockstep.TicksPerTurn, sim.Match!.Config);
+        _recorder = new AoeSim.ReplayRecorder(
+            map, seed, playerCount, sim.Lockstep.TicksPerTurn, sim.Match!.Config, civIds);
         session.Server.Recorder = _recorder;
         if (aiDifficulty >= 0)
         {
@@ -145,7 +146,7 @@ public partial class GameBridge : Node
         _accumulator = 0.0;
         ResetBatchCache();
         _recorder = new AoeSim.ReplayRecorder(
-            map, map.Seed, playerCount, sim.Lockstep.TicksPerTurn, sim.Match!.Config);
+            map, map.Seed, playerCount, sim.Lockstep.TicksPerTurn, sim.Match!.Config, civIds);
         session.Server.Recorder = _recorder;
         if (aiDifficulty >= 0)
         {

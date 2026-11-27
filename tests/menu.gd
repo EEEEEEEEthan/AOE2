@@ -3,6 +3,7 @@ extends TestBase
 const MENU_SCENE := "res://presentation/main_menu.tscn"
 const MATCH_SCENE := "res://presentation/main.tscn"
 const MAP_EDITOR_SCENE := "res://tools/map_editor.tscn"
+const MATCH_SETUP_DIALOG_SCENE := "res://presentation/match_setup_dialog.tscn"
 
 
 func run() -> void:
@@ -30,6 +31,15 @@ func run() -> void:
 	if bridge != null:
 		check_true(bridge.HasSession, "direct match scene still starts a session")
 	match_root.queue_free()
+
+	var dialog_scene := load(MATCH_SETUP_DIALOG_SCENE) as PackedScene
+	check(dialog_scene != null, "match setup dialog loads")
+	if dialog_scene != null:
+		var dialog := dialog_scene.instantiate()
+		add_child(dialog)
+		check(dialog is Control, "match setup dialog root is a control")
+		check(dialog.get_node_or_null("Center") != null, "match setup dialog builds its panel")
+		dialog.queue_free()
 
 	var editor_scene := load(MAP_EDITOR_SCENE) as PackedScene
 	var editor := editor_scene.instantiate()
